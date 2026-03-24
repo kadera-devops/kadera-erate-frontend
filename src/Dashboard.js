@@ -74,7 +74,6 @@ function StatCard({ label, value, sub, color }) {
 function Feed470({ token }) {
   const [data, setData]     = useState([]);
   const [loading, setLoading] = useState(true);
-  const [fy, setFy]         = useState("2025");
   const [state, setState]   = useState("TX");
   const [filter, setFilter] = useState("all");
 
@@ -97,7 +96,7 @@ function Feed470({ token }) {
 
   return (
     <Panel style={{ display:"flex", flexDirection:"column", height:"100%" }}>
-      <PTitle>// USAC OPEN API — <span style={{ color:"#a07ee0" }}>FORM 470 LIVE FEED</span></PTitle>
+      <PTitle>{'// USAC OPEN API — '}<span style={{ color:"#a07ee0" }}>FORM 470 LIVE FEED</span></PTitle>
       <div style={{ display:"flex", alignItems:"center", gap:6, padding:"5px 14px", borderBottom:"1px solid rgba(138,99,210,0.12)" }}>
         <div style={{ width:5, height:5, borderRadius:"50%", background:"#39ff14", animation:"pulse-dot 1s infinite", boxShadow:"0 0 5px #39ff14" }}/>
         <span style={{ fontSize:6.5, letterSpacing:2, color:"rgba(57,255,20,0.55)" }}>LIVE · USAC OPEN DATA API</span>
@@ -242,7 +241,7 @@ export default function Dashboard({ session }) {
                 {/* COL 1: TOOLS */}
                 <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
                   <Panel>
-                    <PTitle>// E-RATE <span style={{ color:"#a07ee0" }}>QUICK ACCESS TOOLS</span></PTitle>
+                    <PTitle>{'// E-RATE '}<span style={{ color:"#a07ee0" }}>QUICK ACCESS TOOLS</span></PTitle>
                     <div style={{ padding:"12px 14px" }}>
                       <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8 }}>
                         <ToolBtn href="https://www.usac.org/e-rate/applicant-process/before-you-begin/budget-tool/"          color="purple" icon="💰" name="E-RATE C2 BUDGET"     desc="Calculate and track your Category 2 five-year budget cycle."/>
@@ -256,7 +255,7 @@ export default function Dashboard({ session }) {
 
                   {/* Deadlines */}
                   <Panel>
-                    <PTitle>// FY2025 <span style={{ color:"#a07ee0" }}>KEY DEADLINES</span></PTitle>
+                    <PTitle>{'// FY2025 '}<span style={{ color:"#a07ee0" }}>KEY DEADLINES</span></PTitle>
                     <div style={{ padding:"10px 14px" }}>
                       {[
                         { name:"Form 470 Window", sub:"Open Now", status:"OPEN", color:"#39ff14", pulse:true },
@@ -290,7 +289,7 @@ export default function Dashboard({ session }) {
                   </div>
 
                   <Panel>
-                    <PTitle>// USAC <span style={{ color:"#a07ee0" }}>PORTAL NAVIGATION</span></PTitle>
+                    <PTitle>{'// USAC '}<span style={{ color:"#a07ee0" }}>PORTAL NAVIGATION</span></PTitle>
                     <div style={{ padding:"9px 14px", display:"flex", flexDirection:"column", gap:6 }}>
                       {[
                         { href:"https://forms.universalservice.org/portal/", icon:"🏛️", name:"EPC PORTAL", sub:"E-Rate Productivity Center" },
@@ -316,7 +315,7 @@ export default function Dashboard({ session }) {
 
                   {/* Logged in user */}
                   <Panel>
-                    <PTitle>// SESSION</PTitle>
+                    <PTitle>{'// SESSION'}</PTitle>
                     <div style={{ padding:"10px 14px" }}>
                       <div style={{ fontSize:7.5, color:"rgba(232,228,240,0.6)", marginBottom:4 }}>{session?.user?.email}</div>
                       <div style={{ fontSize:6.5, color:"rgba(138,99,210,0.5)" }}>KADERA INTERNAL · E-RATE TEAM</div>

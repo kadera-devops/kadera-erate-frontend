@@ -59,7 +59,7 @@ export default function LoginPage() {
 
           {/* Form */}
           <form onSubmit={handleLogin} style={{ padding:"24px 28px 28px" }}>
-            <div style={{ fontSize:7, letterSpacing:2.5, color:"rgba(138,99,210,0.6)", marginBottom:18, textAlign:"center" }}>// AUTHORIZED ACCESS ONLY</div>
+            <div style={{ fontSize:7, letterSpacing:2.5, color:"rgba(138,99,210,0.6)", marginBottom:18, textAlign:"center" }}>{'// AUTHORIZED ACCESS ONLY'}</div>
 
             <div style={{ marginBottom:14 }}>
               <div style={{ fontSize:7, letterSpacing:2, color:"rgba(232,228,240,0.4)", marginBottom:6 }}>EMAIL ADDRESS</div>
