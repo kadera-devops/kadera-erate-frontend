@@ -168,3 +168,4 @@ export default function SearchPanel({ token }) {
     </div>
   );
 }
+
