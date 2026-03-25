@@ -612,7 +612,7 @@ function CompetitiveIntelModal({ token, onClose }) {
           <div style={{ display:"flex", alignItems:"center", gap:12 }}>
             <div style={{ width:6, height:6, borderRadius:"50%", background:"#a07ee0", boxShadow:"0 0 8px rgba(138,99,210,0.9)" }}/>
             <span style={{ fontFamily:"'Aldrich',sans-serif", fontSize:11, letterSpacing:2.5, color:"#a07ee0" }}>COMPETITIVE INTELLIGENCE</span>
-            <span style={{ fontSize:7, letterSpacing:1.5, color:"rgba(232,228,240,0.25)" }}>· FY2026 · TX · {data ? `${data.total.toLocaleString()} COMMITMENTS · ${(data.lineItemTotal||0).toLocaleString()} LINE ITEMS` : ""}</span>
+            <span style={{ fontSize:7, letterSpacing:1.5, color:"rgba(232,228,240,0.25)" }}>· FY2026 COMMITMENTS · FY2025 LINE ITEMS · TX · {data ? `${data.total.toLocaleString()} commitments · ${(data.lineItemTotal||0).toLocaleString()} line items` : ""}</span>
           </div>
           <button onClick={onClose} style={{ background:"transparent", border:"1px solid rgba(232,228,240,0.15)", color:"rgba(232,228,240,0.4)", cursor:"pointer", fontFamily:"'DM Mono',monospace", fontSize:8, padding:"4px 10px", letterSpacing:1 }}>✕ CLOSE</button>
         </div>
@@ -647,7 +647,7 @@ function CompetitiveIntelModal({ token, onClose }) {
                 </div>
               ) : (
                 <>
-                  <div style={{ fontSize:7, letterSpacing:2, color:"rgba(138,99,210,0.5)", marginBottom:14, textTransform:"uppercase" }}>Manufacturer Presence · From {(data.lineItemTotal||0).toLocaleString()} TX FRN Line Items · FY2026</div>
+                  <div style={{ fontSize:7, letterSpacing:2, color:"rgba(138,99,210,0.5)", marginBottom:14, textTransform:"uppercase" }}>Manufacturer Presence · From {(data.lineItemTotal||0).toLocaleString()} TX FRN Line Items · FY2025</div>
                   <GaugeRow items={data.manufacturers} colorFn={name => MFR_COLORS[name] || "#a07ee0"} />
                   <div style={{ marginTop:20 }}>
                     <div style={{ fontSize:7, letterSpacing:2, color:"rgba(138,99,210,0.5)", marginBottom:12, textTransform:"uppercase" }}>Line Item Count by Manufacturer</div>
@@ -674,7 +674,7 @@ function CompetitiveIntelModal({ token, onClose }) {
                 </div>
               ) : (
                 <>
-                  <div style={{ fontSize:7, letterSpacing:2, color:"rgba(138,99,210,0.5)", marginBottom:14, textTransform:"uppercase" }}>Top 10 Product Types in TX Line Items · From {(data.lineItemTotal||0).toLocaleString()} records</div>
+                  <div style={{ fontSize:7, letterSpacing:2, color:"rgba(138,99,210,0.5)", marginBottom:14, textTransform:"uppercase" }}>Top 10 Product Types · FY2025 TX FRN Line Items · {(data.lineItemTotal||0).toLocaleString()} records</div>
                   <BarChart items={data.topProducts} colorFn={(name, i) => ["#a07ee0","#3b9eff","#22c97a","#f0b429","#f0614a","#ff9f43","#00d4ff","#8a63d2","#a07ee0","#3b9eff"][i % 10]} />
                 </>
               )}
