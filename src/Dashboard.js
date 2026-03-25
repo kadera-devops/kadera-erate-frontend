@@ -71,13 +71,140 @@ function StatCard({ label, value, sub, color }) {
   );
 }
 
-function Feed470({ token }) {
+function Feed470({ token, onTagsUpdated }) {
   const [data, setData]       = useState([]);
   const [loading, setLoading] = useState(true);
   const [state, setState]     = useState("TX");
   const [filter, setFilter]   = useState("all");
   const [page, setPage]       = useState(0);
+  const [tags, setTags]       = useState(new Set());
   const PAGE_SIZE = 10;
+
+  const loadTags = useCallback(async () => {
+    try {
+      const res  = await fetch(`${API_URL}/api/tags`, { headers:{ Authorization:`Bearer ${token}` } });
+      const json = await res.json();
+      if (json.status === "success") setTags(new Set((json.data||[]).map(t => t.application_number)));
+    } catch {}
+  }, [token]);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const params = new URLSearchParams({ limit:200, ...(state !== "ALL" && { state }) });
+      const res  = await fetch(`${API_URL}/api/470s?${params}`, { headers:{ Authorization:`Bearer ${token}` } });
+      const json = await res.json();
+      setData(json.data || []);
+      setPage(0);
+    } catch { setData([]); }
+    setLoading(false);
+  }, [token, state]);
+
+  useEffect(() => { load(); loadTags(); }, [load, loadTags]);
+
+  async function toggleTag(e, item) {
+    e.preventDefault();
+    e.stopPropagation();
+    const appNum = item.application_number;
+    const isTagged = tags.has(appNum);
+    try {
+      if (isTagged) {
+        await fetch(`${API_URL}/api/tags/${appNum}`, { method:"DELETE", headers:{ Authorization:`Bearer ${token}` } });
+        setTags(prev => { const n = new Set(prev); n.delete(appNum); return n; });
+      } else {
+        await fetch(`${API_URL}/api/tags`, { method:"POST", headers:{ Authorization:`Bearer ${token}`, "Content-Type":"application/json" },
+          body: JSON.stringify({ application_number: appNum, billed_entity_name: item.billed_entity_name, state: item.state, service_category: item.service_category, bid_due_date: item.bid_due_date, funding_year: item.funding_year }) });
+        setTags(prev => new Set([...prev, appNum]));
+      }
+      if (onTagsUpdated) onTagsUpdated();
+    } catch {}
+  }
+
+  function getStatus(item) {
+    const s = (item.application_status || "").toLowerCase();
+    if (s.includes("certif") && !s.includes("pending")) return "open";
+    if (s.includes("pending") || s.includes("review") || s.includes("progress")) return "review";
+    if (s.includes("cancel") || s.includes("withdraw")) return "closed";
+    return "open";
+  }
+
+  const filtered = filter === "all" ? data : data.filter(d => getStatus(d) === filter);
+  const totalPages = Math.ceil(filtered.length / PAGE_SIZE);
+  const paged = filtered.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
+  const STATES = ["ALL","TX","CA","NY","FL","IL","PA","OH","GA","NC","MI"];
+
+  function get470Link(appNum) {
+    return `https://legacy.fundsforlearning.com/470/${appNum}`;
+  }
+
+  return (
+    <Panel style={{ display:"flex", flexDirection:"column", height:"100%" }}>
+      <PTitle>{'// USAC OPEN API — '}<span style={{ color:"#a07ee0" }}>FORM 470 LIVE FEED</span></PTitle>
+      <div style={{ display:"flex", alignItems:"center", gap:6, padding:"5px 14px", borderBottom:"1px solid rgba(138,99,210,0.12)" }}>
+        <div style={{ width:5, height:5, borderRadius:"50%", background:"#39ff14", animation:"pulse-dot 1s infinite", boxShadow:"0 0 5px #39ff14" }}/>
+        <span style={{ fontSize:6.5, letterSpacing:2, color:"rgba(57,255,20,0.55)" }}>LIVE · USAC OPEN DATA API</span>
+      </div>
+      <div style={{ display:"flex", gap:5, padding:"7px 14px", borderBottom:"1px solid rgba(138,99,210,0.12)", flexWrap:"wrap" }}>
+        <span style={{ fontSize:6.5, color:"rgba(232,228,240,0.35)", alignSelf:"center", marginRight:4 }}>STATE:</span>
+        {STATES.map(s => (
+          <button key={s} onClick={() => setState(s)} style={{ padding:"3px 8px", fontFamily:"'DM Mono',monospace", fontSize:6.5, letterSpacing:1, border:`1px solid ${state===s ? "rgba(240,180,41,0.6)" : "rgba(138,99,210,0.2)"}`, background: state===s ? "rgba(240,180,41,0.08)" : "transparent", color: state===s ? "#f0b429" : "rgba(232,228,240,0.4)", cursor:"pointer" }}>{s}</button>
+        ))}
+      </div>
+      <div style={{ display:"flex", gap:5, padding:"7px 14px", borderBottom:"1px solid rgba(138,99,210,0.12)" }}>
+        {["all","open","review","closed"].map(f => (
+          <button key={f} onClick={() => { setFilter(f); setPage(0); }} style={{ padding:"3px 9px", fontFamily:"'DM Mono',monospace", fontSize:7, letterSpacing:1.5, border:`1px solid ${filter===f ? "rgba(138,99,210,0.6)" : "rgba(138,99,210,0.2)"}`, background: filter===f ? "rgba(138,99,210,0.1)" : "transparent", color: filter===f ? "#a07ee0" : "rgba(232,228,240,0.4)", cursor:"pointer" }}>{f.toUpperCase()}</button>
+        ))}
+      </div>
+      <div style={{ flex:1, overflow:"hidden" }}>
+        {loading ? (
+          [1,2,3,4,5].map(i => (
+            <div key={i} style={{ padding:"10px 14px", borderBottom:"1px solid rgba(138,99,210,0.1)", display:"flex", flexDirection:"column", gap:5 }}>
+              <div style={{ height:10, width:`${55+i*5}%`, borderRadius:1, background:"linear-gradient(90deg,rgba(138,99,210,0.07) 25%,rgba(138,99,210,0.14) 50%,rgba(138,99,210,0.07) 75%)", backgroundSize:"200% 100%", animation:"shimmer 1.5s infinite" }}/>
+              <div style={{ height:8, width:"40%", borderRadius:1, background:"linear-gradient(90deg,rgba(138,99,210,0.07) 25%,rgba(138,99,210,0.14) 50%,rgba(138,99,210,0.07) 75%)", backgroundSize:"200% 100%", animation:"shimmer 1.5s infinite" }}/>
+            </div>
+          ))
+        ) : paged.length === 0 ? (
+          <div style={{ padding:"24px 14px", textAlign:"center", fontSize:9, color:"rgba(138,99,210,0.4)" }}>NO 470s FOUND</div>
+        ) : paged.map((item, i) => {
+          const status   = getStatus(item);
+          const isTagged = tags.has(item.application_number);
+          const badgeColor = status === "open" ? "#39ff14" : status === "review" ? "#f0b429" : "rgba(232,228,240,0.3)";
+          const badgeBg    = status === "open" ? "rgba(57,255,20,0.08)" : status === "review" ? "rgba(240,180,41,0.08)" : "rgba(138,99,210,0.08)";
+          const badgeTxt   = status === "open" ? "CERTIFIED" : status === "review" ? "PENDING" : "CLOSED";
+          return (
+            <a key={i} href={get470Link(item.application_number)} target="_blank" rel="noreferrer"
+              style={{ display:"flex", flexDirection:"column", gap:3, padding:"9px 14px", borderBottom:"1px solid rgba(138,99,210,0.1)", textDecoration:"none", transition:"background 0.15s" }}
+              onMouseEnter={e => e.currentTarget.style.background="rgba(138,99,210,0.05)"}
+              onMouseLeave={e => e.currentTarget.style.background="transparent"}>
+              <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+                <span style={{ fontSize:9, color:"#3b9eff", flex:1, fontWeight:500 }}>Form 470 · {item.application_number}</span>
+                <span style={{ fontSize:6, letterSpacing:1.5, padding:"2px 7px", background:badgeBg, border:`1px solid ${badgeColor}40`, color:badgeColor }}>{badgeTxt}</span>
+                <button onClick={e => toggleTag(e, item)}
+                  style={{ fontSize:6.5, letterSpacing:1.5, padding:"2px 8px", border:`1px solid ${isTagged ? "rgba(240,180,41,0.7)" : "rgba(138,99,210,0.3)"}`, background: isTagged ? "rgba(240,180,41,0.12)" : "rgba(138,99,210,0.06)", color: isTagged ? "#f0b429" : "rgba(232,228,240,0.4)", cursor:"pointer", fontFamily:"'DM Mono',monospace", transition:"all 0.15s" }}>
+                  {isTagged ? "★ TAGGED" : "☆ TAG"}
+                </button>
+              </div>
+              <div style={{ fontSize:8, color:"rgba(232,228,240,0.75)" }}>{item.billed_entity_name}{item.state ? ` · ${item.state}` : ""}</div>
+              <div style={{ display:"flex", gap:10 }}>
+                <span style={{ fontSize:6.5, color:"#a07ee0" }}>FY{item.funding_year}</span>
+                {item.service_category && <span style={{ fontSize:6.5, color:"rgba(232,228,240,0.4)" }}>{item.service_category}</span>}
+                {item.bid_due_date && <span style={{ fontSize:6.5, color:"rgba(240,180,41,0.6)" }}>Bid Due: {new Date(item.bid_due_date).toLocaleDateString()}</span>}
+                {item.date_posted && <span style={{ fontSize:6.5, color:"rgba(232,228,240,0.4)" }}>Posted: {new Date(item.date_posted).toLocaleDateString()}</span>}
+              </div>
+            </a>
+          );
+        })}
+      </div>
+      <div style={{ padding:"9px 14px", borderTop:"1px solid rgba(138,99,210,0.12)", display:"flex", justifyContent:"space-between", alignItems:"center", flexShrink:0 }}>
+        <span style={{ fontSize:7, color:"rgba(232,228,240,0.4)" }}>{filtered.length} TOTAL · PAGE {page+1}/{totalPages||1}</span>
+        <div style={{ display:"flex", gap:5 }}>
+          <button onClick={() => setPage(p => Math.max(0,p-1))} disabled={page===0} style={{ padding:"3px 10px", fontFamily:"'DM Mono',monospace", fontSize:7, letterSpacing:1, border:"1px solid rgba(138,99,210,0.25)", background:"transparent", color: page===0 ? "rgba(232,228,240,0.2)" : "rgba(232,228,240,0.5)", cursor: page===0 ? "not-allowed" : "pointer" }}>← PREV</button>
+          <button onClick={() => setPage(p => Math.min(totalPages-1,p+1))} disabled={page>=totalPages-1} style={{ padding:"3px 10px", fontFamily:"'DM Mono',monospace", fontSize:7, letterSpacing:1, border:"1px solid rgba(138,99,210,0.25)", background:"transparent", color: page>=totalPages-1 ? "rgba(232,228,240,0.2)" : "rgba(232,228,240,0.5)", cursor: page>=totalPages-1 ? "not-allowed" : "pointer" }}>NEXT →</button>
+        </div>
+      </div>
+    </Panel>
+  );
+}
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -178,17 +305,102 @@ function Feed470({ token }) {
   );
 }
 
+// ── Tags Panel ────────────────────────────────────────────────────────────────
+function TagsPanel({ token, onTagsUpdated }) {
+  const [tags, setTags]     = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res  = await fetch(`${API_URL}/api/tags`, { headers:{ Authorization:`Bearer ${token}` } });
+      const json = await res.json();
+      if (json.status === "success") setTags(json.data || []);
+    } catch {}
+    setLoading(false);
+  }, [token]);
+
+  useEffect(() => { load(); }, [load]);
+
+  async function removeTag(appNum) {
+    await fetch(`${API_URL}/api/tags/${appNum}`, { method:"DELETE", headers:{ Authorization:`Bearer ${token}` } });
+    setTags(prev => prev.filter(t => t.application_number !== appNum));
+    if (onTagsUpdated) onTagsUpdated();
+  }
+
+  return (
+    <div style={{ animation:"fade-up 0.4s ease both" }}>
+      <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:16 }}>
+        <div style={{ fontFamily:"'Aldrich',sans-serif", fontSize:14, color:"#f0b429", letterSpacing:1 }}>★ MY TAGGED 470s</div>
+        <span style={{ fontSize:7.5, color:"rgba(232,228,240,0.4)", letterSpacing:2 }}>{tags.length} TAGGED</span>
+      </div>
+
+      <div style={{ background:"rgba(10,8,20,0.95)", border:"1px solid rgba(240,180,41,0.3)", position:"relative", clipPath:"polygon(0 0,100% 0,100% calc(100% - 14px),calc(100% - 14px) 100%,0 100%)" }}>
+        <div style={{ position:"absolute", top:0, left:0, width:12, height:12, borderTop:"1.5px solid #f0b429", borderLeft:"1.5px solid #f0b429" }}/>
+        <div style={{ position:"absolute", bottom:13, right:-1, width:20, height:1.5, background:"rgba(240,180,41,0.35)", transform:"rotate(-45deg)", transformOrigin:"right center" }}/>
+
+        {/* Table header */}
+        <div style={{ display:"grid", gridTemplateColumns:"1.5fr 2fr 1fr 1fr 1.2fr 80px", gap:0, padding:"8px 16px", borderBottom:"1px solid rgba(240,180,41,0.2)", background:"rgba(240,180,41,0.04)" }}>
+          {["APP #","ENTITY","STATE","SERVICE","BID DUE DATE",""].map((h,i) => (
+            <div key={i} style={{ fontSize:6.5, letterSpacing:1.5, color:"rgba(240,180,41,0.6)", fontFamily:"'DM Mono',monospace" }}>{h}</div>
+          ))}
+        </div>
+
+        {loading ? (
+          <div style={{ padding:"24px", textAlign:"center", fontSize:9, color:"rgba(240,180,41,0.4)" }}>LOADING...</div>
+        ) : tags.length === 0 ? (
+          <div style={{ padding:"40px", textAlign:"center" }}>
+            <div style={{ fontSize:11, color:"rgba(240,180,41,0.4)", marginBottom:8 }}>NO TAGGED 470s YET</div>
+            <div style={{ fontSize:8, color:"rgba(232,228,240,0.3)" }}>Click ☆ TAG on any 470 in the feed to add it here</div>
+          </div>
+        ) : tags.map((tag, i) => (
+          <div key={i} style={{ display:"grid", gridTemplateColumns:"1.5fr 2fr 1fr 1fr 1.2fr 80px", gap:0, padding:"10px 16px", borderBottom: i < tags.length-1 ? "1px solid rgba(240,180,41,0.08)" : "none", alignItems:"center", transition:"background 0.15s" }}
+            onMouseEnter={e => e.currentTarget.style.background="rgba(240,180,41,0.04)"}
+            onMouseLeave={e => e.currentTarget.style.background="transparent"}>
+            <a href={`https://legacy.fundsforlearning.com/470/${tag.application_number}`} target="_blank" rel="noreferrer"
+              style={{ fontSize:8.5, color:"#3b9eff", textDecoration:"none", fontWeight:500 }}>
+              {tag.application_number}
+            </a>
+            <div style={{ fontSize:8, color:"rgba(232,228,240,0.8)", paddingRight:8, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{tag.billed_entity_name || "—"}</div>
+            <div style={{ fontSize:8, color:"rgba(232,228,240,0.5)" }}>{tag.state || "—"}</div>
+            <div style={{ fontSize:7.5, color:"rgba(232,228,240,0.4)", paddingRight:8, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{tag.service_category || "—"}</div>
+            <div style={{ fontSize:8, color: tag.bid_due_date ? "#f0b429" : "rgba(232,228,240,0.3)", fontWeight: tag.bid_due_date ? 500 : 400 }}>
+              {tag.bid_due_date ? new Date(tag.bid_due_date).toLocaleDateString() : "—"}
+            </div>
+            <button onClick={() => removeTag(tag.application_number)}
+              style={{ fontSize:7, letterSpacing:1, padding:"3px 8px", border:"1px solid rgba(240,97,74,0.3)", background:"rgba(240,97,74,0.06)", color:"rgba(240,97,74,0.7)", cursor:"pointer", fontFamily:"'DM Mono',monospace", transition:"all 0.15s" }}
+              onMouseEnter={e => { e.currentTarget.style.background="rgba(240,97,74,0.15)"; e.currentTarget.style.color="#f0614a"; }}
+              onMouseLeave={e => { e.currentTarget.style.background="rgba(240,97,74,0.06)"; e.currentTarget.style.color="rgba(240,97,74,0.7)"; }}>
+              ✕ REMOVE
+            </button>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export default function Dashboard({ session }) {
-  const [token, setToken]   = useState(null);
-  const [stats, setStats]   = useState(null);
-  const [tab, setTab]       = useState("dashboard");
-  const [clock, setClock]   = useState("");
+  const [token, setToken]     = useState(null);
+  const [stats, setStats]     = useState(null);
+  const [tab, setTab]         = useState("dashboard");
+  const [clock, setClock]     = useState("");
+  const [tagCount, setTagCount] = useState(0);
+
+  const refreshTagCount = useCallback(async (t) => {
+    if (!t) return;
+    try {
+      const res  = await fetch(`${API_URL}/api/tags`, { headers:{ Authorization:`Bearer ${t}` } });
+      const json = await res.json();
+      if (json.status === "success") setTagCount(json.data?.length || 0);
+    } catch {}
+  }, []);
 
   useEffect(() => {
-    getAuthToken().then(setToken);
+    getAuthToken().then(t => { setToken(t); refreshTagCount(t); });
     const t = setInterval(() => setClock(new Date().toLocaleTimeString("en-US",{hour12:false}) + " CDT"), 1000);
     return () => clearInterval(t);
-  }, []);
+  }, [refreshTagCount]);
 
   useEffect(() => {
     if (!token) return;
@@ -235,6 +447,9 @@ export default function Dashboard({ session }) {
                   {t.toUpperCase()}
                 </button>
               ))}
+              <button onClick={() => setTab("tags")} style={{ padding:"7px 16px", fontFamily:"'DM Mono',monospace", fontSize:7.5, letterSpacing:2, border:`1px solid ${tab==="tags" ? "rgba(240,180,41,0.6)" : "rgba(240,180,41,0.25)"}`, background: tab==="tags" ? "rgba(240,180,41,0.12)" : "transparent", color: tab==="tags" ? "#f0b429" : "rgba(240,180,41,0.5)", cursor:"pointer", transition:"all 0.2s", display:"flex", alignItems:"center", gap:6 }}>
+                ★ MY TAGS {tagCount > 0 && <span style={{ background:"rgba(240,180,41,0.2)", border:"1px solid rgba(240,180,41,0.4)", borderRadius:10, padding:"1px 6px", fontSize:6.5 }}>{tagCount}</span>}
+              </button>
             </div>
 
             <div style={{ display:"flex", alignItems:"center", gap:10 }}>
@@ -300,7 +515,7 @@ export default function Dashboard({ session }) {
                 </div>
 
                 {/* COL 2: 470 FEED */}
-                {token && <Feed470 token={token} />}
+                {token && <Feed470 token={token} onTagsUpdated={() => refreshTagCount(token)} />}
 
                 {/* COL 3: SIDEBAR */}
                 <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
@@ -350,6 +565,7 @@ export default function Dashboard({ session }) {
           )}
 
           {tab === "search" && token && <SearchPanel token={token} />}
+          {tab === "tags"   && token && <TagsPanel token={token} onTagsUpdated={() => refreshTagCount(token)} />}
 
         </div>
       </div>
