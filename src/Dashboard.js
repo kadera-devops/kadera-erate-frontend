@@ -121,6 +121,13 @@ function Feed470({ token, onTagsUpdated }) {
   }
 
   function getStatus(item) {
+    // Primary: use bid_due_date if available
+    if (item.bid_due_date) {
+      const bidDate = new Date(item.bid_due_date);
+      const now     = new Date();
+      return bidDate >= now ? "open" : "closed";
+    }
+    // Fallback: use USAC status field
     const s = (item.application_status || "").toLowerCase();
     if (s.includes("certif") && !s.includes("pending")) return "open";
     if (s.includes("pending") || s.includes("review") || s.includes("progress")) return "review";
@@ -170,7 +177,7 @@ function Feed470({ token, onTagsUpdated }) {
           const isTagged = tags.has(item.application_number);
           const badgeColor = status === "open" ? "#39ff14" : status === "review" ? "#f0b429" : "rgba(232,228,240,0.3)";
           const badgeBg    = status === "open" ? "rgba(57,255,20,0.08)" : status === "review" ? "rgba(240,180,41,0.08)" : "rgba(138,99,210,0.08)";
-          const badgeTxt   = status === "open" ? "CERTIFIED" : status === "review" ? "PENDING" : "CLOSED";
+          const badgeTxt   = status === "open" ? "OPEN" : status === "review" ? "PENDING" : "CLOSED";
           return (
             <a key={i} href={get470Link(item.application_number)} target="_blank" rel="noreferrer"
               style={{ display:"flex", flexDirection:"column", gap:3, padding:"9px 14px", borderBottom:"1px solid rgba(138,99,210,0.1)", textDecoration:"none", transition:"background 0.15s" }}
