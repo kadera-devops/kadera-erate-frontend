@@ -531,8 +531,12 @@ function CompetitiveIntelModal({ token, onClose }) {
   const [data, setData]           = useState(null);
   const [loading, setLoading]     = useState(true);
   const [view, setView]           = useState("providers");
-  const [mfrMetric, setMfrMetric] = useState("count"); // count | amount
-  const [providerPopup, setProviderPopup] = useState(null); // { name, applicants, loading }
+  const [mfrMetric, setMfrMetric]     = useState("count");
+  const [providerPopup, setProviderPopup] = useState(null);
+  const [partQuery, setPartQuery]     = useState("");
+  const [partResults, setPartResults] = useState([]);
+  const [partLoading, setPartLoading] = useState(false);
+  const [partSearched, setPartSearched] = useState(false);
 
   useEffect(() => {
     fetch(`${API_URL}/api/competitive-intel`, { headers:{ Authorization:`Bearer ${token}` } })
@@ -540,6 +544,18 @@ function CompetitiveIntelModal({ token, onClose }) {
       .then(d => { if (d.status === "success") setData(d.data); setLoading(false); })
       .catch(() => setLoading(false));
   }, [token]);
+
+  async function doPartSearch() {
+    if (!partQuery.trim() || partQuery.trim().length < 2) return;
+    setPartLoading(true);
+    setPartSearched(true);
+    try {
+      const res  = await fetch(`${API_URL}/api/part-lookup?q=${encodeURIComponent(partQuery.trim())}&limit=100`, { headers:{ Authorization:`Bearer ${token}` } });
+      const json = await res.json();
+      setPartResults(json.data || []);
+    } catch { setPartResults([]); }
+    setPartLoading(false);
+  }
 
   async function openProviderPopup(providerName) {
     setProviderPopup({ name: providerName, applicants: [], loading: true });
@@ -665,7 +681,7 @@ function CompetitiveIntelModal({ token, onClose }) {
 
         {/* Tab strip */}
         <div style={{ display:"flex", gap:4, padding:"10px 22px", borderBottom:"1px solid rgba(138,99,210,0.1)", flexShrink:0 }}>
-          {[["providers","TOP 25 PROVIDERS"],["manufacturers","MANUFACTURER BREAKDOWN"],["services","SERVICE TYPES"],["products","TOP PRODUCTS"]].map(([key,label]) => (
+          {[["providers","TOP 25 PROVIDERS"],["manufacturers","MANUFACTURER BREAKDOWN"],["services","SERVICE TYPES"],["products","TOP PRODUCTS"],["partlookup","PART LOOKUP"]].map(([key,label]) => (
             <button key={key} onClick={() => setView(key)}
               style={{ padding:"5px 14px", fontFamily:"'DM Mono',monospace", fontSize:7.5, letterSpacing:1.5, border:`1px solid ${view===key ? "rgba(138,99,210,0.6)" : "rgba(138,99,210,0.15)"}`, background: view===key ? "rgba(138,99,210,0.12)" : "transparent", color: view===key ? "#a07ee0" : "rgba(232,228,240,0.35)", cursor:"pointer", transition:"all 0.15s" }}>
               {label}
@@ -735,6 +751,62 @@ function CompetitiveIntelModal({ token, onClose }) {
                 <>
                   <div style={{ fontSize:7, letterSpacing:2, color:"rgba(138,99,210,0.5)", marginBottom:14, textTransform:"uppercase" }}>Top 10 Product Types · FY2025 TX FRN Line Items · {(data.lineItemTotal||0).toLocaleString()} records</div>
                   <BarChart items={data.topProducts} colorFn={(name, i) => ["#a07ee0","#3b9eff","#22c97a","#f0b429","#f0614a","#ff9f43","#00d4ff","#8a63d2","#a07ee0","#3b9eff"][i % 10]} />
+                </>
+              )}
+            </>
+          )}
+
+          {view === "partlookup" && (
+            <>
+              {/* Search bar */}
+              <div style={{ display:"flex", gap:8, alignItems:"center", marginBottom:16 }}>
+                <input value={partQuery} onChange={e => setPartQuery(e.target.value)} onKeyDown={e => e.key === "Enter" && doPartSearch()}
+                  placeholder="Enter part number, model, or product name..."
+                  style={{ flex:1, background:"rgba(255,255,255,0.03)", border:"1px solid rgba(138,99,210,0.25)", outline:"none", fontFamily:"'DM Mono',monospace", fontSize:9, color:"#e8e4f0", padding:"8px 12px" }}/>
+                <button onClick={doPartSearch}
+                  style={{ padding:"8px 20px", fontFamily:"'DM Mono',monospace", fontSize:8, letterSpacing:2, border:"1px solid rgba(138,99,210,0.5)", background:"rgba(138,99,210,0.1)", color:"#a07ee0", cursor:"pointer", whiteSpace:"nowrap" }}>
+                  SEARCH →
+                </button>
+              </div>
+
+              {!partSearched && (
+                <div style={{ padding:"40px 20px", textAlign:"center" }}>
+                  <div style={{ fontSize:9, color:"rgba(138,99,210,0.3)", letterSpacing:2, marginBottom:8 }}>SEARCH FY2025 TX LINE ITEMS</div>
+                  <div style={{ fontSize:7.5, color:"rgba(232,228,240,0.2)" }}>Enter a full or partial model number, part name, or manufacturer — results sorted by total cost, highest first</div>
+                </div>
+              )}
+              {partSearched && partLoading && (
+                <div style={{ padding:"40px", textAlign:"center", fontSize:9, color:"rgba(138,99,210,0.4)", letterSpacing:2 }}>SEARCHING...</div>
+              )}
+              {partSearched && !partLoading && partResults.length === 0 && (
+                <div style={{ padding:"40px", textAlign:"center", fontSize:9, color:"rgba(232,228,240,0.25)", letterSpacing:2 }}>NO RESULTS FOUND</div>
+              )}
+              {partSearched && !partLoading && partResults.length > 0 && (
+                <>
+                  {/* Results header */}
+                  <div style={{ display:"grid", gridTemplateColumns:"1.6fr 1.2fr 1fr 90px 110px 110px", gap:0, padding:"7px 12px", borderBottom:"1px solid rgba(138,99,210,0.2)", background:"rgba(138,99,210,0.05)" }}>
+                    {["MODEL / PART","APPLICANT","SERVICE PROVIDER","UNIT PRICE","TOTAL COST","PRODUCT TYPE"].map((h,i) => (
+                      <div key={i} style={{ fontSize:6.5, letterSpacing:1.5, color:"rgba(138,99,210,0.55)", fontFamily:"'DM Mono',monospace" }}>{h}</div>
+                    ))}
+                  </div>
+                  {partResults.map((r, i) => (
+                    <div key={i} style={{ display:"grid", gridTemplateColumns:"1.6fr 1.2fr 1fr 90px 110px 110px", gap:0, padding:"9px 12px", borderBottom:"1px solid rgba(138,99,210,0.07)", alignItems:"center", transition:"background 0.12s" }}
+                      onMouseEnter={e => e.currentTarget.style.background="rgba(138,99,210,0.04)"}
+                      onMouseLeave={e => e.currentTarget.style.background="transparent"}>
+                      <div>
+                        <div style={{ fontSize:8, color:"#a07ee0", fontWeight:500, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{r.model_of_equipment || "—"}</div>
+                        {r.manufacturer && <div style={{ fontSize:6.5, color:"rgba(232,228,240,0.35)", marginTop:2 }}>{r.manufacturer}</div>}
+                      </div>
+                      <div style={{ fontSize:7.5, color:"rgba(232,228,240,0.75)", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", paddingRight:8 }}>{r.organization_name || "—"}</div>
+                      <div style={{ fontSize:7.5, color:"rgba(59,158,255,0.8)", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", paddingRight:8 }}>{r.spin_name || "—"}</div>
+                      <div style={{ fontSize:8, color:"rgba(232,228,240,0.5)" }}>{r.unit_price ? `$${r.unit_price.toLocaleString()}` : "—"}</div>
+                      <div style={{ fontSize:8, color:"#22c97a", fontWeight:500 }}>{r.total_cost ? `$${Math.round(r.total_cost).toLocaleString()}` : "—"}</div>
+                      <div style={{ fontSize:7, color:"rgba(232,228,240,0.35)", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{r.function_name || r.product_name || "—"}</div>
+                    </div>
+                  ))}
+                  <div style={{ padding:"8px 12px", fontSize:7, color:"rgba(232,228,240,0.2)", letterSpacing:1.5, borderTop:"1px solid rgba(138,99,210,0.08)" }}>
+                    {partResults.length} RESULT{partResults.length !== 1 ? "S" : ""} · FY2025 TX · SORTED BY TOTAL COST
+                  </div>
                 </>
               )}
             </>
