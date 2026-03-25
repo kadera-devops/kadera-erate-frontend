@@ -264,7 +264,7 @@ export default function Dashboard({ session }) {
                 {/* COL 1: TOOLS */}
                 <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
                   <Panel>
-                    <PTitle>{'{'// E-RATE '} '}<span style={{ color:"#a07ee0" }}>QUICK ACCESS TOOLS</span></PTitle>
+                    <PTitle>{'// E-RATE '}<span style={{ color:"#a07ee0" }}>QUICK ACCESS TOOLS</span></PTitle>
                     <div style={{ padding:"12px 14px" }}>
                       <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8 }}>
                         <ToolBtn href="https://www.usac.org/e-rate/applicant-process/before-you-begin/budget-tool/"          color="purple" icon="💰" name="E-RATE C2 BUDGET"     desc="Calculate and track your Category 2 five-year budget cycle."/>
@@ -278,7 +278,7 @@ export default function Dashboard({ session }) {
 
                   {/* Deadlines */}
                   <Panel>
-                    <PTitle>{'{'// FY2025 '}'}<span style={{ color:"#a07ee0" }}>KEY DEADLINES</span></PTitle>
+                    <PTitle>{'// FY2025 '}<span style={{ color:"#a07ee0" }}>KEY DEADLINES</span></PTitle>
                     <div style={{ padding:"10px 14px" }}>
                       {[
                         { name:"Form 470 Window", sub:"Open Now", status:"OPEN", color:"#39ff14", pulse:true },
@@ -338,7 +338,7 @@ export default function Dashboard({ session }) {
 
                   {/* Logged in user */}
                   <Panel>
-                    <PTitle>{'{'// SESSION'}'}</PTitle>
+                    <PTitle>{'// SESSION'}</PTitle>
                     <div style={{ padding:"10px 14px" }}>
                       <div style={{ fontSize:7.5, color:"rgba(232,228,240,0.6)", marginBottom:4 }}>{session?.user?.email}</div>
                       <div style={{ fontSize:6.5, color:"rgba(138,99,210,0.5)" }}>KADERA INTERNAL · E-RATE TEAM</div>
