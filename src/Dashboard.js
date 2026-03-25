@@ -197,30 +197,40 @@ function Feed470({ token, onTagsUpdated }) {
           const isTagged = tags.has(item.application_number);
           const newToday = isNew(item);
           const days     = daysLeft(item);
+          const cdColor  = days === null ? "rgba(232,228,240,0.3)" : days > 14 ? "#39ff14" : days > 7 ? "#f0b429" : "#f0614a";
+          const cdBg     = days === null ? "rgba(138,99,210,0.04)" : days > 14 ? "rgba(57,255,20,0.07)" : days > 7 ? "rgba(240,180,41,0.08)" : "rgba(240,97,74,0.1)";
+          const cdBorder = days === null ? "rgba(138,99,210,0.15)" : days > 14 ? "rgba(57,255,20,0.35)" : days > 7 ? "rgba(240,180,41,0.5)" : "rgba(240,97,74,0.65)";
+          const urgent   = days !== null && days <= 7;
           return (
             <a key={i} href={get470Link(item.application_number)} target="_blank" rel="noreferrer"
-              style={{ display:"flex", flexDirection:"column", gap:3, padding:"9px 14px", borderBottom:"1px solid rgba(138,99,210,0.1)", textDecoration:"none", transition:"background 0.15s" }}
+              style={{ display:"flex", alignItems:"center", gap:10, padding:"9px 14px", borderBottom:"1px solid rgba(138,99,210,0.1)", textDecoration:"none", transition:"background 0.15s" }}
               onMouseEnter={e => e.currentTarget.style.background="rgba(138,99,210,0.05)"}
               onMouseLeave={e => e.currentTarget.style.background="transparent"}>
-              <div style={{ display:"flex", alignItems:"center", gap:8 }}>
-                <span style={{ fontSize:9, color:"#3b9eff", flex:1, fontWeight:500 }}>Form 470 · {item.application_number}</span>
-                {newToday && <span style={{ fontSize:5.5, letterSpacing:2, padding:"2px 6px", background:"rgba(138,99,210,0.15)", border:"1px solid rgba(138,99,210,0.5)", color:"#a07ee0" }}>NEW</span>}
-                <span style={{ fontSize:6, letterSpacing:1.5, padding:"2px 7px", background:"rgba(57,255,20,0.08)", border:"1px solid rgba(57,255,20,0.35)", color:"#39ff14" }}>OPEN</span>
-                <button onClick={e => toggleTag(e, item)}
-                  style={{ fontSize:6.5, letterSpacing:1.5, padding:"2px 8px", border:`1px solid ${isTagged ? "rgba(240,180,41,0.7)" : "rgba(138,99,210,0.3)"}`, background: isTagged ? "rgba(240,180,41,0.12)" : "rgba(138,99,210,0.06)", color: isTagged ? "#f0b429" : "rgba(232,228,240,0.4)", cursor:"pointer", fontFamily:"'DM Mono',monospace", transition:"all 0.15s" }}>
-                  {isTagged ? "★ TAGGED" : "☆ TAG"}
-                </button>
+              {/* Info section */}
+              <div style={{ flex:1, minWidth:0 }}>
+                <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:3 }}>
+                  <span style={{ fontSize:9, color:"#3b9eff", fontWeight:500 }}>Form 470 · {item.application_number}</span>
+                  {newToday && <span style={{ fontSize:5.5, letterSpacing:2, padding:"2px 6px", background:"rgba(138,99,210,0.15)", border:"1px solid rgba(138,99,210,0.5)", color:"#a07ee0", flexShrink:0 }}>NEW</span>}
+                  <span style={{ fontSize:6, letterSpacing:1.5, padding:"2px 7px", background:"rgba(57,255,20,0.08)", border:"1px solid rgba(57,255,20,0.35)", color:"#39ff14", flexShrink:0 }}>OPEN</span>
+                  <button onClick={e => toggleTag(e, item)} style={{ fontSize:6.5, letterSpacing:1.5, padding:"2px 8px", border:`1px solid ${isTagged ? "rgba(240,180,41,0.7)" : "rgba(138,99,210,0.3)"}`, background: isTagged ? "rgba(240,180,41,0.12)" : "rgba(138,99,210,0.06)", color: isTagged ? "#f0b429" : "rgba(232,228,240,0.4)", cursor:"pointer", fontFamily:"'DM Mono',monospace", transition:"all 0.15s", flexShrink:0 }}>
+                    {isTagged ? "★ TAGGED" : "☆ TAG"}
+                  </button>
+                </div>
+                <div style={{ fontSize:8, color:"rgba(232,228,240,0.8)", marginBottom:3, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{item.billed_entity_name}{item.state ? ` · ${item.state}` : ""}</div>
+                <div style={{ display:"flex", gap:10 }}>
+                  <span style={{ fontSize:6.5, color:"#a07ee0" }}>FY{item.funding_year}</span>
+                  {item.service_category && <span style={{ fontSize:6.5, color:"rgba(232,228,240,0.4)", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{item.service_category}</span>}
+                  {item.date_posted && <span style={{ fontSize:6.5, color:"rgba(232,228,240,0.35)", flexShrink:0 }}>Posted: {new Date(item.date_posted).toLocaleDateString()}</span>}
+                </div>
               </div>
-              <div style={{ fontSize:8, color:"rgba(232,228,240,0.75)" }}>{item.billed_entity_name}{item.state ? ` · ${item.state}` : ""}</div>
-              <div style={{ display:"flex", gap:10, alignItems:"center" }}>
-                <span style={{ fontSize:6.5, color:"#a07ee0" }}>FY{item.funding_year}</span>
-                {item.service_category && <span style={{ fontSize:6.5, color:"rgba(232,228,240,0.4)" }}>{item.service_category}</span>}
-                {days !== null && (() => {
-                  const color = days > 14 ? "#39ff14" : days > 7 ? "#f0b429" : "#f0614a";
-                  const urgent = days <= 7;
-                  return <span className={urgent ? "pulse-urgent" : ""} style={{ fontSize:6.5, color, fontWeight: urgent ? 600 : 400 }}>Bid Due: {new Date(item.bid_due_date).toLocaleDateString()} · {days === 0 ? "Due TODAY" : `${days}d remaining`}</span>;
-                })()}
-                {item.date_posted && <span style={{ fontSize:6.5, color:"rgba(232,228,240,0.35)" }}>Posted: {new Date(item.date_posted).toLocaleDateString()}</span>}
+              {/* Large countdown block */}
+              <div className={urgent ? "pulse-urgent" : ""} style={{ display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", minWidth:68, padding:"7px 10px", background:cdBg, border:`1px solid ${cdBorder}`, clipPath:"polygon(0 0,100% 0,100% calc(100% - 6px),calc(100% - 6px) 100%,0 100%)", flexShrink:0, position:"relative" }}>
+                <div style={{ position:"absolute", top:0, left:0, right:0, height:1, background:`linear-gradient(90deg,transparent,${cdColor},transparent)`, opacity:0.6 }}/>
+                <div style={{ fontFamily:"'Aldrich',sans-serif", fontSize:22, lineHeight:1, color:cdColor, marginBottom:2 }}>
+                  {days === null ? "—" : days === 0 ? "0" : days}
+                </div>
+                <div style={{ fontSize:6, letterSpacing:2, color:cdColor, opacity:0.7 }}>DAYS LEFT</div>
+                {item.bid_due_date && <div style={{ fontSize:6, color:cdColor, opacity:0.5, marginTop:2 }}>{new Date(item.bid_due_date).toLocaleDateString()}</div>}
               </div>
             </a>
           );
@@ -413,10 +423,10 @@ export default function Dashboard({ session }) {
             <>
               {/* STAT STRIP */}
               <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:10, marginBottom:20, animation:"fade-up 0.5s ease 0.1s both" }}>
-                <StatCard label="// CURRENT FUNDING YEAR" value="FY2025"    sub="Window Open"                          color="purple"/>
+                <StatCard label="// CURRENT FUNDING YEAR" value="FY2026"    sub="Window Open"                          color="purple"/>
                 <StatCard label="// SYNCED FORM 470s"     value={stats ? stats.total_470s : "—"}  sub="In database"   color="blue"/>
                 <StatCard label="// OPEN 470s"            value={stats ? stats.open_470s  : "—"}  sub="Active bidding" color="gold"/>
-                <StatCard label="// COMMITMENTS"          value={stats ? stats.total_commitments : "—"} sub="FY2025"   color="green"/>
+                <StatCard label="// COMMITMENTS"          value={stats ? stats.total_commitments : "—"} sub="FY2026"   color="green"/>
               </div>
 
               {/* MAIN GRID */}
@@ -439,7 +449,7 @@ export default function Dashboard({ session }) {
 
                   {/* Deadlines */}
                   <Panel>
-                    <PTitle>{'// FY2025 '}<span style={{ color:"#a07ee0" }}>KEY DEADLINES</span></PTitle>
+                    <PTitle>{'// FY2026 '}<span style={{ color:"#a07ee0" }}>KEY DEADLINES</span></PTitle>
                     <div style={{ padding:"10px 14px" }}>
                       {[
                         { name:"Form 470 Window", sub:"Open Now", status:"OPEN", color:"#39ff14", pulse:true },
