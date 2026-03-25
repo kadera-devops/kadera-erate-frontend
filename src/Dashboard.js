@@ -110,7 +110,7 @@ function Feed470({ token }) {
 
   // Correct USAC 470 detail URL
   function get470Link(appNum) {
-    return `https://forms.universalservice.org/portal/form470/view?appNumber=${appNum}`;
+    return `https://legacy.fundsforlearning.com/470/${appNum}`;
   }
 
   return (

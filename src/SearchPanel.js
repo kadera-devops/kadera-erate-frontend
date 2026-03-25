@@ -151,7 +151,7 @@ export default function SearchPanel({ token }) {
                       })}
                       <td style={{ padding:"8px 12px" }}>
                         {row.application_number && (
-                          <a href={`https://forms.universalservice.org/portal/form470/view?appNumber=${row.application_number}`} target="_blank" rel="noreferrer"
+                          <a href={`https://legacy.fundsforlearning.com/470/${row.application_number}`} target="_blank" rel="noreferrer"
                             style={{ fontSize:7, color:"#3b9eff", textDecoration:"none", padding:"2px 8px", border:"1px solid rgba(59,158,255,0.3)", background:"rgba(59,158,255,0.05)" }}>
                             VIEW →
                           </a>
