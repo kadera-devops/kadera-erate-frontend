@@ -9,12 +9,14 @@ const css = `
   *, *::before, *::after { box-sizing:border-box; margin:0; padding:0; }
   body { background:#05050d; font-family:'DM Mono',monospace; color:#e8e4f0; overflow-x:hidden; }
   ::-webkit-scrollbar { width:2px; } ::-webkit-scrollbar-thumb { background:rgba(138,99,210,0.4); }
-  @keyframes spin      { from{transform:rotate(0deg)} to{transform:rotate(360deg)} }
-  @keyframes scan      { 0%{top:-2px} 100%{top:100%} }
-  @keyframes pulse-dot { 0%,100%{opacity:1} 50%{opacity:0.2} }
-  @keyframes fade-up   { from{opacity:0;transform:translateY(12px)} to{opacity:1;transform:translateY(0)} }
-  @keyframes glow-p    { 0%,100%{box-shadow:0 0 10px rgba(138,99,210,0.2)} 50%{box-shadow:0 0 22px rgba(138,99,210,0.5)} }
-  @keyframes shimmer   { 0%{background-position:200% 0} 100%{background-position:-200% 0} }
+  @keyframes spin        { from{transform:rotate(0deg)} to{transform:rotate(360deg)} }
+  @keyframes scan        { 0%{top:-2px} 100%{top:100%} }
+  @keyframes pulse-dot   { 0%,100%{opacity:1} 50%{opacity:0.2} }
+  @keyframes pulse-slow  { 0%,100%{opacity:1} 50%{opacity:0.25} }
+  @keyframes fade-up     { from{opacity:0;transform:translateY(12px)} to{opacity:1;transform:translateY(0)} }
+  @keyframes glow-p      { 0%,100%{box-shadow:0 0 10px rgba(138,99,210,0.2)} 50%{box-shadow:0 0 22px rgba(138,99,210,0.5)} }
+  @keyframes shimmer     { 0%{background-position:200% 0} 100%{background-position:-200% 0} }
+  .pulse-urgent          { animation: pulse-slow 2.4s ease-in-out infinite; }
 `;
 
 function Panel({ children, style }) {
@@ -121,13 +123,11 @@ function Feed470({ token, onTagsUpdated }) {
   }
 
   function getStatus(item) {
-    // Primary: use bid_due_date if available
     if (item.bid_due_date) {
       const bidDate = new Date(item.bid_due_date);
       const now     = new Date();
       return bidDate >= now ? "open" : "closed";
     }
-    // Fallback: use USAC status field
     const s = (item.application_status || "").toLowerCase();
     if (s.includes("certif") && !s.includes("pending")) return "open";
     if (s.includes("pending") || s.includes("review") || s.includes("progress")) return "review";
@@ -135,7 +135,27 @@ function Feed470({ token, onTagsUpdated }) {
     return "open";
   }
 
-  const filtered = filter === "all" ? data : data.filter(d => getStatus(d) === filter);
+  function isNew(item) {
+    if (!item.date_posted && !item.synced_at) return false;
+    const posted = new Date(item.date_posted || item.synced_at);
+    const today  = new Date();
+    return posted.getFullYear() === today.getFullYear() &&
+           posted.getMonth()    === today.getMonth()    &&
+           posted.getDate()     === today.getDate();
+  }
+
+  function daysLeft(item) {
+    if (!item.bid_due_date) return null;
+    return Math.ceil((new Date(item.bid_due_date) - new Date()) / (1000*60*60*24));
+  }
+
+  // Always show open only — closed filtered out at source
+  const openData = data.filter(d => getStatus(d) === "open");
+  const filtered = filter === "all" ? openData : openData.filter(d => {
+    const days = daysLeft(d);
+    if (filter === "urgent") return days !== null && days <= 7;
+    return true;
+  });
   const totalPages = Math.ceil(filtered.length / PAGE_SIZE);
   const paged = filtered.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
   const STATES = ["ALL","TX","CA","NY","FL","IL","PA","OH","GA","NC","MI"];
@@ -158,9 +178,10 @@ function Feed470({ token, onTagsUpdated }) {
         ))}
       </div>
       <div style={{ display:"flex", gap:5, padding:"7px 14px", borderBottom:"1px solid rgba(138,99,210,0.12)" }}>
-        {["all","open","review","closed"].map(f => (
-          <button key={f} onClick={() => { setFilter(f); setPage(0); }} style={{ padding:"3px 9px", fontFamily:"'DM Mono',monospace", fontSize:7, letterSpacing:1.5, border:`1px solid ${filter===f ? "rgba(138,99,210,0.6)" : "rgba(138,99,210,0.2)"}`, background: filter===f ? "rgba(138,99,210,0.1)" : "transparent", color: filter===f ? "#a07ee0" : "rgba(232,228,240,0.4)", cursor:"pointer" }}>{f.toUpperCase()}</button>
+        {["all","urgent"].map(f => (
+          <button key={f} onClick={() => { setFilter(f); setPage(0); }} style={{ padding:"3px 9px", fontFamily:"'DM Mono',monospace", fontSize:7, letterSpacing:1.5, border:`1px solid ${filter===f ? (f==="urgent" ? "rgba(240,97,74,0.6)" : "rgba(138,99,210,0.6)") : "rgba(138,99,210,0.2)"}`, background: filter===f ? (f==="urgent" ? "rgba(240,97,74,0.1)" : "rgba(138,99,210,0.1)") : "transparent", color: filter===f ? (f==="urgent" ? "#f0614a" : "#a07ee0") : "rgba(232,228,240,0.4)", cursor:"pointer" }}>{f === "urgent" ? "⚠ URGENT ≤7d" : "ALL OPEN"}</button>
         ))}
+        <span style={{ marginLeft:"auto", fontSize:7, color:"rgba(232,228,240,0.35)", alignSelf:"center" }}>{openData.length} OPEN 470s</span>
       </div>
       <div style={{ flex:1, overflow:"hidden" }}>
         {loading ? (
@@ -173,11 +194,9 @@ function Feed470({ token, onTagsUpdated }) {
         ) : paged.length === 0 ? (
           <div style={{ padding:"24px 14px", textAlign:"center", fontSize:9, color:"rgba(138,99,210,0.4)" }}>NO 470s FOUND</div>
         ) : paged.map((item, i) => {
-          const status   = getStatus(item);
           const isTagged = tags.has(item.application_number);
-          const badgeColor = status === "open" ? "#39ff14" : status === "review" ? "#f0b429" : "rgba(232,228,240,0.3)";
-          const badgeBg    = status === "open" ? "rgba(57,255,20,0.08)" : status === "review" ? "rgba(240,180,41,0.08)" : "rgba(138,99,210,0.08)";
-          const badgeTxt   = status === "open" ? "OPEN" : status === "review" ? "PENDING" : "CLOSED";
+          const newToday = isNew(item);
+          const days     = daysLeft(item);
           return (
             <a key={i} href={get470Link(item.application_number)} target="_blank" rel="noreferrer"
               style={{ display:"flex", flexDirection:"column", gap:3, padding:"9px 14px", borderBottom:"1px solid rgba(138,99,210,0.1)", textDecoration:"none", transition:"background 0.15s" }}
@@ -185,23 +204,23 @@ function Feed470({ token, onTagsUpdated }) {
               onMouseLeave={e => e.currentTarget.style.background="transparent"}>
               <div style={{ display:"flex", alignItems:"center", gap:8 }}>
                 <span style={{ fontSize:9, color:"#3b9eff", flex:1, fontWeight:500 }}>Form 470 · {item.application_number}</span>
-                <span style={{ fontSize:6, letterSpacing:1.5, padding:"2px 7px", background:badgeBg, border:`1px solid ${badgeColor}40`, color:badgeColor }}>{badgeTxt}</span>
+                {newToday && <span style={{ fontSize:5.5, letterSpacing:2, padding:"2px 6px", background:"rgba(138,99,210,0.15)", border:"1px solid rgba(138,99,210,0.5)", color:"#a07ee0" }}>NEW</span>}
+                <span style={{ fontSize:6, letterSpacing:1.5, padding:"2px 7px", background:"rgba(57,255,20,0.08)", border:"1px solid rgba(57,255,20,0.35)", color:"#39ff14" }}>OPEN</span>
                 <button onClick={e => toggleTag(e, item)}
                   style={{ fontSize:6.5, letterSpacing:1.5, padding:"2px 8px", border:`1px solid ${isTagged ? "rgba(240,180,41,0.7)" : "rgba(138,99,210,0.3)"}`, background: isTagged ? "rgba(240,180,41,0.12)" : "rgba(138,99,210,0.06)", color: isTagged ? "#f0b429" : "rgba(232,228,240,0.4)", cursor:"pointer", fontFamily:"'DM Mono',monospace", transition:"all 0.15s" }}>
                   {isTagged ? "★ TAGGED" : "☆ TAG"}
                 </button>
               </div>
               <div style={{ fontSize:8, color:"rgba(232,228,240,0.75)" }}>{item.billed_entity_name}{item.state ? ` · ${item.state}` : ""}</div>
-              <div style={{ display:"flex", gap:10 }}>
+              <div style={{ display:"flex", gap:10, alignItems:"center" }}>
                 <span style={{ fontSize:6.5, color:"#a07ee0" }}>FY{item.funding_year}</span>
                 {item.service_category && <span style={{ fontSize:6.5, color:"rgba(232,228,240,0.4)" }}>{item.service_category}</span>}
-                {item.bid_due_date && (() => {
-                  const days = Math.ceil((new Date(item.bid_due_date) - new Date()) / (1000*60*60*24));
-                  const color = days > 14 ? "#39ff14" : days > 7 ? "#f0b429" : days >= 0 ? "#f0614a" : "rgba(232,228,240,0.3)";
-                  const label = days < 0 ? `Closed ${Math.abs(days)}d ago` : days === 0 ? "Due TODAY" : `${days}d remaining`;
-                  return <span style={{ fontSize:6.5, color, fontWeight: days >= 0 && days <= 7 ? 600 : 400 }}>Bid Due: {new Date(item.bid_due_date).toLocaleDateString()} · {label}</span>;
+                {days !== null && (() => {
+                  const color = days > 14 ? "#39ff14" : days > 7 ? "#f0b429" : "#f0614a";
+                  const urgent = days <= 7;
+                  return <span className={urgent ? "pulse-urgent" : ""} style={{ fontSize:6.5, color, fontWeight: urgent ? 600 : 400 }}>Bid Due: {new Date(item.bid_due_date).toLocaleDateString()} · {days === 0 ? "Due TODAY" : `${days}d remaining`}</span>;
                 })()}
-                {item.date_posted && <span style={{ fontSize:6.5, color:"rgba(232,228,240,0.4)" }}>Posted: {new Date(item.date_posted).toLocaleDateString()}</span>}
+                {item.date_posted && <span style={{ fontSize:6.5, color:"rgba(232,228,240,0.35)" }}>Posted: {new Date(item.date_posted).toLocaleDateString()}</span>}
               </div>
             </a>
           );
@@ -288,7 +307,7 @@ function TagsPanel({ token, onTagsUpdated }) {
               const label = days < 0 ? "CLOSED" : days === 0 ? "TODAY!" : `${days}d left`;
               return (
                 <div style={{ display:"flex", alignItems:"center" }}>
-                  <span style={{ fontSize:8, color, fontWeight:600, padding:"2px 8px", background:bg, border:`1px solid ${color}40`, borderRadius:1, ...(days >= 0 && days <= 7 && { animation:"pulse-dot 1.5s infinite" }) }}>
+                  <span className={days >= 0 && days <= 7 ? "pulse-urgent" : ""} style={{ fontSize:8, color, fontWeight:600, padding:"2px 8px", background:bg, border:`1px solid ${color}40`, borderRadius:1 }}>
                     {label}
                   </span>
                 </div>
