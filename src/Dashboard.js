@@ -248,8 +248,9 @@ function Feed470({ token, onTagsUpdated }) {
 }
 // ── Tags Panel ────────────────────────────────────────────────────────────────
 function TagsPanel({ token, onTagsUpdated }) {
-  const [tags, setTags]     = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [tags, setTags]         = useState([]);
+  const [loading, setLoading]   = useState(true);
+  const [popup, setPopup]       = useState(null); // { appNum, entityName, bidAmount, cogs }
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -269,20 +270,95 @@ function TagsPanel({ token, onTagsUpdated }) {
     if (onTagsUpdated) onTagsUpdated();
   }
 
+  async function patchTag(appNum, fields) {
+    try {
+      await fetch(`${API_URL}/api/tags/${appNum}`, {
+        method: "PATCH",
+        headers: { Authorization:`Bearer ${token}`, "Content-Type":"application/json" },
+        body: JSON.stringify(fields)
+      });
+      setTags(prev => prev.map(t => t.application_number === appNum ? { ...t, ...fields } : t));
+    } catch {}
+  }
+
+  function toggleResponded(tag) {
+    const newVal = !tag.responded;
+    // If turning off, also clear bid_status and financials
+    const fields = newVal
+      ? { responded: true }
+      : { responded: false, bid_status: null, bid_amount: null, cogs: null };
+    patchTag(tag.application_number, fields);
+  }
+
+  function toggleStatus(tag, status) {
+    const newStatus = tag.bid_status === status ? null : status;
+    patchTag(tag.application_number, { bid_status: newStatus });
+  }
+
+  function openPopup(tag) {
+    setPopup({ appNum: tag.application_number, entityName: tag.billed_entity_name, bidAmount: tag.bid_amount || "", cogs: tag.cogs || "" });
+  }
+
+  async function savePopup() {
+    const bid  = parseFloat(popup.bidAmount) || 0;
+    const cogs = parseFloat(popup.cogs) || 0;
+    await patchTag(popup.appNum, { bid_amount: bid, cogs });
+    setPopup(null);
+  }
+
+  const popupBid    = parseFloat(popup?.bidAmount) || 0;
+  const popupCogs   = parseFloat(popup?.cogs) || 0;
+  const popupMargin = popupBid > 0 ? (((popupBid - popupCogs) / popupBid) * 100).toFixed(1) : "—";
+
+  const btnBase = { fontSize:7, letterSpacing:1, padding:"3px 7px", fontFamily:"'DM Mono',monospace", cursor:"pointer", border:"1px solid", transition:"all 0.15s" };
+
   return (
-    <div style={{ animation:"fade-up 0.4s ease both" }}>
+    <div style={{ animation:"fade-up 0.4s ease both", position:"relative" }}>
+
+      {/* $ Popup */}
+      {popup && (
+        <div style={{ position:"fixed", inset:0, background:"rgba(5,5,13,0.88)", display:"flex", alignItems:"center", justifyContent:"center", zIndex:200 }}>
+          <div style={{ background:"#0b0a1a", border:"1px solid rgba(240,180,41,0.35)", clipPath:"polygon(0 0,calc(100% - 14px) 0,100% 14px,100% 100%,14px 100%,0 calc(100% - 14px))", padding:"20px 22px 22px", width:300, position:"relative" }}>
+            <div style={{ position:"absolute", top:0, left:"10%", right:"10%", height:1, background:"linear-gradient(90deg,transparent,rgba(240,180,41,0.5),transparent)" }}/>
+            <div style={{ fontFamily:"'Aldrich',sans-serif", fontSize:9, letterSpacing:2, color:"#f0b429", marginBottom:6, textTransform:"uppercase" }}>Bid Financials</div>
+            <div style={{ fontSize:7, letterSpacing:1.5, color:"rgba(232,228,240,0.35)", marginBottom:16, textTransform:"uppercase" }}>{popup.appNum} — {popup.entityName}</div>
+
+            {[{ label:"Total Bid Amount", key:"bidAmount" }, { label:"Cost of Goods", key:"cogs" }].map(({ label, key }) => (
+              <div key={key} style={{ marginBottom:12 }}>
+                <div style={{ fontSize:7, letterSpacing:1.8, color:"rgba(232,228,240,0.4)", textTransform:"uppercase", marginBottom:5 }}>{label}</div>
+                <div style={{ display:"flex", border:"1px solid rgba(138,99,210,0.25)", background:"rgba(255,255,255,0.02)" }}>
+                  <div style={{ padding:"6px 9px", fontSize:9, color:"#a07ee0", borderRight:"1px solid rgba(138,99,210,0.2)" }}>$</div>
+                  <input type="number" value={popup[key]} onChange={e => setPopup(p => ({ ...p, [key]: e.target.value }))}
+                    style={{ flex:1, background:"transparent", border:"none", outline:"none", fontFamily:"'DM Mono',monospace", fontSize:9, color:"#e8e4f0", padding:"6px 9px" }}/>
+                </div>
+              </div>
+            ))}
+
+            <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"10px 12px", background:"rgba(138,99,210,0.06)", border:"1px solid rgba(138,99,210,0.2)", marginBottom:14 }}>
+              <span style={{ fontSize:7, letterSpacing:1.8, color:"rgba(138,99,210,0.6)", textTransform:"uppercase" }}>Calculated Margin</span>
+              <span style={{ fontFamily:"'Aldrich',sans-serif", fontSize:16, color:"#8a63d2" }}>{popupMargin}{popupBid > 0 ? "%" : ""}</span>
+            </div>
+
+            <div style={{ display:"flex", gap:8 }}>
+              <button onClick={savePopup} style={{ flex:1, padding:"7px", fontFamily:"'DM Mono',monospace", fontSize:7.5, letterSpacing:1.5, border:"1px solid rgba(34,201,122,0.4)", background:"rgba(34,201,122,0.08)", color:"#22c97a", cursor:"pointer" }}>SAVE</button>
+              <button onClick={() => setPopup(null)} style={{ padding:"7px 14px", fontFamily:"'DM Mono',monospace", fontSize:7.5, letterSpacing:1.5, border:"1px solid rgba(138,99,210,0.2)", background:"transparent", color:"rgba(232,228,240,0.35)", cursor:"pointer" }}>CANCEL</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:16 }}>
         <div style={{ fontFamily:"'Aldrich',sans-serif", fontSize:14, color:"#f0b429", letterSpacing:1 }}>★ MY TAGGED 470s</div>
         <span style={{ fontSize:7.5, color:"rgba(232,228,240,0.4)", letterSpacing:2 }}>{tags.length} TAGGED</span>
       </div>
 
-      <div style={{ background:"rgba(10,8,20,0.95)", border:"1px solid rgba(240,180,41,0.3)", position:"relative", clipPath:"polygon(0 0,100% 0,100% calc(100% - 14px),calc(100% - 14px) 100%,0 100%)" }}>
+      <div style={{ background:"rgba(10,8,20,0.95)", border:"1px solid rgba(240,180,41,0.3)", position:"relative", clipPath:"polygon(0 0,100% 0,100% calc(100% - 14px),calc(100% - 14px) 100%,0 100%)", overflowX:"auto" }}>
         <div style={{ position:"absolute", top:0, left:0, width:12, height:12, borderTop:"1.5px solid #f0b429", borderLeft:"1.5px solid #f0b429" }}/>
         <div style={{ position:"absolute", bottom:13, right:-1, width:20, height:1.5, background:"rgba(240,180,41,0.35)", transform:"rotate(-45deg)", transformOrigin:"right center" }}/>
 
         {/* Table header */}
-        <div style={{ display:"grid", gridTemplateColumns:"1.5fr 2fr 1fr 1fr 1.2fr 100px 80px", gap:0, padding:"8px 16px", borderBottom:"1px solid rgba(240,180,41,0.2)", background:"rgba(240,180,41,0.04)" }}>
-          {["APP #","ENTITY","STATE","SERVICE","BID DUE DATE","DAYS LEFT",""].map((h,i) => (
+        <div style={{ display:"grid", gridTemplateColumns:"130px 1.8fr 60px 1fr 100px 90px 1fr", gap:0, padding:"8px 16px", borderBottom:"1px solid rgba(240,180,41,0.2)", background:"rgba(240,180,41,0.04)", minWidth:900 }}>
+          {["APP #","ENTITY","STATE","SERVICE","BID DUE","DAYS LEFT","ACTIONS"].map((h,i) => (
             <div key={i} style={{ fontSize:6.5, letterSpacing:1.5, color:"rgba(240,180,41,0.6)", fontFamily:"'DM Mono',monospace" }}>{h}</div>
           ))}
         </div>
@@ -294,63 +370,108 @@ function TagsPanel({ token, onTagsUpdated }) {
             <div style={{ fontSize:11, color:"rgba(240,180,41,0.4)", marginBottom:8 }}>NO TAGGED 470s YET</div>
             <div style={{ fontSize:8, color:"rgba(232,228,240,0.3)" }}>Click ☆ TAG on any 470 in the feed to add it here</div>
           </div>
-        ) : tags.map((tag, i) => (
-          <div key={i} style={{ display:"grid", gridTemplateColumns:"1.5fr 2fr 1fr 1fr 1.2fr 100px 80px", gap:0, padding:"10px 16px", borderBottom: i < tags.length-1 ? "1px solid rgba(240,180,41,0.08)" : "none", alignItems:"center", transition:"background 0.15s" }}
-            onMouseEnter={e => e.currentTarget.style.background="rgba(240,180,41,0.04)"}
-            onMouseLeave={e => e.currentTarget.style.background="transparent"}>
-            <a href={`https://legacy.fundsforlearning.com/470/${tag.application_number}`} target="_blank" rel="noreferrer"
-              style={{ fontSize:8.5, color:"#3b9eff", textDecoration:"none", fontWeight:500 }}>
-              {tag.application_number}
-            </a>
-            <a href={`https://legacy.fundsforlearning.com/470/${tag.application_number}`} target="_blank" rel="noreferrer"
-              style={{ fontSize:8, color:"rgba(232,228,240,0.8)", textDecoration:"none", paddingRight:8, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}
-              onMouseEnter={e => e.currentTarget.style.color="#3b9eff"}
-              onMouseLeave={e => e.currentTarget.style.color="rgba(232,228,240,0.8)"}>
-              {tag.billed_entity_name || "—"}
-            </a>
-            <div style={{ fontSize:8, color:"rgba(232,228,240,0.5)" }}>{tag.state || "—"}</div>
-            <div style={{ fontSize:7.5, color:"rgba(232,228,240,0.4)", paddingRight:8, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{tag.service_category || "—"}</div>
-            <div style={{ fontSize:8, color: tag.bid_due_date ? "#f0b429" : "rgba(232,228,240,0.3)", fontWeight: tag.bid_due_date ? 500 : 400 }}>
-              {tag.bid_due_date ? new Date(tag.bid_due_date).toLocaleDateString() : "—"}
+        ) : tags.map((tag, i) => {
+          const days      = tag.bid_due_date ? Math.ceil((new Date(tag.bid_due_date) - new Date()) / (1000*60*60*24)) : null;
+          const dayColor  = days === null ? "rgba(232,228,240,0.3)" : days > 14 ? "#39ff14" : days > 7 ? "#f0b429" : days >= 0 ? "#f0614a" : "rgba(232,228,240,0.3)";
+          const dayBg     = days === null ? "rgba(138,99,210,0.04)" : days > 14 ? "rgba(57,255,20,0.08)" : days > 7 ? "rgba(240,180,41,0.08)" : days >= 0 ? "rgba(240,97,74,0.1)" : "rgba(138,99,210,0.06)";
+          const dayLabel  = days === null ? "—" : days < 0 ? "CLOSED" : days === 0 ? "TODAY!" : `${days}d left`;
+          const responded = !!tag.responded;
+          const isWon     = tag.bid_status === "won";
+          const isLost    = tag.bid_status === "lost";
+          const hasMoney  = tag.bid_amount > 0;
+
+          return (
+            <div key={i} style={{ display:"grid", gridTemplateColumns:"130px 1.8fr 60px 1fr 100px 90px 1fr", gap:0, padding:"9px 16px", borderBottom: i < tags.length-1 ? "1px solid rgba(240,180,41,0.08)" : "none", alignItems:"center", transition:"background 0.15s", minWidth:900 }}
+              onMouseEnter={e => e.currentTarget.style.background="rgba(240,180,41,0.03)"}
+              onMouseLeave={e => e.currentTarget.style.background="transparent"}>
+
+              <a href={`https://legacy.fundsforlearning.com/470/${tag.application_number}`} target="_blank" rel="noreferrer"
+                style={{ fontSize:8.5, color:"#3b9eff", textDecoration:"none", fontWeight:500 }}>{tag.application_number}</a>
+
+              <a href={`https://legacy.fundsforlearning.com/470/${tag.application_number}`} target="_blank" rel="noreferrer"
+                style={{ fontSize:8, color:"rgba(232,228,240,0.8)", textDecoration:"none", paddingRight:8, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}
+                onMouseEnter={e => e.currentTarget.style.color="#3b9eff"}
+                onMouseLeave={e => e.currentTarget.style.color="rgba(232,228,240,0.8)"}>
+                {tag.billed_entity_name || "—"}
+              </a>
+
+              <div style={{ fontSize:8, color:"rgba(232,228,240,0.5)" }}>{tag.state || "—"}</div>
+              <div style={{ fontSize:7.5, color:"rgba(232,228,240,0.4)", paddingRight:8, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{tag.service_category || "—"}</div>
+              <div style={{ fontSize:8, color: tag.bid_due_date ? "#f0b429" : "rgba(232,228,240,0.3)" }}>
+                {tag.bid_due_date ? new Date(tag.bid_due_date).toLocaleDateString() : "—"}
+              </div>
+
+              <div style={{ display:"flex", alignItems:"center" }}>
+                <span className={days !== null && days >= 0 && days <= 7 ? "pulse-urgent" : ""} style={{ fontSize:8, color:dayColor, padding:"2px 8px", background:dayBg, border:`1px solid ${dayColor}40`, borderRadius:1 }}>
+                  {dayLabel}
+                </span>
+              </div>
+
+              {/* Action buttons */}
+              <div style={{ display:"flex", alignItems:"center", gap:4, flexWrap:"nowrap" }}>
+                {/* RESPONDED */}
+                <button onClick={() => toggleResponded(tag)}
+                  style={{ ...btnBase, color: responded ? "#3b9eff" : "rgba(232,228,240,0.3)", borderColor: responded ? "rgba(59,158,255,0.5)" : "rgba(255,255,255,0.1)", background: responded ? "rgba(59,158,255,0.1)" : "transparent" }}>
+                  RESPONDED
+                </button>
+
+                {/* WON */}
+                <button onClick={() => responded && toggleStatus(tag, "won")}
+                  style={{ ...btnBase, color: isWon ? "#22c97a" : "rgba(34,201,122,0.3)", borderColor: isWon ? "rgba(34,201,122,0.6)" : "rgba(34,201,122,0.15)", background: isWon ? "rgba(34,201,122,0.1)" : "transparent", opacity: responded ? 1 : 0.35, cursor: responded ? "pointer" : "not-allowed" }}>
+                  WON
+                </button>
+
+                {/* LOST */}
+                <button onClick={() => responded && toggleStatus(tag, "lost")}
+                  style={{ ...btnBase, color: isLost ? "#f0614a" : "rgba(240,97,74,0.3)", borderColor: isLost ? "rgba(240,97,74,0.6)" : "rgba(240,97,74,0.15)", background: isLost ? "rgba(240,97,74,0.1)" : "transparent", opacity: responded ? 1 : 0.35, cursor: responded ? "pointer" : "not-allowed" }}>
+                  LOST
+                </button>
+
+                {/* $ */}
+                <button onClick={() => responded && openPopup(tag)}
+                  style={{ ...btnBase, fontSize:9, padding:"2px 7px", color: hasMoney ? "#f0b429" : "rgba(240,180,41,0.4)", borderColor: hasMoney ? "rgba(240,180,41,0.6)" : "rgba(240,180,41,0.2)", background: hasMoney ? "rgba(240,180,41,0.1)" : "transparent", opacity: responded ? 1 : 0.35, cursor: responded ? "pointer" : "not-allowed" }}>
+                  $
+                </button>
+
+                {/* REMOVE */}
+                <button onClick={() => removeTag(tag.application_number)}
+                  style={{ ...btnBase, color:"rgba(240,97,74,0.6)", borderColor:"rgba(240,97,74,0.25)", background:"rgba(240,97,74,0.06)" }}
+                  onMouseEnter={e => { e.currentTarget.style.background="rgba(240,97,74,0.15)"; e.currentTarget.style.color="#f0614a"; }}
+                  onMouseLeave={e => { e.currentTarget.style.background="rgba(240,97,74,0.06)"; e.currentTarget.style.color="rgba(240,97,74,0.6)"; }}>
+                  ✕ REMOVE
+                </button>
+              </div>
             </div>
-            {/* Days remaining counter */}
-            {(() => {
-              if (!tag.bid_due_date) return <div style={{ fontSize:8, color:"rgba(232,228,240,0.3)" }}>—</div>;
-              const days  = Math.ceil((new Date(tag.bid_due_date) - new Date()) / (1000*60*60*24));
-              const color = days > 14 ? "#39ff14" : days > 7 ? "#f0b429" : days >= 0 ? "#f0614a" : "rgba(232,228,240,0.3)";
-              const bg    = days > 14 ? "rgba(57,255,20,0.08)" : days > 7 ? "rgba(240,180,41,0.08)" : days >= 0 ? "rgba(240,97,74,0.1)" : "rgba(138,99,210,0.06)";
-              const label = days < 0 ? "CLOSED" : days === 0 ? "TODAY!" : `${days}d left`;
-              return (
-                <div style={{ display:"flex", alignItems:"center" }}>
-                  <span className={days >= 0 && days <= 7 ? "pulse-urgent" : ""} style={{ fontSize:8, color, fontWeight:600, padding:"2px 8px", background:bg, border:`1px solid ${color}40`, borderRadius:1 }}>
-                    {label}
-                  </span>
-                </div>
-              );
-            })()}
-            <button onClick={() => removeTag(tag.application_number)}
-              style={{ fontSize:7, letterSpacing:1, padding:"3px 8px", border:"1px solid rgba(240,97,74,0.3)", background:"rgba(240,97,74,0.06)", color:"rgba(240,97,74,0.7)", cursor:"pointer", fontFamily:"'DM Mono',monospace", transition:"all 0.15s" }}
-              onMouseEnter={e => { e.currentTarget.style.background="rgba(240,97,74,0.15)"; e.currentTarget.style.color="#f0614a"; }}
-              onMouseLeave={e => { e.currentTarget.style.background="rgba(240,97,74,0.06)"; e.currentTarget.style.color="rgba(240,97,74,0.7)"; }}>
-              ✕ REMOVE
-            </button>
-          </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );
 }
 
-function BidResponseOverview() { // bid panel
-  // Static mock data — replace with real state/props once backend is wired
-  const responded = 24;
-  const won       = 14;
-  const lost      = 10;
-  const revenue   = "$2,847,500";
-  const revNote   = `${won} funded commitments · FY2026`;
-  const winRate   = Math.round((won / responded) * 100);
-  const lossRate  = 100 - winRate;
-  const avgMargin = 42.3;
+function BidResponseOverview({ token }) {
+  const [tags, setTags] = useState([]);
+
+  useEffect(() => {
+    if (!token) return;
+    fetch(`${API_URL}/api/tags`, { headers:{ Authorization:`Bearer ${token}` } })
+      .then(r => r.json())
+      .then(d => { if (d.status === "success") setTags(d.data || []); })
+      .catch(() => {});
+  }, [token]);
+
+  const responded = tags.filter(t => t.responded).length;
+  const wonTags   = tags.filter(t => t.bid_status === "won");
+  const lostTags  = tags.filter(t => t.bid_status === "lost");
+  const won       = wonTags.length;
+  const lost      = lostTags.length;
+  const winRate   = responded > 0 ? Math.round((won / responded) * 100) : 0;
+  const lossRate  = responded > 0 ? Math.round((lost / responded) * 100) : 0;
+  const totalRev  = wonTags.reduce((sum, t) => sum + (parseFloat(t.bid_amount) || 0), 0);
+  const margins   = wonTags.filter(t => t.bid_amount > 0).map(t => ((t.bid_amount - t.cogs) / t.bid_amount) * 100);
+  const avgMargin = margins.length > 0 ? (margins.reduce((a,b) => a+b, 0) / margins.length).toFixed(1) : null;
+  const revenue   = totalRev > 0 ? `$${totalRev.toLocaleString()}` : "$0";
+  const revNote   = `${won} funded commitment${won !== 1 ? "s" : ""} · FY2026`;
 
   return (
     <Panel>
@@ -383,11 +504,11 @@ function BidResponseOverview() { // bid panel
         {/* Avg margin bar */}
         <div>
           <div style={{ display:"flex", alignItems:"baseline", gap:7, marginBottom:6 }}>
-            <span style={{ fontFamily:"'Aldrich',sans-serif", fontSize:12, color:"#8a63d2" }}>{avgMargin}%</span>
+            <span style={{ fontFamily:"'Aldrich',sans-serif", fontSize:12, color:"#8a63d2" }}>{avgMargin !== null ? `${avgMargin}%` : "—"}</span>
             <span style={{ fontSize:7, letterSpacing:1.8, color:"rgba(138,99,210,0.4)", textTransform:"uppercase" }}>Avg Margin</span>
           </div>
           <div style={{ height:3, background:"rgba(255,255,255,0.05)", borderRadius:99, overflow:"hidden" }}>
-            <div style={{ height:"100%", width:`${avgMargin}%`, borderRadius:99, background:"linear-gradient(90deg,#2a1a5e,#5a3ab0,#8a63d2,#c0a0ff)" }}/>
+            <div style={{ height:"100%", width:`${avgMargin || 0}%`, borderRadius:99, background:"linear-gradient(90deg,#2a1a5e,#5a3ab0,#8a63d2,#c0a0ff)" }}/>
           </div>
         </div>
 
@@ -542,7 +663,7 @@ export default function Dashboard({ session }) {
                     <span style={{ fontSize:7.5, color:"#e8e4f0", flex:1, letterSpacing:1 }}>USAC OPEN DATA API ONLINE</span>
                   </div>
 
-                  <BidResponseOverview />
+                  <BidResponseOverview token={token} />
 
                   <Panel>
                     <PTitle>{'// USAC '}<span style={{ color:"#a07ee0" }}>PORTAL NAVIGATION</span></PTitle>
