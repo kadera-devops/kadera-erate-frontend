@@ -526,6 +526,142 @@ function TagsPanel({ token, onTagsUpdated }) {
   );
 }
 
+// ── Competitive Intel Modal ───────────────────────────────────────────────────
+function CompetitiveIntelModal({ token, onClose }) {
+  const [data, setData]       = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [view, setView]       = useState("providers"); // providers | manufacturers | services
+
+  useEffect(() => {
+    fetch(`${API_URL}/api/competitive-intel`, { headers:{ Authorization:`Bearer ${token}` } })
+      .then(r => r.json())
+      .then(d => { if (d.status === "success") setData(d.data); setLoading(false); })
+      .catch(() => setLoading(false));
+  }, [token]);
+
+  const MFR_COLORS = {
+    "Cisco":      "#3b9eff", "Meraki":     "#3b9eff",
+    "Juniper":    "#22c97a", "Aruba":      "#a07ee0",
+    "HPE":        "#a07ee0", "Ubiquiti":   "#f0b429",
+    "Extreme":    "#f0614a", "Fortinet":   "#ff9f43",
+    "Palo Alto":  "#f0614a", "Sophos":     "#00d4ff",
+    "Dell":       "#3b9eff", "Ruckus":     "#22c97a",
+    "Netgear":    "#f0b429", "Cambium":    "#a07ee0",
+    "Zyxel":      "#00d4ff",
+  };
+
+  function BarChart({ items, colorFn, maxCount }) {
+    const max = maxCount || Math.max(...items.map(d => d.count), 1);
+    return (
+      <div style={{ display:"flex", flexDirection:"column", gap:5 }}>
+        {items.map((item, i) => {
+          const pct   = Math.round((item.count / max) * 100);
+          const color = colorFn ? colorFn(item.name, i) : "#a07ee0";
+          return (
+            <div key={i} style={{ display:"flex", alignItems:"center", gap:8 }}>
+              <div style={{ width:140, fontSize:7, color:"rgba(232,228,240,0.6)", textAlign:"right", flexShrink:0, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }} title={item.name}>{item.name}</div>
+              <div style={{ flex:1, height:14, background:"rgba(255,255,255,0.04)", borderRadius:2, overflow:"hidden", position:"relative" }}>
+                <div style={{ width:`${pct}%`, height:"100%", background: color, borderRadius:2, opacity:0.85, transition:"width 0.4s ease", minWidth: item.count > 0 ? 4 : 0 }}/>
+              </div>
+              <div style={{ width:32, fontSize:7, color:"rgba(232,228,240,0.45)", textAlign:"right", flexShrink:0 }}>{item.count}</div>
+            </div>
+          );
+        })}
+      </div>
+    );
+  }
+
+  function GaugeRow({ items, colorFn }) {
+    const max = Math.max(...items.map(d => d.count), 1);
+    return (
+      <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill, minmax(140px, 1fr))", gap:10 }}>
+        {items.map((item, i) => {
+          const color = colorFn ? colorFn(item.name) : "#a07ee0";
+          const pct   = item.count > 0 ? Math.round((item.count / max) * 100) : 0;
+          const r = 28, circ = 2 * Math.PI * r;
+          const dash = (pct / 100) * circ;
+          return (
+            <div key={i} style={{ background:"rgba(255,255,255,0.02)", border:`1px solid ${item.count > 0 ? color + "30" : "rgba(255,255,255,0.06)"}`, borderRadius:8, padding:"12px 10px", display:"flex", flexDirection:"column", alignItems:"center", gap:6, opacity: item.count > 0 ? 1 : 0.4 }}>
+              <svg width="72" height="72" viewBox="0 0 72 72">
+                <circle cx="36" cy="36" r={r} fill="none" stroke="rgba(255,255,255,0.06)" strokeWidth="5"/>
+                <circle cx="36" cy="36" r={r} fill="none" stroke={item.count > 0 ? color : "rgba(255,255,255,0.1)"} strokeWidth="5"
+                  strokeDasharray={`${dash} ${circ}`} strokeLinecap="round"
+                  transform="rotate(-90 36 36)" style={{ transition:"stroke-dasharray 0.5s ease" }}/>
+                <text x="36" y="36" textAnchor="middle" dominantBaseline="central"
+                  style={{ fontFamily:"Aldrich,sans-serif", fontSize:13, fill: item.count > 0 ? color : "rgba(232,228,240,0.2)" }}>{item.count}</text>
+              </svg>
+              <div style={{ fontSize:7, letterSpacing:1, color: item.count > 0 ? "rgba(232,228,240,0.7)" : "rgba(232,228,240,0.25)", textAlign:"center", textTransform:"uppercase" }}>{item.name}</div>
+            </div>
+          );
+        })}
+      </div>
+    );
+  }
+
+  const providerColors = ["#a07ee0","#8a63d2","#7a53c2","#6a43b2","#5a33a2","#4a2392","#3b9eff","#2b8eef","#1b7edf","#0b6ecf",
+    "#22c97a","#18b96a","#0ea95a","#f0b429","#e0a419","#d09409","#f0614a","#e0513a","#d0412a","#ff9f43","#ef8f33","#00d4ff","#00c4ef","#a07ee0","#8a63d2"];
+
+  return (
+    <div style={{ position:"fixed", inset:0, background:"rgba(5,5,13,0.92)", display:"flex", alignItems:"center", justifyContent:"center", zIndex:300 }}
+      onClick={e => e.target === e.currentTarget && onClose()}>
+      <div style={{ background:"#07061a", border:"1px solid rgba(138,99,210,0.4)", clipPath:"polygon(0 0,calc(100% - 20px) 0,100% 20px,100% 100%,20px 100%,0 calc(100% - 20px))", width:"min(1100px, 96vw)", maxHeight:"90vh", display:"flex", flexDirection:"column", position:"relative" }}>
+        <div style={{ position:"absolute", top:0, left:"10%", right:"10%", height:1, background:"linear-gradient(90deg,transparent,rgba(138,99,210,0.7),transparent)" }}/>
+
+        {/* Header */}
+        <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"16px 22px", borderBottom:"1px solid rgba(138,99,210,0.15)", flexShrink:0 }}>
+          <div style={{ display:"flex", alignItems:"center", gap:12 }}>
+            <div style={{ width:6, height:6, borderRadius:"50%", background:"#a07ee0", boxShadow:"0 0 8px rgba(138,99,210,0.9)" }}/>
+            <span style={{ fontFamily:"'Aldrich',sans-serif", fontSize:11, letterSpacing:2.5, color:"#a07ee0" }}>COMPETITIVE INTELLIGENCE</span>
+            <span style={{ fontSize:7, letterSpacing:1.5, color:"rgba(232,228,240,0.25)" }}>· FY2026 · TX · {data ? `${data.total.toLocaleString()} COMMITMENTS` : ""}</span>
+          </div>
+          <button onClick={onClose} style={{ background:"transparent", border:"1px solid rgba(232,228,240,0.15)", color:"rgba(232,228,240,0.4)", cursor:"pointer", fontFamily:"'DM Mono',monospace", fontSize:8, padding:"4px 10px", letterSpacing:1 }}>✕ CLOSE</button>
+        </div>
+
+        {/* Tab strip */}
+        <div style={{ display:"flex", gap:4, padding:"10px 22px", borderBottom:"1px solid rgba(138,99,210,0.1)", flexShrink:0 }}>
+          {[["providers","TOP 25 PROVIDERS"],["manufacturers","MANUFACTURER BREAKDOWN"],["services","SERVICE TYPES"]].map(([key,label]) => (
+            <button key={key} onClick={() => setView(key)}
+              style={{ padding:"5px 14px", fontFamily:"'DM Mono',monospace", fontSize:7.5, letterSpacing:1.5, border:`1px solid ${view===key ? "rgba(138,99,210,0.6)" : "rgba(138,99,210,0.15)"}`, background: view===key ? "rgba(138,99,210,0.12)" : "transparent", color: view===key ? "#a07ee0" : "rgba(232,228,240,0.35)", cursor:"pointer", transition:"all 0.15s" }}>
+              {label}
+            </button>
+          ))}
+        </div>
+
+        {/* Body */}
+        <div style={{ flex:1, overflowY:"auto", padding:"20px 22px" }}>
+          {loading && <div style={{ textAlign:"center", padding:"60px", fontSize:9, color:"rgba(138,99,210,0.4)", letterSpacing:2 }}>LOADING INTELLIGENCE DATA...</div>}
+
+          {!loading && data && view === "providers" && (
+            <>
+              <div style={{ fontSize:7, letterSpacing:2, color:"rgba(138,99,210,0.5)", marginBottom:14, textTransform:"uppercase" }}>Top 25 Service Providers by Commitment Count · FY2026 TX</div>
+              <BarChart items={data.topProviders} colorFn={(name, i) => providerColors[i % providerColors.length]} />
+            </>
+          )}
+
+          {!loading && data && view === "manufacturers" && (
+            <>
+              <div style={{ fontSize:7, letterSpacing:2, color:"rgba(138,99,210,0.5)", marginBottom:14, textTransform:"uppercase" }}>Manufacturer Presence in TX Commitments · Detected from SPIN name & service type</div>
+              <GaugeRow items={data.manufacturers} colorFn={name => MFR_COLORS[name] || "#a07ee0"} />
+              <div style={{ marginTop:20 }}>
+                <div style={{ fontSize:7, letterSpacing:2, color:"rgba(138,99,210,0.5)", marginBottom:12, textTransform:"uppercase" }}>Commitment Count by Manufacturer</div>
+                <BarChart items={data.manufacturers} colorFn={name => MFR_COLORS[name] || "#a07ee0"} />
+              </div>
+            </>
+          )}
+
+          {!loading && data && view === "services" && (
+            <>
+              <div style={{ fontSize:7, letterSpacing:2, color:"rgba(138,99,210,0.5)", marginBottom:14, textTransform:"uppercase" }}>Top Service Types by Commitment Count · FY2026 TX</div>
+              <BarChart items={data.serviceTypes} colorFn={(name, i) => ["#3b9eff","#a07ee0","#22c97a","#f0b429","#f0614a","#ff9f43","#00d4ff","#8a63d2"][i % 8]} />
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+
 // ── FRN Status Modal ──────────────────────────────────────────────────────────
 function FRNStatusModal({ token, onClose }) {
   const [query, setQuery]         = useState("");
@@ -811,6 +947,7 @@ export default function Dashboard({ session }) {
   const [clock, setClock]     = useState("");
   const [tagCount, setTagCount] = useState(0);
   const [frnOpen, setFrnOpen] = useState(false);
+  const [ciOpen, setCiOpen]   = useState(false);
 
   const refreshTagCount = useCallback(async (t) => {
     if (!t) return;
@@ -845,6 +982,7 @@ export default function Dashboard({ session }) {
       <style>{css}</style>
       <div style={{ minHeight:"100vh", background:"#05050d", position:"relative" }}>
         {frnOpen && token && <FRNStatusModal token={token} onClose={() => setFrnOpen(false)} />}
+        {ciOpen && token && <CompetitiveIntelModal token={token} onClose={() => setCiOpen(false)} />}
         <div style={{ position:"fixed", inset:0, background:"radial-gradient(ellipse 70% 50% at 15% 15%, rgba(138,99,210,0.09) 0%, transparent 60%)", pointerEvents:"none", zIndex:0 }}/>
         <div style={{ position:"fixed", inset:0, backgroundImage:"radial-gradient(circle, rgba(138,99,210,0.8) 1px, transparent 1px)", backgroundSize:"28px 28px", opacity:0.035, pointerEvents:"none", zIndex:0 }}/>
 
@@ -912,7 +1050,7 @@ export default function Dashboard({ session }) {
                         <ToolBtn href="https://opendata.usac.org/E-rate/E-Rate-Entity-Search/qe3b-nkqm"                       color="blue"   icon="🔍" name="ENTITY SEARCH"        desc="Search schools, libraries, and providers by name or BEN."/>
                         <ToolBtn href="https://www.usac.org/e-rate/tools/window-status/"                                      color="gold"   icon="📅" name="WINDOW REPORTING"     desc="Check filing windows, open/close dates, and deadlines."/>
                         <ToolBtn onClick={() => setFrnOpen(true)}                                                              color="blue"   icon="📋" name="FRN STATUS FY2016+"   desc="Search FRN status from local USAC commitment data."/>
-                        <ToolBtn href="https://www.usac.org/e-rate/tools/commitments-search/" wide color="purple" icon="✅" name="SEARCH COMMITMENTS TOOL" desc="Search commitment decisions, funding amounts, and disbursement records across all funding years."/>
+                        <ToolBtn onClick={() => setCiOpen(true)} wide color="purple" icon="📡" name="COMPETITIVE INTELLIGENCE" desc="Top providers, manufacturer presence, and service type breakdown from FY2026 TX commitments."/>
                       </div>
                     </div>
                   </Panel>
