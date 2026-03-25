@@ -23,22 +23,34 @@ export default function SearchPanel({ token, onTagsUpdated }) {
 
   useEffect(() => { loadTags(); }, [loadTags]);
 
+  const [tagError, setTagError] = useState("");
+
   async function toggleTag(e, row) {
     e.preventDefault();
     e.stopPropagation();
+    setTagError("");
     const appNum   = row.application_number;
     const isTagged = tags.has(appNum);
     try {
       if (isTagged) {
-        await fetch(`${API_URL}/api/tags/${appNum}`, { method:"DELETE", headers:{ Authorization:`Bearer ${token}` } });
-        setTags(prev => { const n = new Set(prev); n.delete(appNum); return n; });
+        const res  = await fetch(`${API_URL}/api/tags/${appNum}`, { method:"DELETE", headers:{ Authorization:`Bearer ${token}` } });
+        const json = await res.json();
+        if (json.status === "success") {
+          setTags(prev => { const n = new Set(prev); n.delete(appNum); return n; });
+        } else setTagError(json.message || "Failed to remove tag");
       } else {
-        await fetch(`${API_URL}/api/tags`, { method:"POST", headers:{ Authorization:`Bearer ${token}`, "Content-Type":"application/json" },
+        const res  = await fetch(`${API_URL}/api/tags`, { method:"POST",
+          headers:{ Authorization:`Bearer ${token}`, "Content-Type":"application/json" },
           body: JSON.stringify({ application_number: appNum, billed_entity_name: row.billed_entity_name, state: row.state, service_category: row.service_category, bid_due_date: row.bid_due_date, funding_year: row.funding_year }) });
-        setTags(prev => new Set([...prev, appNum]));
+        const json = await res.json();
+        if (json.status === "success") {
+          setTags(prev => new Set([...prev, appNum]));
+        } else setTagError(json.message || "Failed to tag 470");
       }
       if (onTagsUpdated) onTagsUpdated();
-    } catch {}
+    } catch (err) {
+      setTagError(err.message || "Network error");
+    }
   }
 
   const SEARCH_TYPES = [
@@ -142,9 +154,12 @@ export default function SearchPanel({ token, onTagsUpdated }) {
           <div style={{ position:"absolute", top:0, left:0, width:12, height:12, borderTop:"1.5px solid #a07ee0", borderLeft:"1.5px solid #a07ee0" }}/>
           <div style={{ padding:"10px 16px", borderBottom:"1px solid rgba(138,99,210,0.15)", display:"flex", justifyContent:"space-between", alignItems:"center" }}>
             <span style={{ fontSize:7, letterSpacing:2, color:"rgba(232,228,240,0.45)" }}>{results.length} RESULTS FOUND</span>
-            {results.length > 0 && (
-              <button onClick={exportCSV} style={{ padding:"4px 12px", fontFamily:"'DM Mono',monospace", fontSize:7, letterSpacing:1.5, border:"1px solid rgba(57,255,20,0.35)", background:"rgba(57,255,20,0.06)", color:"#39ff14", cursor:"pointer" }}>↓ EXPORT CSV</button>
-            )}
+            <div style={{ display:"flex", gap:8, alignItems:"center" }}>
+              {tagError && <span style={{ fontSize:7, color:"#f0614a" }}>⚠ {tagError}</span>}
+              {results.length > 0 && (
+                <button onClick={exportCSV} style={{ padding:"4px 12px", fontFamily:"'DM Mono',monospace", fontSize:7, letterSpacing:1.5, border:"1px solid rgba(57,255,20,0.35)", background:"rgba(57,255,20,0.06)", color:"#39ff14", cursor:"pointer" }}>↓ EXPORT CSV</button>
+              )}
+            </div>
           </div>
           {results.length === 0 ? (
             <div style={{ padding:"30px", textAlign:"center", fontSize:9, color:"rgba(138,99,210,0.4)" }}>NO RESULTS FOUND — TRY A DIFFERENT SEARCH</div>
