@@ -528,9 +528,11 @@ function TagsPanel({ token, onTagsUpdated }) {
 
 // ── Competitive Intel Modal ───────────────────────────────────────────────────
 function CompetitiveIntelModal({ token, onClose }) {
-  const [data, setData]       = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [view, setView]       = useState("providers"); // providers | manufacturers | services
+  const [data, setData]           = useState(null);
+  const [loading, setLoading]     = useState(true);
+  const [view, setView]           = useState("providers");
+  const [mfrMetric, setMfrMetric] = useState("count"); // count | amount
+  const [providerPopup, setProviderPopup] = useState(null); // { name, applicants, loading }
 
   useEffect(() => {
     fetch(`${API_URL}/api/competitive-intel`, { headers:{ Authorization:`Bearer ${token}` } })
@@ -538,6 +540,17 @@ function CompetitiveIntelModal({ token, onClose }) {
       .then(d => { if (d.status === "success") setData(d.data); setLoading(false); })
       .catch(() => setLoading(false));
   }, [token]);
+
+  async function openProviderPopup(providerName) {
+    setProviderPopup({ name: providerName, applicants: [], loading: true });
+    try {
+      const res  = await fetch(`${API_URL}/api/provider-applicants?spin_name=${encodeURIComponent(providerName)}`, { headers:{ Authorization:`Bearer ${token}` } });
+      const json = await res.json();
+      setProviderPopup({ name: providerName, applicants: json.data || [], loading: false });
+    } catch {
+      setProviderPopup({ name: providerName, applicants: [], loading: false });
+    }
+  }
 
   const MFR_COLORS = {
     "Cisco":      "#3b9eff", "Meraki":     "#3b9eff",
@@ -550,7 +563,7 @@ function CompetitiveIntelModal({ token, onClose }) {
     "Zyxel":      "#00d4ff",
   };
 
-  function BarChart({ items, colorFn, maxCount }) {
+  function BarChart({ items, colorFn, maxCount, onClick }) {
     const max = maxCount || Math.max(...items.map(d => d.count), 1);
     return (
       <div style={{ display:"flex", flexDirection:"column", gap:5 }}>
@@ -558,12 +571,18 @@ function CompetitiveIntelModal({ token, onClose }) {
           const pct   = Math.round((item.count / max) * 100);
           const color = colorFn ? colorFn(item.name, i) : "#a07ee0";
           return (
-            <div key={i} style={{ display:"flex", alignItems:"center", gap:8 }}>
-              <div style={{ width:140, fontSize:7, color:"rgba(232,228,240,0.6)", textAlign:"right", flexShrink:0, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }} title={item.name}>{item.name}</div>
-              <div style={{ flex:1, height:14, background:"rgba(255,255,255,0.04)", borderRadius:2, overflow:"hidden", position:"relative" }}>
+            <div key={i} onClick={() => onClick && onClick(item)}
+              style={{ display:"flex", alignItems:"center", gap:8, cursor: onClick ? "pointer" : "default", borderRadius:2, padding:"1px 0", transition:"background 0.1s" }}
+              onMouseEnter={e => { if (onClick) e.currentTarget.style.background="rgba(255,255,255,0.03)"; }}
+              onMouseLeave={e => { if (onClick) e.currentTarget.style.background="transparent"; }}>
+              <div style={{ width:160, fontSize:7, color:"rgba(232,228,240,0.6)", textAlign:"right", flexShrink:0, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }} title={item.name}>
+                {onClick && <span style={{ color:"rgba(138,99,210,0.5)", marginRight:4 }}>↗</span>}
+                {item.name}
+              </div>
+              <div style={{ flex:1, height:14, background:"rgba(255,255,255,0.04)", borderRadius:2, overflow:"hidden" }}>
                 <div style={{ width:`${pct}%`, height:"100%", background: color, borderRadius:2, opacity:0.85, transition:"width 0.4s ease", minWidth: item.count > 0 ? 4 : 0 }}/>
               </div>
-              <div style={{ width:32, fontSize:7, color:"rgba(232,228,240,0.45)", textAlign:"right", flexShrink:0 }}>{item.count}</div>
+              <div style={{ width:36, fontSize:7, color:"rgba(232,228,240,0.45)", textAlign:"right", flexShrink:0 }}>{item.count}</div>
             </div>
           );
         })}
@@ -571,26 +590,53 @@ function CompetitiveIntelModal({ token, onClose }) {
     );
   }
 
-  function GaugeRow({ items, colorFn }) {
-    const max = Math.max(...items.map(d => d.count), 1);
+  function MfrBarChart({ items, metric, colorFn }) {
+    const vals = items.map(d => metric === "amount" ? d.amount : d.count);
+    const max  = Math.max(...vals, 1);
     return (
-      <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill, minmax(140px, 1fr))", gap:10 }}>
+      <div style={{ display:"flex", flexDirection:"column", gap:5 }}>
         {items.map((item, i) => {
+          const val   = metric === "amount" ? item.amount : item.count;
+          const pct   = Math.round((val / max) * 100);
           const color = colorFn ? colorFn(item.name) : "#a07ee0";
-          const pct   = item.count > 0 ? Math.round((item.count / max) * 100) : 0;
+          const label = metric === "amount" ? (val > 0 ? `$${(val/1000).toFixed(0)}k` : "—") : val;
+          return (
+            <div key={i} style={{ display:"flex", alignItems:"center", gap:8 }}>
+              <div style={{ width:100, fontSize:7, color:"rgba(232,228,240,0.6)", textAlign:"right", flexShrink:0 }}>{item.name}</div>
+              <div style={{ flex:1, height:14, background:"rgba(255,255,255,0.04)", borderRadius:2, overflow:"hidden" }}>
+                <div style={{ width:`${pct}%`, height:"100%", background: color, borderRadius:2, opacity:0.85, transition:"width 0.4s ease", minWidth: val > 0 ? 4 : 0 }}/>
+              </div>
+              <div style={{ width:48, fontSize:7, color:"rgba(232,228,240,0.45)", textAlign:"right", flexShrink:0 }}>{label}</div>
+            </div>
+          );
+        })}
+      </div>
+    );
+  }
+
+  function GaugeRow({ items, metric, colorFn }) {
+    const vals = items.map(d => metric === "amount" ? d.amount : d.count);
+    const max  = Math.max(...vals, 1);
+    return (
+      <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill, minmax(130px, 1fr))", gap:10 }}>
+        {items.map((item, i) => {
+          const val   = metric === "amount" ? item.amount : item.count;
+          const color = colorFn ? colorFn(item.name) : "#a07ee0";
+          const pct   = val > 0 ? Math.round((val / max) * 100) : 0;
           const r = 28, circ = 2 * Math.PI * r;
           const dash = (pct / 100) * circ;
+          const label = metric === "amount" ? (val > 0 ? `$${(val/1000).toFixed(0)}k` : "0") : val;
           return (
-            <div key={i} style={{ background:"rgba(255,255,255,0.02)", border:`1px solid ${item.count > 0 ? color + "30" : "rgba(255,255,255,0.06)"}`, borderRadius:8, padding:"12px 10px", display:"flex", flexDirection:"column", alignItems:"center", gap:6, opacity: item.count > 0 ? 1 : 0.4 }}>
+            <div key={i} style={{ background:"rgba(255,255,255,0.02)", border:`1px solid ${val > 0 ? color + "30" : "rgba(255,255,255,0.06)"}`, borderRadius:8, padding:"12px 10px", display:"flex", flexDirection:"column", alignItems:"center", gap:6, opacity: val > 0 ? 1 : 0.4 }}>
               <svg width="72" height="72" viewBox="0 0 72 72">
                 <circle cx="36" cy="36" r={r} fill="none" stroke="rgba(255,255,255,0.06)" strokeWidth="5"/>
-                <circle cx="36" cy="36" r={r} fill="none" stroke={item.count > 0 ? color : "rgba(255,255,255,0.1)"} strokeWidth="5"
+                <circle cx="36" cy="36" r={r} fill="none" stroke={val > 0 ? color : "rgba(255,255,255,0.1)"} strokeWidth="5"
                   strokeDasharray={`${dash} ${circ}`} strokeLinecap="round"
                   transform="rotate(-90 36 36)" style={{ transition:"stroke-dasharray 0.5s ease" }}/>
                 <text x="36" y="36" textAnchor="middle" dominantBaseline="central"
-                  style={{ fontFamily:"Aldrich,sans-serif", fontSize:13, fill: item.count > 0 ? color : "rgba(232,228,240,0.2)" }}>{item.count}</text>
+                  style={{ fontFamily:"Aldrich,sans-serif", fontSize: metric === "amount" ? 9 : 13, fill: val > 0 ? color : "rgba(232,228,240,0.2)" }}>{label}</text>
               </svg>
-              <div style={{ fontSize:7, letterSpacing:1, color: item.count > 0 ? "rgba(232,228,240,0.7)" : "rgba(232,228,240,0.25)", textAlign:"center", textTransform:"uppercase" }}>{item.name}</div>
+              <div style={{ fontSize:7, letterSpacing:1, color: val > 0 ? "rgba(232,228,240,0.7)" : "rgba(232,228,240,0.25)", textAlign:"center", textTransform:"uppercase" }}>{item.name}</div>
             </div>
           );
         })}
@@ -633,8 +679,11 @@ function CompetitiveIntelModal({ token, onClose }) {
 
           {!loading && data && view === "providers" && (
             <>
-              <div style={{ fontSize:7, letterSpacing:2, color:"rgba(138,99,210,0.5)", marginBottom:14, textTransform:"uppercase" }}>Top 25 Service Providers by Commitment Count · FY2026 TX</div>
-              <BarChart items={data.topProviders} colorFn={(name, i) => providerColors[i % providerColors.length]} />
+              <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:14 }}>
+                <div style={{ fontSize:7, letterSpacing:2, color:"rgba(138,99,210,0.5)", textTransform:"uppercase" }}>Top 25 Service Providers by Commitment Count · FY2026 TX</div>
+                <span style={{ fontSize:7, color:"rgba(232,228,240,0.3)", letterSpacing:1 }}>↗ click a provider to see their applicants</span>
+              </div>
+              <BarChart items={data.topProviders} colorFn={(name, i) => providerColors[i % providerColors.length]} onClick={item => openProviderPopup(item.name)} />
             </>
           )}
 
@@ -643,15 +692,25 @@ function CompetitiveIntelModal({ token, onClose }) {
               {data.manufacturers.every(m => m.count === 0) ? (
                 <div style={{ padding:"48px 20px", textAlign:"center" }}>
                   <div style={{ fontSize:9, color:"rgba(138,99,210,0.3)", letterSpacing:2, marginBottom:8 }}>NO LINE ITEM DATA YET</div>
-                  <div style={{ fontSize:7.5, color:"rgba(232,228,240,0.2)" }}>Hit ↺ SYNC on the dashboard to pull FRN line items with real manufacturer data, then check back.</div>
+                  <div style={{ fontSize:7.5, color:"rgba(232,228,240,0.2)" }}>Hit ↺ SYNC on the dashboard to pull FRN line items, then check back.</div>
                 </div>
               ) : (
                 <>
-                  <div style={{ fontSize:7, letterSpacing:2, color:"rgba(138,99,210,0.5)", marginBottom:14, textTransform:"uppercase" }}>Manufacturer Presence · From {(data.lineItemTotal||0).toLocaleString()} TX FRN Line Items · FY2025</div>
-                  <GaugeRow items={data.manufacturers} colorFn={name => MFR_COLORS[name] || "#a07ee0"} />
+                  <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:14 }}>
+                    <div style={{ fontSize:7, letterSpacing:2, color:"rgba(138,99,210,0.5)", textTransform:"uppercase" }}>Manufacturer Presence · {(data.lineItemTotal||0).toLocaleString()} TX FRN Line Items · FY2025</div>
+                    <div style={{ display:"flex", gap:4 }}>
+                      {[["count","Line Items"],["amount","Dollar Value"]].map(([key,label]) => (
+                        <button key={key} onClick={() => setMfrMetric(key)}
+                          style={{ padding:"3px 10px", fontFamily:"'DM Mono',monospace", fontSize:7, letterSpacing:1, border:`1px solid ${mfrMetric===key ? "rgba(138,99,210,0.6)" : "rgba(138,99,210,0.2)"}`, background: mfrMetric===key ? "rgba(138,99,210,0.12)" : "transparent", color: mfrMetric===key ? "#a07ee0" : "rgba(232,228,240,0.3)", cursor:"pointer" }}>
+                          {label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <GaugeRow items={data.manufacturers} metric={mfrMetric} colorFn={name => MFR_COLORS[name] || "#a07ee0"} />
                   <div style={{ marginTop:20 }}>
-                    <div style={{ fontSize:7, letterSpacing:2, color:"rgba(138,99,210,0.5)", marginBottom:12, textTransform:"uppercase" }}>Line Item Count by Manufacturer</div>
-                    <BarChart items={data.manufacturers} colorFn={name => MFR_COLORS[name] || "#a07ee0"} />
+                    <div style={{ fontSize:7, letterSpacing:2, color:"rgba(138,99,210,0.5)", marginBottom:12, textTransform:"uppercase" }}>{mfrMetric === "amount" ? "Dollar Value" : "Line Item Count"} by Manufacturer</div>
+                    <MfrBarChart items={data.manufacturers} metric={mfrMetric} colorFn={name => MFR_COLORS[name] || "#a07ee0"} />
                   </div>
                 </>
               )}
@@ -682,9 +741,60 @@ function CompetitiveIntelModal({ token, onClose }) {
           )}
         </div>
       </div>
+
+      {/* Provider applicants popup */}
+      {providerPopup && (
+        <div style={{ position:"fixed", inset:0, display:"flex", alignItems:"center", justifyContent:"center", zIndex:400 }}
+          onClick={e => e.target === e.currentTarget && setProviderPopup(null)}>
+          <div style={{ background:"#0a0920", border:"1px solid rgba(59,158,255,0.4)", clipPath:"polygon(0 0,calc(100% - 14px) 0,100% 14px,100% 100%,14px 100%,0 calc(100% - 14px))", width:"min(600px, 92vw)", maxHeight:"70vh", display:"flex", flexDirection:"column", position:"relative" }}>
+            <div style={{ position:"absolute", top:0, left:"10%", right:"10%", height:1, background:"linear-gradient(90deg,transparent,rgba(59,158,255,0.5),transparent)" }}/>
+
+            {/* Popup header */}
+            <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"14px 18px", borderBottom:"1px solid rgba(59,158,255,0.12)", flexShrink:0 }}>
+              <div>
+                <div style={{ fontFamily:"'Aldrich',sans-serif", fontSize:9, letterSpacing:2, color:"#3b9eff", marginBottom:3 }}>APPLICANTS</div>
+                <div style={{ fontSize:8, color:"rgba(232,228,240,0.6)", maxWidth:380, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{providerPopup.name}</div>
+              </div>
+              <button onClick={() => setProviderPopup(null)} style={{ background:"transparent", border:"1px solid rgba(232,228,240,0.12)", color:"rgba(232,228,240,0.4)", cursor:"pointer", fontFamily:"'DM Mono',monospace", fontSize:8, padding:"3px 8px" }}>✕</button>
+            </div>
+
+            {/* Popup body */}
+            <div style={{ flex:1, overflowY:"auto" }}>
+              {providerPopup.loading && (
+                <div style={{ padding:"32px", textAlign:"center", fontSize:8, color:"rgba(59,158,255,0.4)", letterSpacing:2 }}>LOADING...</div>
+              )}
+              {!providerPopup.loading && providerPopup.applicants.length === 0 && (
+                <div style={{ padding:"32px", textAlign:"center", fontSize:8, color:"rgba(232,228,240,0.25)" }}>No applicants found</div>
+              )}
+              {!providerPopup.loading && providerPopup.applicants.length > 0 && (
+                <>
+                  <div style={{ display:"grid", gridTemplateColumns:"1fr 80px 100px", padding:"7px 18px", borderBottom:"1px solid rgba(59,158,255,0.12)", background:"rgba(59,158,255,0.04)" }}>
+                    {["ORGANIZATION","AWARDS","COMMITTED"].map((h,i) => (
+                      <div key={i} style={{ fontSize:6.5, letterSpacing:1.5, color:"rgba(59,158,255,0.5)" }}>{h}</div>
+                    ))}
+                  </div>
+                  {providerPopup.applicants.map((a, i) => (
+                    <div key={i} style={{ display:"grid", gridTemplateColumns:"1fr 80px 100px", padding:"8px 18px", borderBottom:"1px solid rgba(59,158,255,0.06)", alignItems:"center", transition:"background 0.12s" }}
+                      onMouseEnter={e => e.currentTarget.style.background="rgba(59,158,255,0.04)"}
+                      onMouseLeave={e => e.currentTarget.style.background="transparent"}>
+                      <div style={{ fontSize:8, color:"rgba(232,228,240,0.8)", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", paddingRight:8 }}>{a.name}</div>
+                      <div style={{ fontSize:8, color:"rgba(232,228,240,0.45)" }}>{a.count}</div>
+                      <div style={{ fontSize:8, color:"#22c97a" }}>${a.total.toLocaleString()}</div>
+                    </div>
+                  ))}
+                  <div style={{ padding:"8px 18px", fontSize:6.5, color:"rgba(232,228,240,0.2)", letterSpacing:1, borderTop:"1px solid rgba(59,158,255,0.06)" }}>
+                    {providerPopup.applicants.length} ORGANIZATIONS · FY2026 TX COMMITMENTS
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
+
 
 
 // ── FRN Status Modal ──────────────────────────────────────────────────────────
