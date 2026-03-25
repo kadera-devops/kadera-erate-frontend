@@ -612,14 +612,14 @@ function CompetitiveIntelModal({ token, onClose }) {
           <div style={{ display:"flex", alignItems:"center", gap:12 }}>
             <div style={{ width:6, height:6, borderRadius:"50%", background:"#a07ee0", boxShadow:"0 0 8px rgba(138,99,210,0.9)" }}/>
             <span style={{ fontFamily:"'Aldrich',sans-serif", fontSize:11, letterSpacing:2.5, color:"#a07ee0" }}>COMPETITIVE INTELLIGENCE</span>
-            <span style={{ fontSize:7, letterSpacing:1.5, color:"rgba(232,228,240,0.25)" }}>· FY2026 · TX · {data ? `${data.total.toLocaleString()} COMMITMENTS` : ""}</span>
+            <span style={{ fontSize:7, letterSpacing:1.5, color:"rgba(232,228,240,0.25)" }}>· FY2026 · TX · {data ? `${data.total.toLocaleString()} COMMITMENTS · ${(data.lineItemTotal||0).toLocaleString()} LINE ITEMS` : ""}</span>
           </div>
           <button onClick={onClose} style={{ background:"transparent", border:"1px solid rgba(232,228,240,0.15)", color:"rgba(232,228,240,0.4)", cursor:"pointer", fontFamily:"'DM Mono',monospace", fontSize:8, padding:"4px 10px", letterSpacing:1 }}>✕ CLOSE</button>
         </div>
 
         {/* Tab strip */}
         <div style={{ display:"flex", gap:4, padding:"10px 22px", borderBottom:"1px solid rgba(138,99,210,0.1)", flexShrink:0 }}>
-          {[["providers","TOP 25 PROVIDERS"],["manufacturers","MANUFACTURER BREAKDOWN"],["services","SERVICE TYPES"]].map(([key,label]) => (
+          {[["providers","TOP 25 PROVIDERS"],["manufacturers","MANUFACTURER BREAKDOWN"],["services","SERVICE TYPES"],["products","TOP PRODUCTS"]].map(([key,label]) => (
             <button key={key} onClick={() => setView(key)}
               style={{ padding:"5px 14px", fontFamily:"'DM Mono',monospace", fontSize:7.5, letterSpacing:1.5, border:`1px solid ${view===key ? "rgba(138,99,210,0.6)" : "rgba(138,99,210,0.15)"}`, background: view===key ? "rgba(138,99,210,0.12)" : "transparent", color: view===key ? "#a07ee0" : "rgba(232,228,240,0.35)", cursor:"pointer", transition:"all 0.15s" }}>
               {label}
@@ -640,12 +640,21 @@ function CompetitiveIntelModal({ token, onClose }) {
 
           {!loading && data && view === "manufacturers" && (
             <>
-              <div style={{ fontSize:7, letterSpacing:2, color:"rgba(138,99,210,0.5)", marginBottom:14, textTransform:"uppercase" }}>Manufacturer Presence in TX Commitments · Detected from SPIN name & service type</div>
-              <GaugeRow items={data.manufacturers} colorFn={name => MFR_COLORS[name] || "#a07ee0"} />
-              <div style={{ marginTop:20 }}>
-                <div style={{ fontSize:7, letterSpacing:2, color:"rgba(138,99,210,0.5)", marginBottom:12, textTransform:"uppercase" }}>Commitment Count by Manufacturer</div>
-                <BarChart items={data.manufacturers} colorFn={name => MFR_COLORS[name] || "#a07ee0"} />
-              </div>
+              {data.manufacturers.every(m => m.count === 0) ? (
+                <div style={{ padding:"48px 20px", textAlign:"center" }}>
+                  <div style={{ fontSize:9, color:"rgba(138,99,210,0.3)", letterSpacing:2, marginBottom:8 }}>NO LINE ITEM DATA YET</div>
+                  <div style={{ fontSize:7.5, color:"rgba(232,228,240,0.2)" }}>Hit ↺ SYNC on the dashboard to pull FRN line items with real manufacturer data, then check back.</div>
+                </div>
+              ) : (
+                <>
+                  <div style={{ fontSize:7, letterSpacing:2, color:"rgba(138,99,210,0.5)", marginBottom:14, textTransform:"uppercase" }}>Manufacturer Presence · From {(data.lineItemTotal||0).toLocaleString()} TX FRN Line Items · FY2026</div>
+                  <GaugeRow items={data.manufacturers} colorFn={name => MFR_COLORS[name] || "#a07ee0"} />
+                  <div style={{ marginTop:20 }}>
+                    <div style={{ fontSize:7, letterSpacing:2, color:"rgba(138,99,210,0.5)", marginBottom:12, textTransform:"uppercase" }}>Line Item Count by Manufacturer</div>
+                    <BarChart items={data.manufacturers} colorFn={name => MFR_COLORS[name] || "#a07ee0"} />
+                  </div>
+                </>
+              )}
             </>
           )}
 
@@ -653,6 +662,22 @@ function CompetitiveIntelModal({ token, onClose }) {
             <>
               <div style={{ fontSize:7, letterSpacing:2, color:"rgba(138,99,210,0.5)", marginBottom:14, textTransform:"uppercase" }}>Top Service Types by Commitment Count · FY2026 TX</div>
               <BarChart items={data.serviceTypes} colorFn={(name, i) => ["#3b9eff","#a07ee0","#22c97a","#f0b429","#f0614a","#ff9f43","#00d4ff","#8a63d2"][i % 8]} />
+            </>
+          )}
+
+          {!loading && data && view === "products" && (
+            <>
+              {(!data.topProducts || data.topProducts.length === 0) ? (
+                <div style={{ padding:"48px 20px", textAlign:"center" }}>
+                  <div style={{ fontSize:9, color:"rgba(138,99,210,0.3)", letterSpacing:2, marginBottom:8 }}>NO LINE ITEM DATA YET</div>
+                  <div style={{ fontSize:7.5, color:"rgba(232,228,240,0.2)" }}>Hit ↺ SYNC on the dashboard to pull FRN line items, then check back.</div>
+                </div>
+              ) : (
+                <>
+                  <div style={{ fontSize:7, letterSpacing:2, color:"rgba(138,99,210,0.5)", marginBottom:14, textTransform:"uppercase" }}>Top 10 Product Types in TX Line Items · From {(data.lineItemTotal||0).toLocaleString()} records</div>
+                  <BarChart items={data.topProducts} colorFn={(name, i) => ["#a07ee0","#3b9eff","#22c97a","#f0b429","#f0614a","#ff9f43","#00d4ff","#8a63d2","#a07ee0","#3b9eff"][i % 10]} />
+                </>
+              )}
             </>
           )}
         </div>
