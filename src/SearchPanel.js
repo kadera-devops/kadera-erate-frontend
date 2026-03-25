@@ -1,16 +1,45 @@
-import React, { useState } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 
 const API_URL = process.env.REACT_APP_API_URL || "https://kadera-backend-production-6a21.up.railway.app";
 
 const STATES = ["ALL","TX","CA","NY","FL","IL","PA","OH","GA","NC","MI","WA","AZ","CO","VA","MA","TN","IN","MO","WI","MN","OR","KY","OK","NV","CT","UT","AR","MS","KS","NM","NE","ID","WV","HI","NH","ME","RI","MT","DE","SD","ND","AK","VT","WY"];
 
-export default function SearchPanel({ token }) {
+export default function SearchPanel({ token, onTagsUpdated }) {
   const [searchType, setSearchType] = useState("contacts");
   const [query,      setQuery]      = useState("");
   const [state,      setState]      = useState("TX");
   const [results,    setResults]    = useState(null);
   const [loading,    setLoading]    = useState(false);
   const [error,      setError]      = useState("");
+  const [tags,       setTags]       = useState(new Set());
+
+  const loadTags = useCallback(async () => {
+    try {
+      const res  = await fetch(`${API_URL}/api/tags`, { headers:{ Authorization:`Bearer ${token}` } });
+      const json = await res.json();
+      if (json.status === "success") setTags(new Set((json.data||[]).map(t => t.application_number)));
+    } catch {}
+  }, [token]);
+
+  useEffect(() => { loadTags(); }, [loadTags]);
+
+  async function toggleTag(e, row) {
+    e.preventDefault();
+    e.stopPropagation();
+    const appNum   = row.application_number;
+    const isTagged = tags.has(appNum);
+    try {
+      if (isTagged) {
+        await fetch(`${API_URL}/api/tags/${appNum}`, { method:"DELETE", headers:{ Authorization:`Bearer ${token}` } });
+        setTags(prev => { const n = new Set(prev); n.delete(appNum); return n; });
+      } else {
+        await fetch(`${API_URL}/api/tags`, { method:"POST", headers:{ Authorization:`Bearer ${token}`, "Content-Type":"application/json" },
+          body: JSON.stringify({ application_number: appNum, billed_entity_name: row.billed_entity_name, state: row.state, service_category: row.service_category, bid_due_date: row.bid_due_date, funding_year: row.funding_year }) });
+        setTags(prev => new Set([...prev, appNum]));
+      }
+      if (onTagsUpdated) onTagsUpdated();
+    } catch {}
+  }
 
   const SEARCH_TYPES = [
     { id:"contacts",    label:"TECHNICAL CONTACTS",  desc:"Search contacts listed on Form 470s" },
@@ -150,12 +179,20 @@ export default function SearchPanel({ token }) {
                         );
                       })}
                       <td style={{ padding:"8px 12px" }}>
-                        {row.application_number && (
-                          <a href={`https://legacy.fundsforlearning.com/470/${row.application_number}`} target="_blank" rel="noreferrer"
-                            style={{ fontSize:7, color:"#3b9eff", textDecoration:"none", padding:"2px 8px", border:"1px solid rgba(59,158,255,0.3)", background:"rgba(59,158,255,0.05)" }}>
-                            VIEW →
-                          </a>
-                        )}
+                        <div style={{ display:"flex", gap:5, alignItems:"center" }}>
+                          {row.application_number && (
+                            <a href={`https://legacy.fundsforlearning.com/470/${row.application_number}`} target="_blank" rel="noreferrer"
+                              style={{ fontSize:7, color:"#3b9eff", textDecoration:"none", padding:"2px 8px", border:"1px solid rgba(59,158,255,0.3)", background:"rgba(59,158,255,0.05)", whiteSpace:"nowrap" }}>
+                              VIEW →
+                            </a>
+                          )}
+                          {row.application_number && (searchType === "470s" || searchType === "contacts") && (
+                            <button onClick={e => toggleTag(e, row)}
+                              style={{ fontSize:7, letterSpacing:1, padding:"2px 7px", border:`1px solid ${tags.has(row.application_number) ? "rgba(240,180,41,0.6)" : "rgba(138,99,210,0.3)"}`, background: tags.has(row.application_number) ? "rgba(240,180,41,0.1)" : "rgba(138,99,210,0.05)", color: tags.has(row.application_number) ? "#f0b429" : "rgba(232,228,240,0.45)", cursor:"pointer", fontFamily:"'DM Mono',monospace", whiteSpace:"nowrap" }}>
+                              {tags.has(row.application_number) ? "★" : "☆"}
+                            </button>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   ))}

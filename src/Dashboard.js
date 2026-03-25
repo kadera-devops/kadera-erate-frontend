@@ -302,7 +302,12 @@ function TagsPanel({ token, onTagsUpdated }) {
               style={{ fontSize:8.5, color:"#3b9eff", textDecoration:"none", fontWeight:500 }}>
               {tag.application_number}
             </a>
-            <div style={{ fontSize:8, color:"rgba(232,228,240,0.8)", paddingRight:8, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{tag.billed_entity_name || "—"}</div>
+            <a href={`https://legacy.fundsforlearning.com/470/${tag.application_number}`} target="_blank" rel="noreferrer"
+              style={{ fontSize:8, color:"rgba(232,228,240,0.8)", textDecoration:"none", paddingRight:8, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}
+              onMouseEnter={e => e.currentTarget.style.color="#3b9eff"}
+              onMouseLeave={e => e.currentTarget.style.color="rgba(232,228,240,0.8)"}>
+              {tag.billed_entity_name || "—"}
+            </a>
             <div style={{ fontSize:8, color:"rgba(232,228,240,0.5)" }}>{tag.state || "—"}</div>
             <div style={{ fontSize:7.5, color:"rgba(232,228,240,0.4)", paddingRight:8, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{tag.service_category || "—"}</div>
             <div style={{ fontSize:8, color: tag.bid_due_date ? "#f0b429" : "rgba(232,228,240,0.3)", fontWeight: tag.bid_due_date ? 500 : 400 }}>
@@ -520,7 +525,7 @@ export default function Dashboard({ session }) {
             </>
           )}
 
-          {tab === "search" && token && <SearchPanel token={token} />}
+          {tab === "search" && token && <SearchPanel token={token} onTagsUpdated={() => refreshTagCount(token)} />}
           {tab === "tags"   && token && <TagsPanel token={token} onTagsUpdated={() => refreshTagCount(token)} />}
 
         </div>
