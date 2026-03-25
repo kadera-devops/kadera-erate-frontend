@@ -456,11 +456,14 @@ function TagsPanel({ token, onTagsUpdated }) {
 
 // ── FRN Status Modal ──────────────────────────────────────────────────────────
 function FRNStatusModal({ token, onClose }) {
-  const [query, setQuery]       = useState("");
-  const [searchBy, setSearchBy] = useState("frn");
-  const [results, setResults]   = useState([]);
-  const [loading, setLoading]   = useState(false);
-  const [searched, setSearched] = useState(false);
+  const [query, setQuery]         = useState("");
+  const [searchBy, setSearchBy]   = useState("frn");
+  const [results, setResults]     = useState([]);
+  const [loading, setLoading]     = useState(false);
+  const [searched, setSearched]   = useState(false);
+  const [selected, setSelected]   = useState(null);   // selected commitment row
+  const [form471, setForm471]     = useState(null);    // matched 471 record
+  const [detail471Loading, setDetail471Loading] = useState(false);
 
   const searchByOptions = [
     { key:"frn",          label:"FRN #",   placeholder:"Enter FRN number..." },
@@ -473,6 +476,8 @@ function FRNStatusModal({ token, onClose }) {
     if (!query.trim()) return;
     setLoading(true);
     setSearched(true);
+    setSelected(null);
+    setForm471(null);
     try {
       const params = new URLSearchParams({ search: query.trim(), search_by: searchBy, limit: 50 });
       const res  = await fetch(`${API_URL}/api/frn-status?${params}`, { headers:{ Authorization:`Bearer ${token}` } });
@@ -480,6 +485,20 @@ function FRNStatusModal({ token, onClose }) {
       setResults(json.data || []);
     } catch { setResults([]); }
     setLoading(false);
+  }
+
+  async function selectRow(r) {
+    setSelected(r);
+    setForm471(null);
+    if (!r.application_number) return;
+    setDetail471Loading(true);
+    try {
+      const params = new URLSearchParams({ search: r.application_number, limit: 1 });
+      const res  = await fetch(`${API_URL}/api/471s?${params}`, { headers:{ Authorization:`Bearer ${token}` } });
+      const json = await res.json();
+      setForm471((json.data || [])[0] || null);
+    } catch {}
+    setDetail471Loading(false);
   }
 
   function handleKey(e) { if (e.key === "Enter") doSearch(); }
@@ -493,10 +512,17 @@ function FRNStatusModal({ token, onClose }) {
     return "#a07ee0";
   };
 
+  const field = (label, value, color) => (
+    <div style={{ marginBottom:10 }}>
+      <div style={{ fontSize:6.5, letterSpacing:1.8, color:"rgba(232,228,240,0.3)", textTransform:"uppercase", marginBottom:3 }}>{label}</div>
+      <div style={{ fontSize:8.5, color: color || "rgba(232,228,240,0.8)", wordBreak:"break-word" }}>{value || "—"}</div>
+    </div>
+  );
+
   return (
     <div style={{ position:"fixed", inset:0, background:"rgba(5,5,13,0.9)", display:"flex", alignItems:"center", justifyContent:"center", zIndex:300 }}
       onClick={e => e.target === e.currentTarget && onClose()}>
-      <div style={{ background:"#08071a", border:"1px solid rgba(59,158,255,0.35)", clipPath:"polygon(0 0,calc(100% - 18px) 0,100% 18px,100% 100%,18px 100%,0 calc(100% - 18px))", width:"min(880px, 95vw)", maxHeight:"85vh", display:"flex", flexDirection:"column", position:"relative" }}>
+      <div style={{ background:"#08071a", border:"1px solid rgba(59,158,255,0.35)", clipPath:"polygon(0 0,calc(100% - 18px) 0,100% 18px,100% 100%,18px 100%,0 calc(100% - 18px))", width:"min(1100px, 96vw)", maxHeight:"88vh", display:"flex", flexDirection:"column", position:"relative" }}>
         <div style={{ position:"absolute", top:0, left:"10%", right:"10%", height:1, background:"linear-gradient(90deg,transparent,rgba(59,158,255,0.6),transparent)" }}/>
 
         {/* Header */}
@@ -528,47 +554,109 @@ function FRNStatusModal({ token, onClose }) {
           </button>
         </div>
 
-        {/* Results */}
-        <div style={{ flex:1, overflowY:"auto" }}>
-          {!searched && (
-            <div style={{ padding:"48px 20px", textAlign:"center" }}>
-              <div style={{ fontSize:9, color:"rgba(59,158,255,0.3)", letterSpacing:2, marginBottom:8 }}>ENTER A SEARCH TERM ABOVE</div>
-              <div style={{ fontSize:7.5, color:"rgba(232,228,240,0.2)" }}>Search by FRN number, application number, organization name, or BEN</div>
+        {/* Body: results + optional detail panel */}
+        <div style={{ flex:1, display:"flex", overflow:"hidden" }}>
+
+          {/* Results list */}
+          <div style={{ flex:1, overflowY:"auto", borderRight: selected ? "1px solid rgba(59,158,255,0.12)" : "none" }}>
+            {!searched && (
+              <div style={{ padding:"48px 20px", textAlign:"center" }}>
+                <div style={{ fontSize:9, color:"rgba(59,158,255,0.3)", letterSpacing:2, marginBottom:8 }}>ENTER A SEARCH TERM ABOVE</div>
+                <div style={{ fontSize:7.5, color:"rgba(232,228,240,0.2)" }}>Search by FRN number, application number, organization name, or BEN</div>
+              </div>
+            )}
+            {searched && loading && (
+              <div style={{ padding:"48px 20px", textAlign:"center", fontSize:9, color:"rgba(59,158,255,0.4)", letterSpacing:2 }}>SEARCHING...</div>
+            )}
+            {searched && !loading && results.length === 0 && (
+              <div style={{ padding:"48px 20px", textAlign:"center", fontSize:9, color:"rgba(232,228,240,0.25)", letterSpacing:2 }}>NO RESULTS FOUND</div>
+            )}
+            {searched && !loading && results.length > 0 && (
+              <>
+                <div style={{ display:"grid", gridTemplateColumns:"110px 1fr 90px 150px 110px 120px", padding:"8px 16px", borderBottom:"1px solid rgba(59,158,255,0.15)", background:"rgba(59,158,255,0.04)", position:"sticky", top:0 }}>
+                  {["FRN #","ORGANIZATION","BEN","SERVICE TYPE","COMMITMENT","STATUS"].map((h,i) => (
+                    <div key={i} style={{ fontSize:6.5, letterSpacing:1.5, color:"rgba(59,158,255,0.55)", fontFamily:"'DM Mono',monospace" }}>{h}</div>
+                  ))}
+                </div>
+                {results.map((r, i) => {
+                  const sc         = statusColor(r.form_471_frn_status_name);
+                  const commitment = r.funding_commitment_request ? `$${Number(r.funding_commitment_request).toLocaleString()}` : "—";
+                  const isSelected = selected?.funding_request_number === r.funding_request_number;
+                  return (
+                    <div key={i}
+                      onClick={() => selectRow(r)}
+                      style={{ display:"grid", gridTemplateColumns:"110px 1fr 90px 150px 110px 120px", padding:"10px 16px", borderBottom:"1px solid rgba(59,158,255,0.07)", alignItems:"center", cursor:"pointer", transition:"background 0.15s", background: isSelected ? "rgba(59,158,255,0.08)" : "transparent", borderLeft: isSelected ? "2px solid #3b9eff" : "2px solid transparent" }}
+                      onMouseEnter={e => { if (!isSelected) e.currentTarget.style.background="rgba(59,158,255,0.04)"; }}
+                      onMouseLeave={e => { if (!isSelected) e.currentTarget.style.background="transparent"; }}>
+                      <div style={{ fontSize:8, color:"#3b9eff", fontWeight:500 }}>{r.funding_request_number || "—"}</div>
+                      <div style={{ fontSize:8, color:"rgba(232,228,240,0.8)", paddingRight:10, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{r.organization_name || "—"}</div>
+                      <div style={{ fontSize:7.5, color:"rgba(232,228,240,0.45)" }}>{r.ben || "—"}</div>
+                      <div style={{ fontSize:7.5, color:"rgba(232,228,240,0.45)", paddingRight:8, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{r.form_471_service_type_name || "—"}</div>
+                      <div style={{ fontSize:8, color:"#22c97a" }}>{commitment}</div>
+                      <div><span style={{ fontSize:7, letterSpacing:1, padding:"2px 8px", border:`1px solid ${sc}40`, background:`${sc}10`, color:sc }}>{r.form_471_frn_status_name || "UNKNOWN"}</span></div>
+                    </div>
+                  );
+                })}
+                <div style={{ padding:"10px 16px", fontSize:7, color:"rgba(232,228,240,0.25)", letterSpacing:1.5, borderTop:"1px solid rgba(59,158,255,0.08)" }}>
+                  {results.length} RESULT{results.length !== 1 ? "S" : ""} · CLICK A ROW TO SEE 471 DETAILS
+                </div>
+              </>
+            )}
+          </div>
+
+          {/* Detail panel */}
+          {selected && (
+            <div style={{ width:300, flexShrink:0, overflowY:"auto", background:"rgba(5,5,18,0.6)", padding:"16px 18px", display:"flex", flexDirection:"column", gap:0 }}>
+              {/* Detail header */}
+              <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:14 }}>
+                <div style={{ fontSize:7, letterSpacing:2, color:"rgba(138,99,210,0.7)", textTransform:"uppercase" }}>FRN Detail</div>
+                <button onClick={() => { setSelected(null); setForm471(null); }}
+                  style={{ background:"transparent", border:"none", color:"rgba(232,228,240,0.3)", cursor:"pointer", fontSize:10, padding:"0 2px" }}>✕</button>
+              </div>
+
+              {/* Commitment fields */}
+              <div style={{ paddingBottom:14, borderBottom:"1px solid rgba(138,99,210,0.15)", marginBottom:14 }}>
+                <div style={{ fontSize:6.5, letterSpacing:2, color:"rgba(59,158,255,0.5)", marginBottom:10, textTransform:"uppercase" }}>Commitment Record</div>
+                {field("FRN #", selected.funding_request_number, "#3b9eff")}
+                {field("Organization", selected.organization_name)}
+                {field("BEN", selected.ben)}
+                {field("Service Type", selected.form_471_service_type_name)}
+                {field("FRN Status", selected.form_471_frn_status_name, statusColor(selected.form_471_frn_status_name))}
+                {field("Commitment Amount", selected.funding_commitment_request ? `$${Number(selected.funding_commitment_request).toLocaleString()}` : null, "#22c97a")}
+                {field("Discount %", selected.dis_pct ? `${selected.dis_pct}%` : null)}
+                {field("FCDL Date", selected.fcdl_letter_date ? new Date(selected.fcdl_letter_date).toLocaleDateString() : null)}
+                {field("Service Provider", selected.spin_name)}
+              </div>
+
+              {/* 471 fields */}
+              <div style={{ marginBottom:14 }}>
+                <div style={{ fontSize:6.5, letterSpacing:2, color:"rgba(138,99,210,0.5)", marginBottom:10, textTransform:"uppercase" }}>Form 471 Record</div>
+                {detail471Loading && <div style={{ fontSize:8, color:"rgba(138,99,210,0.4)", letterSpacing:1.5 }}>LOADING...</div>}
+                {!detail471Loading && !form471 && <div style={{ fontSize:8, color:"rgba(232,228,240,0.2)" }}>No matching 471 found in local DB</div>}
+                {!detail471Loading && form471 && (
+                  <>
+                    {field("App #", form471.application_number, "#a07ee0")}
+                    {field("471 Status", form471.form_471_status_name)}
+                    {field("Category of Service", form471.chosen_category_of_service)}
+                    {field("Funding Request Amt", form471.funding_request_amount ? `$${Number(form471.funding_request_amount).toLocaleString()}` : null, "#22c97a")}
+                    {field("Contact", form471.cnct_first_name ? `${form471.cnct_first_name} ${form471.cnct_last_name || ""}`.trim() : null)}
+                    {field("Contact Email", form471.cnct_email, "#3b9eff")}
+                    {field("Contact Phone", form471.cnct_phone)}
+                    {field("Certified", form471.certified_datetime ? new Date(form471.certified_datetime).toLocaleDateString() : null)}
+                  </>
+                )}
+              </div>
+
+              {/* Link out button */}
+              {selected.application_number && (
+                <a href={`https://legacy.fundsforlearning.com/471/${selected.application_number}`} target="_blank" rel="noreferrer"
+                  style={{ display:"flex", alignItems:"center", justifyContent:"center", gap:8, padding:"9px 14px", border:"1px solid rgba(138,99,210,0.4)", background:"rgba(138,99,210,0.08)", color:"#a07ee0", textDecoration:"none", fontFamily:"'DM Mono',monospace", fontSize:8, letterSpacing:1.5, textTransform:"uppercase", marginTop:"auto", transition:"all 0.15s" }}
+                  onMouseEnter={e => { e.currentTarget.style.background="rgba(138,99,210,0.18)"; e.currentTarget.style.borderColor="rgba(138,99,210,0.7)"; }}
+                  onMouseLeave={e => { e.currentTarget.style.background="rgba(138,99,210,0.08)"; e.currentTarget.style.borderColor="rgba(138,99,210,0.4)"; }}>
+                  View on FundsForLearning →
+                </a>
+              )}
             </div>
-          )}
-          {searched && loading && (
-            <div style={{ padding:"48px 20px", textAlign:"center", fontSize:9, color:"rgba(59,158,255,0.4)", letterSpacing:2 }}>SEARCHING...</div>
-          )}
-          {searched && !loading && results.length === 0 && (
-            <div style={{ padding:"48px 20px", textAlign:"center", fontSize:9, color:"rgba(232,228,240,0.25)", letterSpacing:2 }}>NO RESULTS FOUND</div>
-          )}
-          {searched && !loading && results.length > 0 && (
-            <>
-              <div style={{ display:"grid", gridTemplateColumns:"130px 1fr 100px 170px 120px 130px", padding:"8px 20px", borderBottom:"1px solid rgba(59,158,255,0.15)", background:"rgba(59,158,255,0.04)", position:"sticky", top:0 }}>
-                {["FRN #","ORGANIZATION","BEN","SERVICE TYPE","COMMITMENT","STATUS"].map((h,i) => (
-                  <div key={i} style={{ fontSize:6.5, letterSpacing:1.5, color:"rgba(59,158,255,0.55)", fontFamily:"'DM Mono',monospace" }}>{h}</div>
-                ))}
-              </div>
-              {results.map((r, i) => {
-                const sc = statusColor(r.form_471_frn_status_name);
-                const commitment = r.funding_commitment_request ? `$${Number(r.funding_commitment_request).toLocaleString()}` : "—";
-                return (
-                  <div key={i} style={{ display:"grid", gridTemplateColumns:"130px 1fr 100px 170px 120px 130px", padding:"10px 20px", borderBottom:"1px solid rgba(59,158,255,0.07)", alignItems:"center", transition:"background 0.15s" }}
-                    onMouseEnter={e => e.currentTarget.style.background="rgba(59,158,255,0.04)"}
-                    onMouseLeave={e => e.currentTarget.style.background="transparent"}>
-                    <div style={{ fontSize:8, color:"#3b9eff", fontWeight:500 }}>{r.funding_request_number || "—"}</div>
-                    <div style={{ fontSize:8, color:"rgba(232,228,240,0.8)", paddingRight:12, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{r.organization_name || "—"}</div>
-                    <div style={{ fontSize:7.5, color:"rgba(232,228,240,0.45)" }}>{r.ben || "—"}</div>
-                    <div style={{ fontSize:7.5, color:"rgba(232,228,240,0.45)", paddingRight:8, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{r.form_471_service_type_name || "—"}</div>
-                    <div style={{ fontSize:8, color:"#22c97a" }}>{commitment}</div>
-                    <div><span style={{ fontSize:7, letterSpacing:1, padding:"2px 8px", border:`1px solid ${sc}40`, background:`${sc}10`, color:sc }}>{r.form_471_frn_status_name || "UNKNOWN"}</span></div>
-                  </div>
-                );
-              })}
-              <div style={{ padding:"10px 20px", fontSize:7, color:"rgba(232,228,240,0.25)", letterSpacing:1.5, borderTop:"1px solid rgba(59,158,255,0.08)" }}>
-                {results.length} RESULT{results.length !== 1 ? "S" : ""} · LOCAL DATABASE · LAST SYNCED AT 8AM UTC
-              </div>
-            </>
           )}
         </div>
       </div>
