@@ -252,17 +252,38 @@ function Feed470({ token, onTagsUpdated }) {
   );
 }
 // ── Tags Panel ────────────────────────────────────────────────────────────────
+const STAGES = ["Bid Submitted","Under Review","Final Review","Wave Ready","Funded","Denied","On Appeal"];
+const STAGE_COLORS = {
+  "Bid Submitted": { color:"#3b9eff", bg:"rgba(59,158,255,0.1)",  border:"rgba(59,158,255,0.4)"  },
+  "Under Review":  { color:"#a07ee0", bg:"rgba(138,99,210,0.1)", border:"rgba(138,99,210,0.4)"  },
+  "Final Review":  { color:"#f0b429", bg:"rgba(240,180,41,0.1)",  border:"rgba(240,180,41,0.4)"  },
+  "Wave Ready":    { color:"#00d4ff", bg:"rgba(0,212,255,0.1)",   border:"rgba(0,212,255,0.4)"   },
+  "Funded":        { color:"#22c97a", bg:"rgba(34,201,122,0.1)",  border:"rgba(34,201,122,0.4)"  },
+  "Denied":        { color:"#f0614a", bg:"rgba(240,97,74,0.1)",   border:"rgba(240,97,74,0.4)"   },
+  "On Appeal":     { color:"#ff9f43", bg:"rgba(255,159,67,0.1)",  border:"rgba(255,159,67,0.4)"  },
+};
+
 function TagsPanel({ token, onTagsUpdated }) {
   const [tags, setTags]         = useState([]);
   const [loading, setLoading]   = useState(true);
-  const [popup, setPopup]       = useState(null); // { appNum, entityName, bidAmount, cogs }
+  const [popup, setPopup]       = useState(null);
+  const [stages, setStages]     = useState({});
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
       const res  = await fetch(`${API_URL}/api/tags`, { headers:{ Authorization:`Bearer ${token}` } });
       const json = await res.json();
-      if (json.status === "success") setTags(json.data || []);
+      const data = json.data || [];
+      if (json.status === "success") {
+        setTags(data);
+        if (data.length > 0) {
+          const nums  = data.map(t => t.application_number).join(",");
+          const sRes  = await fetch(`${API_URL}/api/bid-stages?app_numbers=${nums}`, { headers:{ Authorization:`Bearer ${token}` } });
+          const sJson = await sRes.json();
+          if (sJson.status === "success") setStages(sJson.data || {});
+        }
+      }
     } catch {}
     setLoading(false);
   }, [token]);
@@ -352,18 +373,35 @@ function TagsPanel({ token, onTagsUpdated }) {
         </div>
       )}
 
-      <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:16 }}>
+      <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:12 }}>
         <div style={{ fontFamily:"'Aldrich',sans-serif", fontSize:14, color:"#f0b429", letterSpacing:1 }}>★ MY TAGGED 470s</div>
         <span style={{ fontSize:7.5, color:"rgba(232,228,240,0.4)", letterSpacing:2 }}>{tags.length} TAGGED</span>
       </div>
+
+      {/* Stage pipeline strip */}
+      {!loading && tags.length > 0 && (
+        <div style={{ display:"flex", gap:6, marginBottom:14, flexWrap:"wrap" }}>
+          {STAGES.map(stage => {
+            const count = tags.filter(t => stages[t.application_number] === stage).length;
+            const sc    = STAGE_COLORS[stage];
+            return (
+              <div key={stage} style={{ display:"flex", alignItems:"center", gap:6, padding:"6px 12px", border:`1px solid ${count > 0 ? sc.border : "rgba(255,255,255,0.07)"}`, background: count > 0 ? sc.bg : "rgba(255,255,255,0.02)", borderRadius:2, opacity: count > 0 ? 1 : 0.45, transition:"all 0.2s" }}>
+                <div style={{ width:5, height:5, borderRadius:"50%", background: count > 0 ? sc.color : "rgba(255,255,255,0.2)", flexShrink:0 }}/>
+                <span style={{ fontSize:7, letterSpacing:1.2, color: count > 0 ? sc.color : "rgba(232,228,240,0.3)", textTransform:"uppercase", whiteSpace:"nowrap" }}>{stage}</span>
+                <span style={{ fontFamily:"'Aldrich',sans-serif", fontSize:11, color: count > 0 ? sc.color : "rgba(232,228,240,0.2)", marginLeft:2 }}>{count}</span>
+              </div>
+            );
+          })}
+        </div>
+      )}
 
       <div style={{ background:"rgba(10,8,20,0.95)", border:"1px solid rgba(240,180,41,0.3)", position:"relative", clipPath:"polygon(0 0,100% 0,100% calc(100% - 14px),calc(100% - 14px) 100%,0 100%)", overflowX:"auto" }}>
         <div style={{ position:"absolute", top:0, left:0, width:12, height:12, borderTop:"1.5px solid #f0b429", borderLeft:"1.5px solid #f0b429" }}/>
         <div style={{ position:"absolute", bottom:13, right:-1, width:20, height:1.5, background:"rgba(240,180,41,0.35)", transform:"rotate(-45deg)", transformOrigin:"right center" }}/>
 
         {/* Table header */}
-        <div style={{ display:"grid", gridTemplateColumns:"130px 1.8fr 60px 1fr 100px 90px 1fr", gap:0, padding:"8px 16px", borderBottom:"1px solid rgba(240,180,41,0.2)", background:"rgba(240,180,41,0.04)", minWidth:900 }}>
-          {["APP #","ENTITY","STATE","SERVICE","BID DUE","DAYS LEFT","ACTIONS"].map((h,i) => (
+        <div style={{ display:"grid", gridTemplateColumns:"130px 1.8fr 60px 1fr 100px 90px 120px 1fr", gap:0, padding:"8px 16px", borderBottom:"1px solid rgba(240,180,41,0.2)", background:"rgba(240,180,41,0.04)", minWidth:1020 }}>
+          {["APP #","ENTITY","STATE","SERVICE","BID DUE","DAYS LEFT","STAGE","ACTIONS"].map((h,i) => (
             <div key={i} style={{ fontSize:6.5, letterSpacing:1.5, color:"rgba(240,180,41,0.6)", fontFamily:"'DM Mono',monospace" }}>{h}</div>
           ))}
         </div>
@@ -385,8 +423,11 @@ function TagsPanel({ token, onTagsUpdated }) {
           const isLost    = tag.bid_status === "lost";
           const hasMoney  = tag.bid_amount > 0;
 
+          const stage    = stages[tag.application_number] || null;
+          const stageSc  = stage ? STAGE_COLORS[stage] : null;
+
           return (
-            <div key={i} style={{ display:"grid", gridTemplateColumns:"130px 1.8fr 60px 1fr 100px 90px 1fr", gap:0, padding:"9px 16px", borderBottom: i < tags.length-1 ? "1px solid rgba(240,180,41,0.08)" : "none", alignItems:"center", transition:"background 0.15s", minWidth:900 }}
+            <div key={i} style={{ display:"grid", gridTemplateColumns:"130px 1.8fr 60px 1fr 100px 90px 120px 1fr", gap:0, padding:"9px 16px", borderBottom: i < tags.length-1 ? "1px solid rgba(240,180,41,0.08)" : "none", alignItems:"center", transition:"background 0.15s", minWidth:1020 }}
               onMouseEnter={e => e.currentTarget.style.background="rgba(240,180,41,0.03)"}
               onMouseLeave={e => e.currentTarget.style.background="transparent"}>
 
@@ -410,6 +451,15 @@ function TagsPanel({ token, onTagsUpdated }) {
                 <span className={days !== null && days >= 0 && days <= 7 ? "pulse-urgent" : ""} style={{ fontSize:8, color:dayColor, padding:"2px 8px", background:dayBg, border:`1px solid ${dayColor}40`, borderRadius:1 }}>
                   {dayLabel}
                 </span>
+              </div>
+
+              {/* Stage badge */}
+              <div style={{ display:"flex", alignItems:"center" }}>
+                {stage && stageSc ? (
+                  <span style={{ fontSize:6.5, letterSpacing:1, padding:"2px 8px", border:`1px solid ${stageSc.border}`, background:stageSc.bg, color:stageSc.color, whiteSpace:"nowrap", borderRadius:1 }}>{stage}</span>
+                ) : (
+                  <span style={{ fontSize:7, color:"rgba(232,228,240,0.2)" }}>—</span>
+                )}
               </div>
 
               {/* Action buttons */}
@@ -623,7 +673,7 @@ function FRNStatusModal({ token, onClose }) {
                 {field("Service Type", selected.form_471_service_type_name)}
                 {field("FRN Status", selected.form_471_frn_status_name, statusColor(selected.form_471_frn_status_name))}
                 {field("Commitment Amount", selected.funding_commitment_request ? `$${Number(selected.funding_commitment_request).toLocaleString()}` : null, "#22c97a")}
-                {field("Discount %", selected.dis_pct ? `${selected.dis_pct}%` : null)}
+                {field("Discount %", selected.dis_pct ? `${Math.round(parseFloat(selected.dis_pct) * 100)}%` : null)}
                 {field("FCDL Date", selected.fcdl_letter_date ? new Date(selected.fcdl_letter_date).toLocaleDateString() : null)}
                 {field("Service Provider", selected.spin_name)}
               </div>
