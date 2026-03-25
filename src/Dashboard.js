@@ -424,7 +424,6 @@ function TagsPanel({ token, onTagsUpdated }) {
           const hasMoney  = tag.bid_amount > 0;
 
           const stage    = stages[tag.application_number] || null;
-          const stageSc  = stage ? STAGE_COLORS[stage] : null;
           const stageIdx = stage ? STAGES.indexOf(stage) : -1;
 
           return (
