@@ -72,27 +72,46 @@ function StatCard({ label, value, sub, color }) {
 }
 
 function Feed470({ token }) {
-  const [data, setData]     = useState([]);
+  const [data, setData]       = useState([]);
   const [loading, setLoading] = useState(true);
-  const [state, setState]   = useState("TX");
-  const [filter, setFilter] = useState("all");
+  const [state, setState]     = useState("TX");
+  const [filter, setFilter]   = useState("all");
+  const [page, setPage]       = useState(0);
+  const PAGE_SIZE = 10;
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const params = new URLSearchParams({ limit:50, ...(state !== "ALL" && { state }) });
+      const params = new URLSearchParams({ limit:200, ...(state !== "ALL" && { state }) });
       const res  = await fetch(`${API_URL}/api/470s?${params}`, { headers:{ Authorization:`Bearer ${token}` } });
       const json = await res.json();
       setData(json.data || []);
+      setPage(0);
     } catch { setData([]); }
     setLoading(false);
   }, [token, state]);
 
   useEffect(() => { load(); }, [load]);
 
-  const filtered = filter === "all" ? data : data.filter(d => (d.application_status||"").toLowerCase().includes(filter));
+  // Status mapping — USAC uses values like "Certified", "Pending Certification" etc
+  function getStatus(item) {
+    const s = (item.application_status || "").toLowerCase();
+    if (s.includes("certif") && !s.includes("pending")) return "open";
+    if (s.includes("pending") || s.includes("review") || s.includes("progress")) return "review";
+    if (s.includes("cancel") || s.includes("withdraw")) return "closed";
+    return "open"; // default to open if certified
+  }
+
+  const filtered = filter === "all" ? data : data.filter(d => getStatus(d) === filter);
+  const totalPages = Math.ceil(filtered.length / PAGE_SIZE);
+  const paged = filtered.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
 
   const STATES = ["ALL","TX","CA","NY","FL","IL","PA","OH","GA","NC","MI"];
+
+  // Correct USAC 470 detail URL
+  function get470Link(appNum) {
+    return `https://forms.universalservice.org/portal/form470/view?appNumber=${appNum}`;
+  }
 
   return (
     <Panel style={{ display:"flex", flexDirection:"column", height:"100%" }}>
@@ -101,7 +120,6 @@ function Feed470({ token }) {
         <div style={{ width:5, height:5, borderRadius:"50%", background:"#39ff14", animation:"pulse-dot 1s infinite", boxShadow:"0 0 5px #39ff14" }}/>
         <span style={{ fontSize:6.5, letterSpacing:2, color:"rgba(57,255,20,0.55)" }}>LIVE · USAC OPEN DATA API</span>
       </div>
-      {/* Filters */}
       <div style={{ display:"flex", gap:5, padding:"7px 14px", borderBottom:"1px solid rgba(138,99,210,0.12)", flexWrap:"wrap" }}>
         <span style={{ fontSize:6.5, color:"rgba(232,228,240,0.35)", alignSelf:"center", marginRight:4 }}>STATE:</span>
         {STATES.map(s => (
@@ -110,11 +128,11 @@ function Feed470({ token }) {
       </div>
       <div style={{ display:"flex", gap:5, padding:"7px 14px", borderBottom:"1px solid rgba(138,99,210,0.12)" }}>
         {["all","open","review","closed"].map(f => (
-          <button key={f} onClick={() => setFilter(f)} style={{ padding:"3px 9px", fontFamily:"'DM Mono',monospace", fontSize:7, letterSpacing:1.5, border:`1px solid ${filter===f ? "rgba(138,99,210,0.6)" : "rgba(138,99,210,0.2)"}`, background: filter===f ? "rgba(138,99,210,0.1)" : "transparent", color: filter===f ? "#a07ee0" : "rgba(232,228,240,0.4)", cursor:"pointer" }}>{f.toUpperCase()}</button>
+          <button key={f} onClick={() => { setFilter(f); setPage(0); }} style={{ padding:"3px 9px", fontFamily:"'DM Mono',monospace", fontSize:7, letterSpacing:1.5, border:`1px solid ${filter===f ? "rgba(138,99,210,0.6)" : "rgba(138,99,210,0.2)"}`, background: filter===f ? "rgba(138,99,210,0.1)" : "transparent", color: filter===f ? "#a07ee0" : "rgba(232,228,240,0.4)", cursor:"pointer" }}>{f.toUpperCase()}</button>
         ))}
       </div>
-      {/* Feed */}
-      <div style={{ flex:1, overflowY:"auto" }}>
+      {/* Feed — fixed height, no scroll */}
+      <div style={{ flex:1, overflow:"hidden" }}>
         {loading ? (
           [1,2,3,4,5].map(i => (
             <div key={i} style={{ padding:"10px 14px", borderBottom:"1px solid rgba(138,99,210,0.1)", display:"flex", flexDirection:"column", gap:5 }}>
@@ -122,20 +140,21 @@ function Feed470({ token }) {
               <div style={{ height:8, width:"40%", borderRadius:1, background:"linear-gradient(90deg,rgba(138,99,210,0.07) 25%,rgba(138,99,210,0.14) 50%,rgba(138,99,210,0.07) 75%)", backgroundSize:"200% 100%", animation:"shimmer 1.5s infinite" }}/>
             </div>
           ))
-        ) : filtered.length === 0 ? (
+        ) : paged.length === 0 ? (
           <div style={{ padding:"24px 14px", textAlign:"center", fontSize:9, color:"rgba(138,99,210,0.4)" }}>NO 470s FOUND</div>
-        ) : filtered.map((item, i) => {
-          const status = (item.application_status||"open").toLowerCase();
-          const badgeColor = status.includes("open") ? "#39ff14" : status.includes("review") ? "#f0b429" : "rgba(232,228,240,0.3)";
-          const badgeBg    = status.includes("open") ? "rgba(57,255,20,0.08)" : status.includes("review") ? "rgba(240,180,41,0.08)" : "rgba(138,99,210,0.08)";
-          const link = `https://forms.universalservice.org/portal/form470/appDetail?applicationNumber=${item.application_number}`;
+        ) : paged.map((item, i) => {
+          const status = getStatus(item);
+          const badgeColor = status === "open" ? "#39ff14" : status === "review" ? "#f0b429" : "rgba(232,228,240,0.3)";
+          const badgeBg    = status === "open" ? "rgba(57,255,20,0.08)" : status === "review" ? "rgba(240,180,41,0.08)" : "rgba(138,99,210,0.08)";
+          const badgeTxt   = status === "open" ? "CERTIFIED" : status === "review" ? "PENDING" : "CLOSED";
           return (
-            <a key={i} href={link} target="_blank" rel="noreferrer" style={{ display:"flex", flexDirection:"column", gap:3, padding:"9px 14px", borderBottom:"1px solid rgba(138,99,210,0.1)", textDecoration:"none", transition:"background 0.15s" }}
+            <a key={i} href={get470Link(item.application_number)} target="_blank" rel="noreferrer"
+              style={{ display:"flex", flexDirection:"column", gap:3, padding:"9px 14px", borderBottom:"1px solid rgba(138,99,210,0.1)", textDecoration:"none", transition:"background 0.15s" }}
               onMouseEnter={e => e.currentTarget.style.background="rgba(138,99,210,0.05)"}
               onMouseLeave={e => e.currentTarget.style.background="transparent"}>
               <div style={{ display:"flex", alignItems:"center", gap:8 }}>
                 <span style={{ fontSize:9, color:"#3b9eff", flex:1, fontWeight:500 }}>Form 470 · {item.application_number}</span>
-                <span style={{ fontSize:6, letterSpacing:1.5, padding:"2px 7px", background:badgeBg, border:`1px solid ${badgeColor}40`, color:badgeColor }}>{status.includes("open") ? "OPEN" : status.includes("review") ? "IN REVIEW" : "CLOSED"}</span>
+                <span style={{ fontSize:6, letterSpacing:1.5, padding:"2px 7px", background:badgeBg, border:`1px solid ${badgeColor}40`, color:badgeColor }}>{badgeTxt}</span>
               </div>
               <div style={{ fontSize:8, color:"rgba(232,228,240,0.75)" }}>{item.billed_entity_name}{item.state ? ` · ${item.state}` : ""}</div>
               <div style={{ display:"flex", gap:10 }}>
@@ -147,9 +166,13 @@ function Feed470({ token }) {
           );
         })}
       </div>
-      <div style={{ padding:"9px 14px", borderTop:"1px solid rgba(138,99,210,0.12)", display:"flex", justifyContent:"space-between", alignItems:"center" }}>
-        <span style={{ fontSize:7, color:"rgba(232,228,240,0.4)" }}>{filtered.length} FORM 470s</span>
-        <button onClick={load} style={{ padding:"4px 11px", fontFamily:"'DM Mono',monospace", fontSize:7, letterSpacing:1.5, border:"1px solid rgba(138,99,210,0.25)", background:"transparent", color:"rgba(232,228,240,0.4)", cursor:"pointer" }}>↺ REFRESH</button>
+      {/* Pagination footer */}
+      <div style={{ padding:"9px 14px", borderTop:"1px solid rgba(138,99,210,0.12)", display:"flex", justifyContent:"space-between", alignItems:"center", flexShrink:0 }}>
+        <span style={{ fontSize:7, color:"rgba(232,228,240,0.4)" }}>{filtered.length} TOTAL · PAGE {page+1}/{totalPages||1}</span>
+        <div style={{ display:"flex", gap:5 }}>
+          <button onClick={() => setPage(p => Math.max(0,p-1))} disabled={page===0} style={{ padding:"3px 10px", fontFamily:"'DM Mono',monospace", fontSize:7, letterSpacing:1, border:"1px solid rgba(138,99,210,0.25)", background:"transparent", color: page===0 ? "rgba(232,228,240,0.2)" : "rgba(232,228,240,0.5)", cursor: page===0 ? "not-allowed" : "pointer" }}>← PREV</button>
+          <button onClick={() => setPage(p => Math.min(totalPages-1,p+1))} disabled={page>=totalPages-1} style={{ padding:"3px 10px", fontFamily:"'DM Mono',monospace", fontSize:7, letterSpacing:1, border:"1px solid rgba(138,99,210,0.25)", background:"transparent", color: page>=totalPages-1 ? "rgba(232,228,240,0.2)" : "rgba(232,228,240,0.5)", cursor: page>=totalPages-1 ? "not-allowed" : "pointer" }}>NEXT →</button>
+        </div>
       </div>
     </Panel>
   );
@@ -241,7 +264,7 @@ export default function Dashboard({ session }) {
                 {/* COL 1: TOOLS */}
                 <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
                   <Panel>
-                    <PTitle>{'// E-RATE '}<span style={{ color:"#a07ee0" }}>QUICK ACCESS TOOLS</span></PTitle>
+                    <PTitle>// E-RATE <span style={{ color:"#a07ee0" }}>QUICK ACCESS TOOLS</span></PTitle>
                     <div style={{ padding:"12px 14px" }}>
                       <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8 }}>
                         <ToolBtn href="https://www.usac.org/e-rate/applicant-process/before-you-begin/budget-tool/"          color="purple" icon="💰" name="E-RATE C2 BUDGET"     desc="Calculate and track your Category 2 five-year budget cycle."/>
@@ -255,7 +278,7 @@ export default function Dashboard({ session }) {
 
                   {/* Deadlines */}
                   <Panel>
-                    <PTitle>{'// FY2025 '}<span style={{ color:"#a07ee0" }}>KEY DEADLINES</span></PTitle>
+                    <PTitle>// FY2025 <span style={{ color:"#a07ee0" }}>KEY DEADLINES</span></PTitle>
                     <div style={{ padding:"10px 14px" }}>
                       {[
                         { name:"Form 470 Window", sub:"Open Now", status:"OPEN", color:"#39ff14", pulse:true },
@@ -289,7 +312,7 @@ export default function Dashboard({ session }) {
                   </div>
 
                   <Panel>
-                    <PTitle>{'// USAC '}<span style={{ color:"#a07ee0" }}>PORTAL NAVIGATION</span></PTitle>
+                    <PTitle>// USAC <span style={{ color:"#a07ee0" }}>PORTAL NAVIGATION</span></PTitle>
                     <div style={{ padding:"9px 14px", display:"flex", flexDirection:"column", gap:6 }}>
                       {[
                         { href:"https://forms.universalservice.org/portal/", icon:"🏛️", name:"EPC PORTAL", sub:"E-Rate Productivity Center" },
@@ -315,7 +338,7 @@ export default function Dashboard({ session }) {
 
                   {/* Logged in user */}
                   <Panel>
-                    <PTitle>{'// SESSION'}</PTitle>
+                    <PTitle>// SESSION</PTitle>
                     <div style={{ padding:"10px 14px" }}>
                       <div style={{ fontSize:7.5, color:"rgba(232,228,240,0.6)", marginBottom:4 }}>{session?.user?.email}</div>
                       <div style={{ fontSize:6.5, color:"rgba(138,99,210,0.5)" }}>KADERA INTERNAL · E-RATE TEAM</div>
@@ -333,4 +356,3 @@ export default function Dashboard({ session }) {
     </>
   );
 }
-
