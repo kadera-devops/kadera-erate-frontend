@@ -34,7 +34,7 @@ function PTitle({ children }) {
   return <div style={{ fontSize:7, letterSpacing:2.5, color:"rgba(232,228,240,0.45)", padding:"11px 14px 8px", borderBottom:"1px solid rgba(138,99,210,0.15)", position:"relative", zIndex:5 }}>{children}</div>;
 }
 
-function ToolBtn({ href, color, icon, name, desc, wide }) {
+function ToolBtn({ href, onClick, color, icon, name, desc, wide }) {
   const colors = {
     purple: { border:"rgba(138,99,210,0.35)", bg:"rgba(138,99,210,0.05)", hover:"rgba(138,99,210,0.12)", text:"#a07ee0", corner:"#a07ee0" },
     blue:   { border:"rgba(59,158,255,0.3)",  bg:"rgba(59,158,255,0.04)",  hover:"rgba(59,158,255,0.1)",  text:"#3b9eff", corner:"#3b9eff" },
@@ -42,10 +42,9 @@ function ToolBtn({ href, color, icon, name, desc, wide }) {
   };
   const c = colors[color] || colors.purple;
   const [hov, setHov] = useState(false);
-  return (
-    <a href={href} target="_blank" rel="noreferrer"
-      onMouseEnter={() => setHov(true)} onMouseLeave={() => setHov(false)}
-      style={{ display:"flex", flexDirection: wide ? "row" : "column", alignItems: wide ? "center" : "flex-start", gap: wide ? 12 : 5, padding:"12px 12px", border:`1px solid ${c.border}`, background: hov ? c.hover : c.bg, cursor:"pointer", textDecoration:"none", position:"relative", transition:"all 0.2s", clipPath:"polygon(0 0,100% 0,100% calc(100% - 7px),calc(100% - 7px) 100%,0 100%)", gridColumn: wide ? "span 2" : undefined }}>
+  const sharedStyle = { display:"flex", flexDirection: wide ? "row" : "column", alignItems: wide ? "center" : "flex-start", gap: wide ? 12 : 5, padding:"12px 12px", border:`1px solid ${c.border}`, background: hov ? c.hover : c.bg, cursor:"pointer", textDecoration:"none", position:"relative", transition:"all 0.2s", clipPath:"polygon(0 0,100% 0,100% calc(100% - 7px),calc(100% - 7px) 100%,0 100%)", gridColumn: wide ? "span 2" : undefined };
+  const inner = (
+    <>
       <div style={{ position:"absolute", top:0, left:0, width:7, height:7, borderTop:`1px solid ${c.corner}`, borderLeft:`1px solid ${c.corner}` }}/>
       <div style={{ fontSize:wide ? 18 : 16 }}>{icon}</div>
       <div style={{ flex: wide ? 1 : undefined }}>
@@ -53,7 +52,13 @@ function ToolBtn({ href, color, icon, name, desc, wide }) {
         <div style={{ fontSize:6.5, color:"rgba(232,228,240,0.45)", lineHeight:1.5 }}>{desc}</div>
       </div>
       <div style={{ fontSize:7.5, color:c.text, opacity:0.5, marginTop: wide ? 0 : "auto", alignSelf: wide ? "center" : "flex-end" }}>→</div>
-    </a>
+    </>
+  );
+  if (onClick) return (
+    <div onClick={onClick} onMouseEnter={() => setHov(true)} onMouseLeave={() => setHov(false)} style={{ ...sharedStyle, fontFamily:"inherit" }}>{inner}</div>
+  );
+  return (
+    <a href={href} target="_blank" rel="noreferrer" onMouseEnter={() => setHov(true)} onMouseLeave={() => setHov(false)} style={sharedStyle}>{inner}</a>
   );
 }
 
@@ -449,6 +454,128 @@ function TagsPanel({ token, onTagsUpdated }) {
   );
 }
 
+// ── FRN Status Modal ──────────────────────────────────────────────────────────
+function FRNStatusModal({ token, onClose }) {
+  const [query, setQuery]       = useState("");
+  const [searchBy, setSearchBy] = useState("frn");
+  const [results, setResults]   = useState([]);
+  const [loading, setLoading]   = useState(false);
+  const [searched, setSearched] = useState(false);
+
+  const searchByOptions = [
+    { key:"frn",          label:"FRN #",   placeholder:"Enter FRN number..." },
+    { key:"application",  label:"App #",    placeholder:"Enter application number..." },
+    { key:"organization", label:"Org Name", placeholder:"Enter organization name..." },
+    { key:"ben",          label:"BEN",      placeholder:"Enter BEN entity number..." },
+  ];
+
+  async function doSearch() {
+    if (!query.trim()) return;
+    setLoading(true);
+    setSearched(true);
+    try {
+      const params = new URLSearchParams({ search: query.trim(), search_by: searchBy, limit: 50 });
+      const res  = await fetch(`${API_URL}/api/frn-status?${params}`, { headers:{ Authorization:`Bearer ${token}` } });
+      const json = await res.json();
+      setResults(json.data || []);
+    } catch { setResults([]); }
+    setLoading(false);
+  }
+
+  function handleKey(e) { if (e.key === "Enter") doSearch(); }
+
+  const statusColor = (s) => {
+    if (!s) return "rgba(232,228,240,0.35)";
+    const sl = s.toLowerCase();
+    if (sl.includes("commit") || sl.includes("fund")) return "#22c97a";
+    if (sl.includes("deny")   || sl.includes("reject")) return "#f0614a";
+    if (sl.includes("review") || sl.includes("pend"))   return "#f0b429";
+    return "#a07ee0";
+  };
+
+  return (
+    <div style={{ position:"fixed", inset:0, background:"rgba(5,5,13,0.9)", display:"flex", alignItems:"center", justifyContent:"center", zIndex:300 }}
+      onClick={e => e.target === e.currentTarget && onClose()}>
+      <div style={{ background:"#08071a", border:"1px solid rgba(59,158,255,0.35)", clipPath:"polygon(0 0,calc(100% - 18px) 0,100% 18px,100% 100%,18px 100%,0 calc(100% - 18px))", width:"min(880px, 95vw)", maxHeight:"85vh", display:"flex", flexDirection:"column", position:"relative" }}>
+        <div style={{ position:"absolute", top:0, left:"10%", right:"10%", height:1, background:"linear-gradient(90deg,transparent,rgba(59,158,255,0.6),transparent)" }}/>
+
+        {/* Header */}
+        <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"16px 20px", borderBottom:"1px solid rgba(59,158,255,0.15)", flexShrink:0 }}>
+          <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+            <div style={{ width:6, height:6, borderRadius:"50%", background:"#3b9eff", boxShadow:"0 0 6px rgba(59,158,255,0.8)" }}/>
+            <span style={{ fontFamily:"'Aldrich',sans-serif", fontSize:10, letterSpacing:2.5, color:"#3b9eff" }}>FRN STATUS LOOKUP</span>
+            <span style={{ fontSize:7, letterSpacing:1.5, color:"rgba(232,228,240,0.3)" }}>· LOCAL DATABASE · FY2026 TX</span>
+          </div>
+          <button onClick={onClose} style={{ background:"transparent", border:"1px solid rgba(232,228,240,0.15)", color:"rgba(232,228,240,0.4)", cursor:"pointer", fontFamily:"'DM Mono',monospace", fontSize:8, padding:"4px 10px", letterSpacing:1 }}>✕ CLOSE</button>
+        </div>
+
+        {/* Search bar */}
+        <div style={{ padding:"14px 20px", borderBottom:"1px solid rgba(59,158,255,0.1)", display:"flex", gap:8, alignItems:"center", flexWrap:"wrap", flexShrink:0 }}>
+          <div style={{ display:"flex", gap:4 }}>
+            {searchByOptions.map(o => (
+              <button key={o.key} onClick={() => setSearchBy(o.key)}
+                style={{ padding:"4px 10px", fontFamily:"'DM Mono',monospace", fontSize:7, letterSpacing:1.5, border:`1px solid ${searchBy===o.key ? "rgba(59,158,255,0.6)" : "rgba(59,158,255,0.15)"}`, background: searchBy===o.key ? "rgba(59,158,255,0.12)" : "transparent", color: searchBy===o.key ? "#3b9eff" : "rgba(232,228,240,0.35)", cursor:"pointer", transition:"all 0.15s" }}>
+                {o.label}
+              </button>
+            ))}
+          </div>
+          <input value={query} onChange={e => setQuery(e.target.value)} onKeyDown={handleKey}
+            placeholder={searchByOptions.find(o => o.key === searchBy)?.placeholder}
+            style={{ flex:1, minWidth:200, background:"rgba(255,255,255,0.03)", border:"1px solid rgba(59,158,255,0.25)", outline:"none", fontFamily:"'DM Mono',monospace", fontSize:9, color:"#e8e4f0", padding:"7px 12px" }}/>
+          <button onClick={doSearch}
+            style={{ padding:"7px 18px", fontFamily:"'DM Mono',monospace", fontSize:8, letterSpacing:2, border:"1px solid rgba(59,158,255,0.5)", background:"rgba(59,158,255,0.1)", color:"#3b9eff", cursor:"pointer", whiteSpace:"nowrap" }}>
+            SEARCH →
+          </button>
+        </div>
+
+        {/* Results */}
+        <div style={{ flex:1, overflowY:"auto" }}>
+          {!searched && (
+            <div style={{ padding:"48px 20px", textAlign:"center" }}>
+              <div style={{ fontSize:9, color:"rgba(59,158,255,0.3)", letterSpacing:2, marginBottom:8 }}>ENTER A SEARCH TERM ABOVE</div>
+              <div style={{ fontSize:7.5, color:"rgba(232,228,240,0.2)" }}>Search by FRN number, application number, organization name, or BEN</div>
+            </div>
+          )}
+          {searched && loading && (
+            <div style={{ padding:"48px 20px", textAlign:"center", fontSize:9, color:"rgba(59,158,255,0.4)", letterSpacing:2 }}>SEARCHING...</div>
+          )}
+          {searched && !loading && results.length === 0 && (
+            <div style={{ padding:"48px 20px", textAlign:"center", fontSize:9, color:"rgba(232,228,240,0.25)", letterSpacing:2 }}>NO RESULTS FOUND</div>
+          )}
+          {searched && !loading && results.length > 0 && (
+            <>
+              <div style={{ display:"grid", gridTemplateColumns:"130px 1fr 100px 170px 120px 130px", padding:"8px 20px", borderBottom:"1px solid rgba(59,158,255,0.15)", background:"rgba(59,158,255,0.04)", position:"sticky", top:0 }}>
+                {["FRN #","ORGANIZATION","BEN","SERVICE TYPE","COMMITMENT","STATUS"].map((h,i) => (
+                  <div key={i} style={{ fontSize:6.5, letterSpacing:1.5, color:"rgba(59,158,255,0.55)", fontFamily:"'DM Mono',monospace" }}>{h}</div>
+                ))}
+              </div>
+              {results.map((r, i) => {
+                const sc = statusColor(r.form_471_frn_status_name);
+                const commitment = r.funding_commitment_request ? `$${Number(r.funding_commitment_request).toLocaleString()}` : "—";
+                return (
+                  <div key={i} style={{ display:"grid", gridTemplateColumns:"130px 1fr 100px 170px 120px 130px", padding:"10px 20px", borderBottom:"1px solid rgba(59,158,255,0.07)", alignItems:"center", transition:"background 0.15s" }}
+                    onMouseEnter={e => e.currentTarget.style.background="rgba(59,158,255,0.04)"}
+                    onMouseLeave={e => e.currentTarget.style.background="transparent"}>
+                    <div style={{ fontSize:8, color:"#3b9eff", fontWeight:500 }}>{r.funding_request_number || "—"}</div>
+                    <div style={{ fontSize:8, color:"rgba(232,228,240,0.8)", paddingRight:12, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{r.organization_name || "—"}</div>
+                    <div style={{ fontSize:7.5, color:"rgba(232,228,240,0.45)" }}>{r.ben || "—"}</div>
+                    <div style={{ fontSize:7.5, color:"rgba(232,228,240,0.45)", paddingRight:8, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{r.form_471_service_type_name || "—"}</div>
+                    <div style={{ fontSize:8, color:"#22c97a" }}>{commitment}</div>
+                    <div><span style={{ fontSize:7, letterSpacing:1, padding:"2px 8px", border:`1px solid ${sc}40`, background:`${sc}10`, color:sc }}>{r.form_471_frn_status_name || "UNKNOWN"}</span></div>
+                  </div>
+                );
+              })}
+              <div style={{ padding:"10px 20px", fontSize:7, color:"rgba(232,228,240,0.25)", letterSpacing:1.5, borderTop:"1px solid rgba(59,158,255,0.08)" }}>
+                {results.length} RESULT{results.length !== 1 ? "S" : ""} · LOCAL DATABASE · LAST SYNCED AT 8AM UTC
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function BidResponseOverview({ token }) {
   const [tags, setTags] = useState([]);
 
@@ -523,6 +650,7 @@ export default function Dashboard({ session }) {
   const [tab, setTab]         = useState("dashboard");
   const [clock, setClock]     = useState("");
   const [tagCount, setTagCount] = useState(0);
+  const [frnOpen, setFrnOpen] = useState(false);
 
   const refreshTagCount = useCallback(async (t) => {
     if (!t) return;
@@ -556,6 +684,7 @@ export default function Dashboard({ session }) {
     <>
       <style>{css}</style>
       <div style={{ minHeight:"100vh", background:"#05050d", position:"relative" }}>
+        {frnOpen && token && <FRNStatusModal token={token} onClose={() => setFrnOpen(false)} />}
         <div style={{ position:"fixed", inset:0, background:"radial-gradient(ellipse 70% 50% at 15% 15%, rgba(138,99,210,0.09) 0%, transparent 60%)", pointerEvents:"none", zIndex:0 }}/>
         <div style={{ position:"fixed", inset:0, backgroundImage:"radial-gradient(circle, rgba(138,99,210,0.8) 1px, transparent 1px)", backgroundSize:"28px 28px", opacity:0.035, pointerEvents:"none", zIndex:0 }}/>
 
@@ -622,7 +751,7 @@ export default function Dashboard({ session }) {
                         <ToolBtn href="https://www.usac.org/e-rate/applicant-process/before-you-begin/budget-tool/"          color="purple" icon="💰" name="E-RATE C2 BUDGET"     desc="Calculate and track your Category 2 five-year budget cycle."/>
                         <ToolBtn href="https://opendata.usac.org/E-rate/E-Rate-Entity-Search/qe3b-nkqm"                       color="blue"   icon="🔍" name="ENTITY SEARCH"        desc="Search schools, libraries, and providers by name or BEN."/>
                         <ToolBtn href="https://www.usac.org/e-rate/tools/window-status/"                                      color="gold"   icon="📅" name="WINDOW REPORTING"     desc="Check filing windows, open/close dates, and deadlines."/>
-                        <ToolBtn href="https://www.usac.org/e-rate/tools/frn-status-tool/"                                    color="blue"   icon="📋" name="FRN STATUS FY2016+"   desc="Track Funding Request Number status for FY2016 and later."/>
+                        <ToolBtn onClick={() => setFrnOpen(true)}                                                              color="blue"   icon="📋" name="FRN STATUS FY2016+"   desc="Search FRN status from local USAC commitment data."/>
                         <ToolBtn href="https://www.usac.org/e-rate/tools/commitments-search/" wide color="purple" icon="✅" name="SEARCH COMMITMENTS TOOL" desc="Search commitment decisions, funding amounts, and disbursement records across all funding years."/>
                       </div>
                     </div>
