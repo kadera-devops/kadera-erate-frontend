@@ -162,8 +162,12 @@ export default function SearchPanel({ token, onTagsUpdated }) {
                   </tr>
                 </thead>
                 <tbody>
-                  {results.map((row, i) => (
-                    <tr key={i} style={{ borderBottom:"1px solid rgba(138,99,210,0.08)", transition:"background 0.15s" }}
+                  {results.map((row, i) => {
+                    const is470Row = row.application_number && (searchType === "470s" || searchType === "contacts");
+                    const link = is470Row ? `https://legacy.fundsforlearning.com/470/${row.application_number}` : null;
+                    return (
+                    <tr key={i} style={{ borderBottom:"1px solid rgba(138,99,210,0.08)", transition:"background 0.15s", cursor: link ? "pointer" : "default" }}
+                      onClick={() => link && window.open(link, "_blank")}
                       onMouseEnter={e => e.currentTarget.style.background="rgba(138,99,210,0.05)"}
                       onMouseLeave={e => e.currentTarget.style.background="transparent"}>
                       {currentCols.map(col => {
@@ -174,11 +178,11 @@ export default function SearchPanel({ token, onTagsUpdated }) {
                         const statusColor = isStatus ? ((val||"").toLowerCase().includes("open") ? "#39ff14" : (val||"").toLowerCase().includes("review") ? "#f0b429" : "rgba(232,228,240,0.4)") : null;
                         return (
                           <td key={col} style={{ padding:"8px 12px", fontSize:8, color: statusColor || "rgba(232,228,240,0.75)", whiteSpace: col === "billed_entity_name" ? "normal" : "nowrap", maxWidth: col === "billed_entity_name" ? 200 : undefined }}>
-                            {col === "tech_contact_email" && val !== "—" ? <a href={`mailto:${val}`} style={{ color:"#3b9eff", textDecoration:"none" }}>{val}</a> : val}
+                            {col === "tech_contact_email" && val !== "—" ? <a href={`mailto:${val}`} onClick={e => e.stopPropagation()} style={{ color:"#3b9eff", textDecoration:"none" }}>{val}</a> : val}
                           </td>
                         );
                       })}
-                      <td style={{ padding:"8px 12px" }}>
+                      <td style={{ padding:"8px 12px" }} onClick={e => e.stopPropagation()}>
                         <div style={{ display:"flex", gap:5, alignItems:"center" }}>
                           {row.application_number && (
                             <a href={`https://legacy.fundsforlearning.com/470/${row.application_number}`} target="_blank" rel="noreferrer"
@@ -186,7 +190,7 @@ export default function SearchPanel({ token, onTagsUpdated }) {
                               VIEW →
                             </a>
                           )}
-                          {row.application_number && (searchType === "470s" || searchType === "contacts") && (
+                          {is470Row && (
                             <button onClick={e => toggleTag(e, row)}
                               style={{ fontSize:7, letterSpacing:1, padding:"2px 7px", border:`1px solid ${tags.has(row.application_number) ? "rgba(240,180,41,0.6)" : "rgba(138,99,210,0.3)"}`, background: tags.has(row.application_number) ? "rgba(240,180,41,0.1)" : "rgba(138,99,210,0.05)", color: tags.has(row.application_number) ? "#f0b429" : "rgba(232,228,240,0.45)", cursor:"pointer", fontFamily:"'DM Mono',monospace", whiteSpace:"nowrap" }}>
                               {tags.has(row.application_number) ? "★" : "☆"}
@@ -195,7 +199,8 @@ export default function SearchPanel({ token, onTagsUpdated }) {
                         </div>
                       </td>
                     </tr>
-                  ))}
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
