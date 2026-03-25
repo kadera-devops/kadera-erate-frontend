@@ -341,7 +341,7 @@ function TagsPanel({ token, onTagsUpdated }) {
   );
 }
 
-function BidResponseOverview() {
+function BidResponseOverview() { // bid panel
   // Static mock data — replace with real state/props once backend is wired
   const responded = 24;
   const won       = 14;
