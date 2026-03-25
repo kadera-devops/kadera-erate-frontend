@@ -195,7 +195,12 @@ function Feed470({ token, onTagsUpdated }) {
               <div style={{ display:"flex", gap:10 }}>
                 <span style={{ fontSize:6.5, color:"#a07ee0" }}>FY{item.funding_year}</span>
                 {item.service_category && <span style={{ fontSize:6.5, color:"rgba(232,228,240,0.4)" }}>{item.service_category}</span>}
-                {item.bid_due_date && <span style={{ fontSize:6.5, color:"rgba(240,180,41,0.6)" }}>Bid Due: {new Date(item.bid_due_date).toLocaleDateString()}</span>}
+                {item.bid_due_date && (() => {
+                  const days = Math.ceil((new Date(item.bid_due_date) - new Date()) / (1000*60*60*24));
+                  const color = days > 14 ? "#39ff14" : days > 7 ? "#f0b429" : days >= 0 ? "#f0614a" : "rgba(232,228,240,0.3)";
+                  const label = days < 0 ? `Closed ${Math.abs(days)}d ago` : days === 0 ? "Due TODAY" : `${days}d remaining`;
+                  return <span style={{ fontSize:6.5, color, fontWeight: days >= 0 && days <= 7 ? 600 : 400 }}>Bid Due: {new Date(item.bid_due_date).toLocaleDateString()} · {label}</span>;
+                })()}
                 {item.date_posted && <span style={{ fontSize:6.5, color:"rgba(232,228,240,0.4)" }}>Posted: {new Date(item.date_posted).toLocaleDateString()}</span>}
               </div>
             </a>
@@ -247,8 +252,8 @@ function TagsPanel({ token, onTagsUpdated }) {
         <div style={{ position:"absolute", bottom:13, right:-1, width:20, height:1.5, background:"rgba(240,180,41,0.35)", transform:"rotate(-45deg)", transformOrigin:"right center" }}/>
 
         {/* Table header */}
-        <div style={{ display:"grid", gridTemplateColumns:"1.5fr 2fr 1fr 1fr 1.2fr 80px", gap:0, padding:"8px 16px", borderBottom:"1px solid rgba(240,180,41,0.2)", background:"rgba(240,180,41,0.04)" }}>
-          {["APP #","ENTITY","STATE","SERVICE","BID DUE DATE",""].map((h,i) => (
+        <div style={{ display:"grid", gridTemplateColumns:"1.5fr 2fr 1fr 1fr 1.2fr 100px 80px", gap:0, padding:"8px 16px", borderBottom:"1px solid rgba(240,180,41,0.2)", background:"rgba(240,180,41,0.04)" }}>
+          {["APP #","ENTITY","STATE","SERVICE","BID DUE DATE","DAYS LEFT",""].map((h,i) => (
             <div key={i} style={{ fontSize:6.5, letterSpacing:1.5, color:"rgba(240,180,41,0.6)", fontFamily:"'DM Mono',monospace" }}>{h}</div>
           ))}
         </div>
@@ -261,7 +266,7 @@ function TagsPanel({ token, onTagsUpdated }) {
             <div style={{ fontSize:8, color:"rgba(232,228,240,0.3)" }}>Click ☆ TAG on any 470 in the feed to add it here</div>
           </div>
         ) : tags.map((tag, i) => (
-          <div key={i} style={{ display:"grid", gridTemplateColumns:"1.5fr 2fr 1fr 1fr 1.2fr 80px", gap:0, padding:"10px 16px", borderBottom: i < tags.length-1 ? "1px solid rgba(240,180,41,0.08)" : "none", alignItems:"center", transition:"background 0.15s" }}
+          <div key={i} style={{ display:"grid", gridTemplateColumns:"1.5fr 2fr 1fr 1fr 1.2fr 100px 80px", gap:0, padding:"10px 16px", borderBottom: i < tags.length-1 ? "1px solid rgba(240,180,41,0.08)" : "none", alignItems:"center", transition:"background 0.15s" }}
             onMouseEnter={e => e.currentTarget.style.background="rgba(240,180,41,0.04)"}
             onMouseLeave={e => e.currentTarget.style.background="transparent"}>
             <a href={`https://legacy.fundsforlearning.com/470/${tag.application_number}`} target="_blank" rel="noreferrer"
@@ -274,6 +279,21 @@ function TagsPanel({ token, onTagsUpdated }) {
             <div style={{ fontSize:8, color: tag.bid_due_date ? "#f0b429" : "rgba(232,228,240,0.3)", fontWeight: tag.bid_due_date ? 500 : 400 }}>
               {tag.bid_due_date ? new Date(tag.bid_due_date).toLocaleDateString() : "—"}
             </div>
+            {/* Days remaining counter */}
+            {(() => {
+              if (!tag.bid_due_date) return <div style={{ fontSize:8, color:"rgba(232,228,240,0.3)" }}>—</div>;
+              const days  = Math.ceil((new Date(tag.bid_due_date) - new Date()) / (1000*60*60*24));
+              const color = days > 14 ? "#39ff14" : days > 7 ? "#f0b429" : days >= 0 ? "#f0614a" : "rgba(232,228,240,0.3)";
+              const bg    = days > 14 ? "rgba(57,255,20,0.08)" : days > 7 ? "rgba(240,180,41,0.08)" : days >= 0 ? "rgba(240,97,74,0.1)" : "rgba(138,99,210,0.06)";
+              const label = days < 0 ? "CLOSED" : days === 0 ? "TODAY!" : `${days}d left`;
+              return (
+                <div style={{ display:"flex", alignItems:"center" }}>
+                  <span style={{ fontSize:8, color, fontWeight:600, padding:"2px 8px", background:bg, border:`1px solid ${color}40`, borderRadius:1, ...(days >= 0 && days <= 7 && { animation:"pulse-dot 1.5s infinite" }) }}>
+                    {label}
+                  </span>
+                </div>
+              );
+            })()}
             <button onClick={() => removeTag(tag.application_number)}
               style={{ fontSize:7, letterSpacing:1, padding:"3px 8px", border:"1px solid rgba(240,97,74,0.3)", background:"rgba(240,97,74,0.06)", color:"rgba(240,97,74,0.7)", cursor:"pointer", fontFamily:"'DM Mono',monospace", transition:"all 0.15s" }}
               onMouseEnter={e => { e.currentTarget.style.background="rgba(240,97,74,0.15)"; e.currentTarget.style.color="#f0614a"; }}
