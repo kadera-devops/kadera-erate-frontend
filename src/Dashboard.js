@@ -400,8 +400,8 @@ function TagsPanel({ token, onTagsUpdated }) {
         <div style={{ position:"absolute", bottom:13, right:-1, width:20, height:1.5, background:"rgba(240,180,41,0.35)", transform:"rotate(-45deg)", transformOrigin:"right center" }}/>
 
         {/* Table header */}
-        <div style={{ display:"grid", gridTemplateColumns:"130px 1.8fr 60px 1fr 100px 90px 120px 1fr", gap:0, padding:"8px 16px", borderBottom:"1px solid rgba(240,180,41,0.2)", background:"rgba(240,180,41,0.04)", minWidth:1020 }}>
-          {["APP #","ENTITY","STATE","SERVICE","BID DUE","DAYS LEFT","STAGE","ACTIONS"].map((h,i) => (
+        <div style={{ display:"grid", gridTemplateColumns:"130px 1.8fr 60px 1fr 100px 90px 1fr", gap:0, padding:"8px 16px", borderBottom:"1px solid rgba(240,180,41,0.2)", background:"rgba(240,180,41,0.04)", minWidth:1020 }}>
+          {["APP #","ENTITY","STATE","SERVICE","BID DUE","DAYS LEFT","ACTIONS"].map((h,i) => (
             <div key={i} style={{ fontSize:6.5, letterSpacing:1.5, color:"rgba(240,180,41,0.6)", fontFamily:"'DM Mono',monospace" }}>{h}</div>
           ))}
         </div>
@@ -425,11 +425,15 @@ function TagsPanel({ token, onTagsUpdated }) {
 
           const stage    = stages[tag.application_number] || null;
           const stageSc  = stage ? STAGE_COLORS[stage] : null;
+          const stageIdx = stage ? STAGES.indexOf(stage) : -1;
 
           return (
-            <div key={i} style={{ display:"grid", gridTemplateColumns:"130px 1.8fr 60px 1fr 100px 90px 120px 1fr", gap:0, padding:"9px 16px", borderBottom: i < tags.length-1 ? "1px solid rgba(240,180,41,0.08)" : "none", alignItems:"center", transition:"background 0.15s", minWidth:1020 }}
+            <div key={i} style={{ borderBottom: i < tags.length-1 ? "1px solid rgba(240,180,41,0.08)" : "none", transition:"background 0.15s", minWidth:1020 }}
               onMouseEnter={e => e.currentTarget.style.background="rgba(240,180,41,0.03)"}
               onMouseLeave={e => e.currentTarget.style.background="transparent"}>
+
+              {/* Main data row */}
+              <div style={{ display:"grid", gridTemplateColumns:"130px 1.8fr 60px 1fr 100px 90px 1fr", gap:0, padding:"9px 16px 6px", alignItems:"center" }}>
 
               <a href={`https://legacy.fundsforlearning.com/470/${tag.application_number}`} target="_blank" rel="noreferrer"
                 style={{ fontSize:8.5, color:"#3b9eff", textDecoration:"none", fontWeight:500 }}>{tag.application_number}</a>
@@ -451,15 +455,6 @@ function TagsPanel({ token, onTagsUpdated }) {
                 <span className={days !== null && days >= 0 && days <= 7 ? "pulse-urgent" : ""} style={{ fontSize:8, color:dayColor, padding:"2px 8px", background:dayBg, border:`1px solid ${dayColor}40`, borderRadius:1 }}>
                   {dayLabel}
                 </span>
-              </div>
-
-              {/* Stage badge */}
-              <div style={{ display:"flex", alignItems:"center" }}>
-                {stage && stageSc ? (
-                  <span style={{ fontSize:6.5, letterSpacing:1, padding:"2px 8px", border:`1px solid ${stageSc.border}`, background:stageSc.bg, color:stageSc.color, whiteSpace:"nowrap", borderRadius:1 }}>{stage}</span>
-                ) : (
-                  <span style={{ fontSize:7, color:"rgba(232,228,240,0.2)" }}>—</span>
-                )}
               </div>
 
               {/* Action buttons */}
@@ -496,7 +491,35 @@ function TagsPanel({ token, onTagsUpdated }) {
                   ✕ REMOVE
                 </button>
               </div>
-            </div>
+              </div>{/* end inner grid */}
+
+              {/* Stage pipeline */}
+              <div style={{ padding:"0 16px 9px", display:"flex", alignItems:"center", gap:0 }}>
+                {STAGES.map((s, si) => {
+                  const isCurrent  = si === stageIdx;
+                  const isPast     = stageIdx >= 0 && si < stageIdx && s !== "Denied" && s !== "On Appeal";
+                  const sc         = STAGE_COLORS[s];
+                  const dotColor   = isCurrent ? sc.color : isPast ? "rgba(255,255,255,0.2)" : "rgba(255,255,255,0.08)";
+                  const labelColor = isCurrent ? sc.color : "rgba(232,228,240,0.18)";
+                  const isLast     = si === STAGES.length - 1;
+                  return (
+                    <div key={s} style={{ display:"flex", alignItems:"center", flex: isLast ? "0 0 auto" : 1, minWidth:0 }}>
+                      <div style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:3, flexShrink:0 }}>
+                        <div style={{ width: isCurrent ? 7 : 5, height: isCurrent ? 7 : 5, borderRadius:"50%", background: dotColor, boxShadow: isCurrent ? `0 0 6px ${sc.color}` : "none", transition:"all 0.2s", border: isCurrent ? `1px solid ${sc.color}` : "none" }}/>
+                        <div style={{ fontSize:5.5, letterSpacing:0.8, color:labelColor, whiteSpace:"nowrap", fontWeight: isCurrent ? 500 : 400, textTransform:"uppercase" }}>{s}</div>
+                      </div>
+                      {!isLast && (
+                        <div style={{ flex:1, height:1, background: isPast ? "rgba(255,255,255,0.15)" : "rgba(255,255,255,0.06)", margin:"0 3px", marginBottom:10, minWidth:8 }}/>
+                      )}
+                    </div>
+                  );
+                })}
+                {stageIdx === -1 && (
+                  <span style={{ fontSize:6.5, color:"rgba(232,228,240,0.2)", letterSpacing:1 }}>No stage data found — sync to refresh</span>
+                )}
+              </div>
+
+            </div>{/* end outer row */}
           );
         })}
       </div>
