@@ -491,7 +491,7 @@ function TagsPanel({ token, onTagsUpdated }) {
                   ✕ REMOVE
                 </button>
               </div>
-              </div>{/* end inner grid */}
+              </div>
 
               {/* Stage pipeline */}
               <div style={{ padding:"0 16px 9px", display:"flex", alignItems:"center", gap:0 }}>
@@ -519,7 +519,7 @@ function TagsPanel({ token, onTagsUpdated }) {
                 )}
               </div>
 
-            </div>{/* end outer row */}
+            </div>
           );
         })}
       </div>
