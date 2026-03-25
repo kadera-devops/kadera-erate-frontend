@@ -341,6 +341,61 @@ function TagsPanel({ token, onTagsUpdated }) {
   );
 }
 
+function BidResponseOverview() {
+  // Static mock data — replace with real state/props once backend is wired
+  const responded = 24;
+  const won       = 14;
+  const lost      = 10;
+  const revenue   = "$2,847,500";
+  const revNote   = `${won} funded commitments · FY2026`;
+  const winRate   = Math.round((won / responded) * 100);
+  const lossRate  = 100 - winRate;
+  const avgMargin = 42.3;
+
+  return (
+    <Panel>
+      <PTitle>{'// BID '}<span style={{ color:"#a07ee0" }}>RESPONSE OVERVIEW</span></PTitle>
+      <div style={{ padding:"14px 14px 16px" }}>
+
+        {/* Revenue block */}
+        <div style={{ background:"rgba(10,30,18,0.7)", border:"1px solid rgba(34,201,122,0.15)", borderRadius:10, padding:"13px 16px", marginBottom:12, textAlign:"center", position:"relative", overflow:"hidden" }}>
+          <div style={{ position:"absolute", top:0, left:"15%", right:"15%", height:1, background:"linear-gradient(90deg,transparent,rgba(34,201,122,0.5),transparent)" }}/>
+          <div style={{ fontSize:7, letterSpacing:2, color:"#1a7a4a", textTransform:"uppercase", marginBottom:5 }}>Total Revenue — Bids Won</div>
+          <div style={{ fontFamily:"'Aldrich',sans-serif", fontSize:30, color:"#22c97a", lineHeight:1, marginBottom:4, textShadow:"0 0 12px rgba(34,201,122,0.8), 0 0 35px rgba(34,201,122,0.4), 0 0 70px rgba(34,201,122,0.15)" }}>{revenue}</div>
+          <div style={{ fontSize:6.5, letterSpacing:1.2, color:"#0d5530", textTransform:"uppercase" }}>{revNote}</div>
+        </div>
+
+        {/* 3 counters */}
+        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:8, marginBottom:14 }}>
+          {[
+            { label:"Responded", value:responded, sub:"total bids",      color:"#a07ee0", subColor:"rgba(138,99,210,0.35)" },
+            { label:"Won",        value:won,       sub:`${winRate}% rate`,  color:"#22c97a", subColor:"rgba(34,201,122,0.35)" },
+            { label:"Lost",       value:lost,      sub:`${lossRate}% rate`, color:"#f0614a", subColor:"rgba(240,97,74,0.35)"  },
+          ].map(({ label, value, sub, color, subColor }) => (
+            <div key={label} style={{ background:"rgba(255,255,255,0.02)", border:"1px solid rgba(255,255,255,0.06)", borderRadius:8, padding:"10px 11px" }}>
+              <div style={{ fontSize:6.5, letterSpacing:1.8, color:"rgba(232,228,240,0.3)", textTransform:"uppercase", marginBottom:6 }}>{label}</div>
+              <div style={{ fontFamily:"'Aldrich',sans-serif", fontSize:26, color, lineHeight:1, marginBottom:3 }}>{value}</div>
+              <div style={{ fontSize:6.5, letterSpacing:1, textTransform:"uppercase", color:subColor }}>{sub}</div>
+            </div>
+          ))}
+        </div>
+
+        {/* Avg margin bar */}
+        <div>
+          <div style={{ display:"flex", alignItems:"baseline", gap:7, marginBottom:6 }}>
+            <span style={{ fontFamily:"'Aldrich',sans-serif", fontSize:12, color:"#8a63d2" }}>{avgMargin}%</span>
+            <span style={{ fontSize:7, letterSpacing:1.8, color:"rgba(138,99,210,0.4)", textTransform:"uppercase" }}>Avg Margin</span>
+          </div>
+          <div style={{ height:3, background:"rgba(255,255,255,0.05)", borderRadius:99, overflow:"hidden" }}>
+            <div style={{ height:"100%", width:`${avgMargin}%`, borderRadius:99, background:"linear-gradient(90deg,#2a1a5e,#5a3ab0,#8a63d2,#c0a0ff)" }}/>
+          </div>
+        </div>
+
+      </div>
+    </Panel>
+  );
+}
+
 export default function Dashboard({ session }) {
   const [token, setToken]     = useState(null);
   const [stats, setStats]     = useState(null);
@@ -486,6 +541,8 @@ export default function Dashboard({ session }) {
                     <div style={{ width:6, height:6, borderRadius:"50%", background:"#39ff14", animation:"pulse-dot 1.5s infinite", boxShadow:"0 0 6px #39ff14" }}/>
                     <span style={{ fontSize:7.5, color:"#e8e4f0", flex:1, letterSpacing:1 }}>USAC OPEN DATA API ONLINE</span>
                   </div>
+
+                  <BidResponseOverview />
 
                   <Panel>
                     <PTitle>{'// USAC '}<span style={{ color:"#a07ee0" }}>PORTAL NAVIGATION</span></PTitle>
