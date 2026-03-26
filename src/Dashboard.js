@@ -970,6 +970,7 @@ function EntitySearchModal({ token, onClose }) {
   };
 
   return (
+    <>
     <div style={{ position:"fixed", inset:0, background:"rgba(5,5,13,0.9)", display:"flex", alignItems:"center", justifyContent:"center", zIndex:300 }}
       onClick={e => e.target === e.currentTarget && onClose()}>
       <div style={{ background:"#07061a", border:"1px solid rgba(59,158,255,0.35)", clipPath:"polygon(0 0,calc(100% - 18px) 0,100% 18px,100% 100%,18px 100%,0 calc(100% - 18px))", width:"min(1000px, 96vw)", maxHeight:"88vh", display:"flex", flexDirection:"column", position:"relative" }}>
@@ -1223,7 +1224,8 @@ function EntitySearchModal({ token, onClose }) {
                     SOURCE: {d.source === "local_db" ? "LOCAL DB (FY2026)" : "USAC LIVE API"}
                   </div>
                 </>
-              );
+    </>
+  );
             })()}
           </div>
         </div>
