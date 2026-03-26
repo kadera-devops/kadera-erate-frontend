@@ -942,28 +942,28 @@ function C2BudgetModal({ token, onClose }) {
 
   function BudgetBar({ total, committed, disbursed }) {
     if (!total) return null;
-    const committedPct  = Math.min(100, Math.round(((committed||0) / total) * 100));
-    const disbursedPct  = Math.min(committedPct, Math.round(((disbursed||0) / total) * 100));
-    const remainingPct  = 100 - committedPct;
+    const fundedPct   = Math.min(100, Math.round(((committed||0) / total) * 100));
+    const pendingPct  = Math.min(100 - fundedPct, Math.round(((disbursed||0) / total) * 100));
+    const availPct    = 100 - fundedPct - pendingPct;
     return (
       <div style={{ marginTop:6 }}>
         <div style={{ height:6, background:"rgba(255,255,255,0.06)", borderRadius:99, overflow:"hidden", display:"flex" }}>
-          <div style={{ width:`${disbursedPct}%`, height:"100%", background:"#22c97a", borderRadius:"99px 0 0 99px" }}/>
-          <div style={{ width:`${committedPct - disbursedPct}%`, height:"100%", background:"rgba(240,180,41,0.7)" }}/>
-          <div style={{ width:`${remainingPct}%`, height:"100%", background:"rgba(138,99,210,0.25)", borderRadius:"0 99px 99px 0" }}/>
+          <div style={{ width:`${fundedPct}%`, height:"100%", background:"#22c97a" }}/>
+          <div style={{ width:`${pendingPct}%`, height:"100%", background:"rgba(240,180,41,0.7)" }}/>
+          <div style={{ width:`${availPct}%`, height:"100%", background:"rgba(138,99,210,0.25)", borderRadius:"0 99px 99px 0" }}/>
         </div>
         <div style={{ display:"flex", gap:12, marginTop:5 }}>
           <div style={{ display:"flex", alignItems:"center", gap:4 }}>
             <div style={{ width:6, height:6, borderRadius:"50%", background:"#22c97a", flexShrink:0 }}/>
-            <span style={{ fontSize:6.5, color:"rgba(232,228,240,0.4)" }}>Disbursed</span>
+            <span style={{ fontSize:6.5, color:"rgba(232,228,240,0.4)" }}>Funded</span>
           </div>
           <div style={{ display:"flex", alignItems:"center", gap:4 }}>
             <div style={{ width:6, height:6, borderRadius:"50%", background:"rgba(240,180,41,0.7)", flexShrink:0 }}/>
-            <span style={{ fontSize:6.5, color:"rgba(232,228,240,0.4)" }}>Committed</span>
+            <span style={{ fontSize:6.5, color:"rgba(232,228,240,0.4)" }}>Pending</span>
           </div>
           <div style={{ display:"flex", alignItems:"center", gap:4 }}>
             <div style={{ width:6, height:6, borderRadius:"50%", background:"rgba(138,99,210,0.4)", flexShrink:0 }}/>
-            <span style={{ fontSize:6.5, color:"rgba(232,228,240,0.4)" }}>Remaining</span>
+            <span style={{ fontSize:6.5, color:"rgba(232,228,240,0.4)" }}>Available</span>
           </div>
         </div>
       </div>
@@ -1030,14 +1030,14 @@ function C2BudgetModal({ token, onClose }) {
             <>
               {/* Table header */}
               <div style={{ display:"grid", gridTemplateColumns:"1fr 60px 80px 130px 130px 130px 120px", padding:"8px 22px", borderBottom:"1px solid rgba(240,180,41,0.15)", background:"rgba(240,180,41,0.04)", position:"sticky", top:0 }}>
-                {["ENTITY","STATE","BEN","TOTAL BUDGET","COMMITTED","DISBURSED","REMAINING"].map((h,i) => (
+                {["ENTITY","STATE","BEN","TOTAL BUDGET","FUNDED","PENDING","AVAILABLE"].map((h,i) => (
                   <div key={i} style={{ fontSize:6.5, letterSpacing:1.5, color:"rgba(240,180,41,0.55)", fontFamily:"'DM Mono',monospace" }}>{h}</div>
                 ))}
               </div>
 
               {results.map((r, i) => {
-                const remaining    = r.remaining || (r.total_budget - (r.committed||0)) || null;
-                const remainingPct = r.total_budget ? Math.round(((remaining||0) / r.total_budget) * 100) : null;
+                const remaining    = r.available;
+                const remainingPct = r.total_budget ? Math.round(((r.available||0) / r.total_budget) * 100) : null;
                 const isExpanded   = expanded === i;
                 const rawKeys      = rawFields.filter(k => !["billed_entity_name","billed_entity_number","state","entity_type"].includes(k));
                 return (
@@ -1054,10 +1054,10 @@ function C2BudgetModal({ token, onClose }) {
                       <div style={{ fontSize:8, color:"rgba(232,228,240,0.45)" }}>{r.state || "—"}</div>
                       <div style={{ fontSize:8, color:"#3b9eff" }}>{r.ben || "—"}</div>
                       <div style={{ fontSize:8, color:"rgba(232,228,240,0.6)" }}>{fmt(r.total_budget)}</div>
-                      <div style={{ fontSize:8, color:"#f0b429" }}>{fmt(r.committed)}</div>
-                      <div style={{ fontSize:8, color:"#22c97a" }}>{fmt(r.disbursed)}</div>
+                      <div style={{ fontSize:8, color:"#22c97a" }}>{fmt(r.funded)}</div>
+                      <div style={{ fontSize:8, color:"#f0b429" }}>{fmt(r.pending)}</div>
                       <div>
-                        <div style={{ fontSize:8, color: remainingPct > 50 ? "#22c97a" : remainingPct > 20 ? "#f0b429" : "#f0614a", fontWeight:500 }}>{fmt(remaining)}</div>
+                        <div style={{ fontSize:8, color: remainingPct > 50 ? "#22c97a" : remainingPct > 20 ? "#f0b429" : "#f0614a", fontWeight:500 }}>{fmt(r.available)}</div>
                         {remainingPct !== null && <div style={{ fontSize:6.5, color:"rgba(232,228,240,0.3)", marginTop:1 }}>{remainingPct}% left</div>}
                       </div>
                     </div>
@@ -1065,7 +1065,7 @@ function C2BudgetModal({ token, onClose }) {
                     {/* Expanded detail */}
                     {isExpanded && (
                       <div style={{ padding:"12px 22px 16px", background:"rgba(240,180,41,0.03)", borderTop:"1px solid rgba(240,180,41,0.08)" }}>
-                        <BudgetBar total={r.total_budget} committed={r.committed} disbursed={r.disbursed} />
+                        <BudgetBar total={r.total_budget} committed={r.funded} disbursed={r.pending} />
                         {rawKeys.length > 0 && (
                           <div style={{ marginTop:14, display:"grid", gridTemplateColumns:"repeat(auto-fill, minmax(200px, 1fr))", gap:8 }}>
                             {rawKeys.map(k => (
