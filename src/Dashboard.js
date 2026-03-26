@@ -890,6 +890,199 @@ function CompetitiveIntelModal({ token, onClose }) {
 
 
 
+// ── Entity Search Modal ────────────────────────────────────────────────────────
+const ENTITY_STATES = ["TX","CA","NY","FL","IL","PA","OH","GA","NC","MI","WA","AZ","CO","VA","MA","TN","IN","MO","WI","MN","OR","KY","OK","NV","CT","UT","AR","MS","KS","NM","NE","ID","WV","HI","NH","ME","RI","MT","DE","SD","ND","AK","VT","WY"];
+const ENTITY_TYPES  = ["","School","Library","School District","Library System","Non-Instructional Facility (Nif)","Consortium"];
+
+function EntitySearchModal({ token, onClose }) {
+  const [searchBy, setSearchBy]     = useState("name");
+  const [query, setQuery]           = useState("");
+  const [stateFilter, setStateFilter] = useState("TX");
+  const [typeFilter, setTypeFilter] = useState("");
+  const [results, setResults]       = useState([]);
+  const [loading, setLoading]       = useState(false);
+  const [searched, setSearched]     = useState(false);
+  const [error, setError]           = useState("");
+  const [expanded, setExpanded]     = useState(null);
+
+  async function doSearch() {
+    if (!query.trim()) return;
+    setLoading(true);
+    setSearched(true);
+    setError("");
+    setExpanded(null);
+    try {
+      const params = new URLSearchParams({ limit: 100 });
+      if (searchBy === "ben") params.set("ben", query.trim());
+      else                    params.set("search", query.trim());
+      if (stateFilter !== "ALL") params.set("state", stateFilter);
+      if (typeFilter)            params.set("entity_type", typeFilter);
+      const res  = await fetch(`${API_URL}/api/entity-search?${params}`, { headers:{ Authorization:`Bearer ${token}` } });
+      const json = await res.json();
+      if (json.status === "success") setResults(json.data || []);
+      else { setError(json.message || "Search failed"); setResults([]); }
+    } catch { setError("Connection error — check backend"); setResults([]); }
+    setLoading(false);
+  }
+
+  function handleKey(e) { if (e.key === "Enter") doSearch(); }
+
+  const statusColor = s => s === "Active" ? "#22c97a" : "rgba(232,228,240,0.3)";
+
+  const typeColor = t => {
+    if (!t) return "#a07ee0";
+    const tl = t.toLowerCase();
+    if (tl.includes("school district")) return "#3b9eff";
+    if (tl.includes("school"))          return "#a07ee0";
+    if (tl.includes("library system"))  return "#f0b429";
+    if (tl.includes("library"))         return "#f0b429";
+    if (tl.includes("nif"))             return "rgba(232,228,240,0.35)";
+    if (tl.includes("consortium"))      return "#00d4ff";
+    return "#a07ee0";
+  };
+
+  return (
+    <div style={{ position:"fixed", inset:0, background:"rgba(5,5,13,0.9)", display:"flex", alignItems:"center", justifyContent:"center", zIndex:300 }}
+      onClick={e => e.target === e.currentTarget && onClose()}>
+      <div style={{ background:"#07061a", border:"1px solid rgba(59,158,255,0.35)", clipPath:"polygon(0 0,calc(100% - 18px) 0,100% 18px,100% 100%,18px 100%,0 calc(100% - 18px))", width:"min(1000px, 96vw)", maxHeight:"88vh", display:"flex", flexDirection:"column", position:"relative" }}>
+        <div style={{ position:"absolute", top:0, left:"10%", right:"10%", height:1, background:"linear-gradient(90deg,transparent,rgba(59,158,255,0.6),transparent)" }}/>
+
+        {/* Header */}
+        <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"16px 22px", borderBottom:"1px solid rgba(59,158,255,0.12)", flexShrink:0 }}>
+          <div style={{ display:"flex", alignItems:"center", gap:12 }}>
+            <div style={{ width:6, height:6, borderRadius:"50%", background:"#3b9eff", boxShadow:"0 0 8px rgba(59,158,255,0.9)" }}/>
+            <span style={{ fontFamily:"'Aldrich',sans-serif", fontSize:11, letterSpacing:2.5, color:"#3b9eff" }}>ENTITY SEARCH</span>
+            <span style={{ fontSize:7, letterSpacing:1.5, color:"rgba(232,228,240,0.25)" }}>· LIVE · USAC OPEN DATA · Schools, Libraries & Consortia</span>
+          </div>
+          <button onClick={onClose} style={{ background:"transparent", border:"1px solid rgba(232,228,240,0.15)", color:"rgba(232,228,240,0.4)", cursor:"pointer", fontFamily:"'DM Mono',monospace", fontSize:8, padding:"4px 10px", letterSpacing:1 }}>✕ CLOSE</button>
+        </div>
+
+        {/* Search bar */}
+        <div style={{ padding:"14px 22px", borderBottom:"1px solid rgba(59,158,255,0.08)", display:"flex", gap:8, alignItems:"center", flexWrap:"wrap", flexShrink:0 }}>
+          {/* Search by toggles */}
+          <div style={{ display:"flex", gap:4 }}>
+            {[["name","Entity Name"],["ben","BEN #"]].map(([key,label]) => (
+              <button key={key} onClick={() => setSearchBy(key)}
+                style={{ padding:"4px 12px", fontFamily:"'DM Mono',monospace", fontSize:7, letterSpacing:1.5, border:`1px solid ${searchBy===key ? "rgba(59,158,255,0.6)" : "rgba(59,158,255,0.15)"}`, background: searchBy===key ? "rgba(59,158,255,0.1)" : "transparent", color: searchBy===key ? "#3b9eff" : "rgba(232,228,240,0.35)", cursor:"pointer", transition:"all 0.15s" }}>
+                {label}
+              </button>
+            ))}
+          </div>
+          {/* State */}
+          <select value={stateFilter} onChange={e => setStateFilter(e.target.value)}
+            style={{ background:"rgba(255,255,255,0.03)", border:"1px solid rgba(59,158,255,0.2)", color:"#e8e4f0", fontFamily:"'DM Mono',monospace", fontSize:8, padding:"6px 8px", outline:"none" }}>
+            <option value="ALL">ALL STATES</option>
+            {ENTITY_STATES.map(s => <option key={s} value={s} style={{ background:"#0a0814" }}>{s}</option>)}
+          </select>
+          {/* Entity type */}
+          <select value={typeFilter} onChange={e => setTypeFilter(e.target.value)}
+            style={{ background:"rgba(255,255,255,0.03)", border:"1px solid rgba(59,158,255,0.2)", color:"#e8e4f0", fontFamily:"'DM Mono',monospace", fontSize:8, padding:"6px 8px", outline:"none" }}>
+            <option value="">ALL TYPES</option>
+            {ENTITY_TYPES.filter(t => t).map(t => <option key={t} value={t} style={{ background:"#0a0814" }}>{t}</option>)}
+          </select>
+          {/* Input */}
+          <input value={query} onChange={e => setQuery(e.target.value)} onKeyDown={handleKey}
+            placeholder={searchBy === "ben" ? "Enter BEN entity number..." : "Enter school, district, or library name..."}
+            style={{ flex:1, minWidth:220, background:"rgba(255,255,255,0.03)", border:"1px solid rgba(59,158,255,0.25)", outline:"none", fontFamily:"'DM Mono',monospace", fontSize:9, color:"#e8e4f0", padding:"7px 12px" }}/>
+          <button onClick={doSearch}
+            style={{ padding:"7px 18px", fontFamily:"'DM Mono',monospace", fontSize:8, letterSpacing:2, border:"1px solid rgba(59,158,255,0.5)", background:"rgba(59,158,255,0.1)", color:"#3b9eff", cursor:"pointer", whiteSpace:"nowrap" }}>
+            SEARCH →
+          </button>
+        </div>
+
+        {/* Results */}
+        <div style={{ flex:1, overflowY:"auto" }}>
+          {!searched && (
+            <div style={{ padding:"48px 22px", textAlign:"center" }}>
+              <div style={{ fontSize:9, color:"rgba(59,158,255,0.3)", letterSpacing:2, marginBottom:8 }}>SEARCH FOR AN ENTITY ABOVE</div>
+              <div style={{ fontSize:7.5, color:"rgba(232,228,240,0.2)" }}>Search schools, libraries, districts, and consortia by name or BEN · Filter by state and entity type · Click a row to expand full details</div>
+            </div>
+          )}
+          {searched && loading && <div style={{ padding:"48px", textAlign:"center", fontSize:9, color:"rgba(59,158,255,0.4)", letterSpacing:2 }}>FETCHING FROM USAC...</div>}
+          {searched && !loading && error && <div style={{ padding:"24px 22px", fontSize:8, color:"#f0614a" }}>⚠ {error}</div>}
+          {searched && !loading && !error && results.length === 0 && (
+            <div style={{ padding:"48px", textAlign:"center", fontSize:9, color:"rgba(232,228,240,0.25)", letterSpacing:2 }}>NO RESULTS FOUND</div>
+          )}
+          {searched && !loading && results.length > 0 && (
+            <>
+              {/* Table header */}
+              <div style={{ display:"grid", gridTemplateColumns:"2fr 1.2fr 90px 80px 60px 100px", padding:"8px 22px", borderBottom:"1px solid rgba(59,158,255,0.15)", background:"rgba(59,158,255,0.04)", position:"sticky", top:0 }}>
+                {["ENTITY NAME","TYPE","BEN","CITY","STATE","STATUS"].map((h,i) => (
+                  <div key={i} style={{ fontSize:6.5, letterSpacing:1.5, color:"rgba(59,158,255,0.55)", fontFamily:"'DM Mono',monospace" }}>{h}</div>
+                ))}
+              </div>
+
+              {results.map((r, i) => {
+                const isExpanded = expanded === i;
+                const tc = typeColor(r.entity_type);
+                return (
+                  <div key={i} style={{ borderBottom:"1px solid rgba(59,158,255,0.07)" }}>
+                    <div onClick={() => setExpanded(isExpanded ? null : i)}
+                      style={{ display:"grid", gridTemplateColumns:"2fr 1.2fr 90px 80px 60px 100px", padding:"10px 22px", alignItems:"center", cursor:"pointer", transition:"background 0.15s", background: isExpanded ? "rgba(59,158,255,0.06)" : "transparent" }}
+                      onMouseEnter={e => { if (!isExpanded) e.currentTarget.style.background="rgba(59,158,255,0.03)"; }}
+                      onMouseLeave={e => { if (!isExpanded) e.currentTarget.style.background="transparent"; }}>
+                      <div style={{ fontSize:8.5, color:"rgba(232,228,240,0.85)", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", paddingRight:10 }}>{r.entity_name || "—"}</div>
+                      <div style={{ fontSize:7, color: tc, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", paddingRight:8 }}>{r.entity_type || "—"}</div>
+                      <div style={{ fontSize:8, color:"#3b9eff" }}>{r.entity_number || "—"}</div>
+                      <div style={{ fontSize:7.5, color:"rgba(232,228,240,0.5)", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{r.city || "—"}</div>
+                      <div style={{ fontSize:7.5, color:"rgba(232,228,240,0.5)" }}>{r.state || "—"}</div>
+                      <div>
+                        <span style={{ fontSize:7, padding:"2px 8px", border:`1px solid ${statusColor(r.status)}40`, background:`${statusColor(r.status)}10`, color:statusColor(r.status), letterSpacing:1 }}>
+                          {r.status || "—"}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Expanded detail */}
+                    {isExpanded && (
+                      <div style={{ padding:"14px 22px 16px", background:"rgba(59,158,255,0.03)", borderTop:"1px solid rgba(59,158,255,0.08)" }}>
+                        <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill, minmax(200px, 1fr))", gap:10, marginBottom:12 }}>
+                          {[
+                            { label:"Full Address", value:`${r.address || ""} ${r.city || ""}, ${r.state || ""} ${r.zip || ""}`.trim() },
+                            { label:"County", value:r.county },
+                            { label:"Phone", value:r.phone },
+                            { label:"BEN", value:r.entity_number },
+                            { label:"Entity Type", value:r.entity_type },
+                            { label:"Last Updated", value:r.last_updated ? new Date(r.last_updated).toLocaleDateString() : null },
+                          ].map(({ label, value }) => value && (
+                            <div key={label} style={{ background:"rgba(255,255,255,0.02)", border:"1px solid rgba(59,158,255,0.1)", padding:"8px 10px", borderRadius:4 }}>
+                              <div style={{ fontSize:6, letterSpacing:1.5, color:"rgba(59,158,255,0.4)", textTransform:"uppercase", marginBottom:3 }}>{label}</div>
+                              <div style={{ fontSize:8, color:"rgba(232,228,240,0.75)" }}>{value}</div>
+                            </div>
+                          ))}
+                        </div>
+                        {/* Active flags */}
+                        {(() => {
+                          const flags = ["public_school","private_school","charter_school","tribal_school","public_library","private_library","main_branch","head_start","pre_k","bie","public_school_district","charter_school_district","non_profit_purchasing_group"];
+                          const active = flags.filter(f => r.raw[f] === "Yes");
+                          if (!active.length) return null;
+                          return (
+                            <div style={{ display:"flex", flexWrap:"wrap", gap:5 }}>
+                              {active.map(f => (
+                                <span key={f} style={{ fontSize:6.5, letterSpacing:1, padding:"2px 8px", border:"1px solid rgba(59,158,255,0.25)", background:"rgba(59,158,255,0.06)", color:"#3b9eff", borderRadius:2 }}>
+                                  {f.replace(/_/g," ").toUpperCase()}
+                                </span>
+                              ))}
+                            </div>
+                          );
+                        })()}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+              <div style={{ padding:"10px 22px", fontSize:7, color:"rgba(232,228,240,0.2)", letterSpacing:1.5, borderTop:"1px solid rgba(59,158,255,0.08)" }}>
+                {results.length} RESULT{results.length !== 1 ? "S" : ""} · LIVE DATA FROM USAC · Click a row to expand details
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+
 // ── C2 Budget Modal ────────────────────────────────────────────────────────────
 const C2_STATES = ["TX","CA","NY","FL","IL","PA","OH","GA","NC","MI","WA","AZ","CO","VA","MA","TN","IN","MO","WI","MN","OR","KY","OK","NV","CT","UT","AR","MS","KS","NM","NE","ID","WV","HI","NH","ME","RI","MT","DE","SD","ND","AK","VT","WY"];
 
@@ -1380,6 +1573,7 @@ export default function Dashboard({ session }) {
   const [frnOpen, setFrnOpen] = useState(false);
   const [ciOpen, setCiOpen]   = useState(false);
   const [c2Open, setC2Open]     = useState(false);
+  const [entityOpen, setEntityOpen] = useState(false);
 
   const refreshTagCount = useCallback(async (t) => {
     if (!t) return;
@@ -1416,6 +1610,7 @@ export default function Dashboard({ session }) {
         {frnOpen && token && <FRNStatusModal token={token} onClose={() => setFrnOpen(false)} />}
         {ciOpen && token && <CompetitiveIntelModal token={token} onClose={() => setCiOpen(false)} />}
         {c2Open && token && <C2BudgetModal token={token} onClose={() => setC2Open(false)} />}
+        {entityOpen && token && <EntitySearchModal token={token} onClose={() => setEntityOpen(false)} />}
         <div style={{ position:"fixed", inset:0, background:"radial-gradient(ellipse 70% 50% at 15% 15%, rgba(138,99,210,0.09) 0%, transparent 60%)", pointerEvents:"none", zIndex:0 }}/>
         <div style={{ position:"fixed", inset:0, backgroundImage:"radial-gradient(circle, rgba(138,99,210,0.8) 1px, transparent 1px)", backgroundSize:"28px 28px", opacity:0.035, pointerEvents:"none", zIndex:0 }}/>
 
@@ -1480,7 +1675,7 @@ export default function Dashboard({ session }) {
                     <div style={{ padding:"12px 14px" }}>
                       <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8 }}>
                         <ToolBtn onClick={() => setC2Open(true)} color="gold" icon="💰" name="E-RATE C2 BUDGET" desc="Look up Category 2 budget, committed, disbursed, and remaining amounts by entity or BEN."/>
-                        <ToolBtn href="https://opendata.usac.org/E-rate/E-Rate-Entity-Search/qe3b-nkqm"                       color="blue"   icon="🔍" name="ENTITY SEARCH"        desc="Search schools, libraries, and providers by name or BEN."/>
+                        <ToolBtn onClick={() => setEntityOpen(true)} color="blue" icon="🔍" name="ENTITY SEARCH" desc="Search schools, libraries, districts, and consortia by name or BEN."/>
                         <ToolBtn href="https://www.usac.org/e-rate/tools/window-status/"                                      color="gold"   icon="📅" name="WINDOW REPORTING"     desc="Check filing windows, open/close dates, and deadlines."/>
                         <ToolBtn onClick={() => setFrnOpen(true)}                                                              color="blue"   icon="📋" name="FRN STATUS FY2016+"   desc="Search FRN status from local USAC commitment data."/>
                         <ToolBtn onClick={() => setCiOpen(true)} wide color="purple" icon="📡" name="COMPETITIVE INTELLIGENCE" desc="Top providers, manufacturer presence, and service type breakdown from FY2026 TX commitments."/>
