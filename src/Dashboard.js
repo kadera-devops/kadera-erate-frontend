@@ -1224,13 +1224,12 @@ function EntitySearchModal({ token, onClose }) {
                     SOURCE: {d.source === "local_db" ? "LOCAL DB (FY2026)" : "USAC LIVE API"}
                   </div>
                 </>
-    </>
-  );
             })()}
           </div>
         </div>
       </div>
     )}
+  </>
   );
 }
 
