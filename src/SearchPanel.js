@@ -90,17 +90,22 @@ export default function SearchPanel({ token, onTagsUpdated }) {
   const cols = {
     contacts:    ["billed_entity_name","state","tech_contact_name","tech_contact_email","tech_contact_phone","service_category","application_status"],
     "470s":      ["application_number","billed_entity_name","billed_entity_number","state","service_category","application_status","date_posted","bid_due_date"],
-    "471s":      ["frn","application_number","billed_entity_name","state","service_type","amount_requested","amount_committed","application_status"],
-    commitments: ["frn","billed_entity_name","state","service_type","amount_committed","disbursed_amount","commitment_date","status"],
+    "471s":      ["application_number","organization_name","org_state","chosen_category_of_service","form_471_status_name","funding_request_amount","certified_datetime"],
+    commitments: ["funding_request_number","organization_name","state","form_471_service_type_name","funding_commitment_request","form_471_frn_status_name","fcdl_letter_date","spin_name"],
   };
 
   const colLabels = {
     application_number:"APP #", billed_entity_name:"ENTITY", billed_entity_number:"BEN",
-    state:"STATE", service_category:"SERVICE", application_status:"STATUS",
+    state:"STATE", org_state:"STATE", service_category:"SERVICE", application_status:"STATUS",
     date_posted:"POSTED", bid_due_date:"BID DUE", frn:"FRN",
     service_type:"SERVICE TYPE", amount_requested:"REQUESTED", amount_committed:"COMMITTED",
     disbursed_amount:"DISBURSED", commitment_date:"DATE", status:"STATUS",
     tech_contact_name:"CONTACT NAME", tech_contact_email:"EMAIL", tech_contact_phone:"PHONE",
+    organization_name:"ORGANIZATION", chosen_category_of_service:"CATEGORY",
+    form_471_status_name:"STATUS", funding_request_amount:"REQUESTED",
+    certified_datetime:"CERTIFIED", funding_request_number:"FRN #",
+    form_471_service_type_name:"SERVICE TYPE", funding_commitment_request:"COMMITTED",
+    form_471_frn_status_name:"FRN STATUS", fcdl_letter_date:"FCDL DATE", spin_name:"PROVIDER",
   };
 
   const currentCols = cols[searchType] || cols["470s"];
@@ -179,7 +184,12 @@ export default function SearchPanel({ token, onTagsUpdated }) {
                 <tbody>
                   {results.map((row, i) => {
                     const is470Row = row.application_number && (searchType === "470s" || searchType === "contacts");
-                    const link = is470Row ? `https://legacy.fundsforlearning.com/470/${row.application_number}` : null;
+                    const is471Row = row.application_number && searchType === "471s";
+                    const link = is470Row
+                      ? `https://legacy.fundsforlearning.com/470/${row.application_number}`
+                      : is471Row
+                      ? `https://legacy.fundsforlearning.com/471/${row.application_number}`
+                      : null;
                     return (
                     <tr key={i} style={{ borderBottom:"1px solid rgba(138,99,210,0.08)", transition:"background 0.15s", cursor: link ? "pointer" : "default" }}
                       onClick={() => link && window.open(link, "_blank")}
@@ -187,8 +197,8 @@ export default function SearchPanel({ token, onTagsUpdated }) {
                       onMouseLeave={e => e.currentTarget.style.background="transparent"}>
                       {currentCols.map(col => {
                         let val = row[col] || "—";
-                        if (typeof val === "number") val = col.includes("amount") || col.includes("committed") || col.includes("disbursed") ? `$${val.toLocaleString()}` : val;
-                        if (col === "date_posted" || col === "bid_due_date" || col === "commitment_date") val = val && val !== "—" ? new Date(val).toLocaleDateString() : "—";
+                        if (typeof val === "number") val = col.includes("amount") || col.includes("committed") || col.includes("disbursed") || col.includes("request") ? `$${val.toLocaleString()}` : val;
+                        if (["date_posted","bid_due_date","commitment_date","certified_datetime","fcdl_letter_date"].includes(col)) val = val && val !== "—" ? new Date(val).toLocaleDateString() : "—";
                         const isStatus = col.includes("status");
                         const statusColor = isStatus ? ((val||"").toLowerCase().includes("open") ? "#39ff14" : (val||"").toLowerCase().includes("review") ? "#f0b429" : "rgba(232,228,240,0.4)") : null;
                         return (
@@ -199,8 +209,8 @@ export default function SearchPanel({ token, onTagsUpdated }) {
                       })}
                       <td style={{ padding:"8px 12px" }} onClick={e => e.stopPropagation()}>
                         <div style={{ display:"flex", gap:5, alignItems:"center" }}>
-                          {row.application_number && (
-                            <a href={`https://legacy.fundsforlearning.com/470/${row.application_number}`} target="_blank" rel="noreferrer"
+                          {link && (
+                            <a href={link} target="_blank" rel="noreferrer"
                               style={{ fontSize:7, color:"#3b9eff", textDecoration:"none", padding:"2px 8px", border:"1px solid rgba(59,158,255,0.3)", background:"rgba(59,158,255,0.05)", whiteSpace:"nowrap" }}>
                               VIEW →
                             </a>
