@@ -932,6 +932,180 @@ function Detail471Fields({ data: d }) {
   );
 }
 
+// ── C2 Prospects Modal ─────────────────────────────────────────────────────────
+function C2ProspectsModal({ token, onClose }) {
+  const [results, setResults]   = useState([]);
+  const [loading, setLoading]   = useState(false);
+  const [loaded, setLoaded]     = useState(false);
+  const [error, setError]       = useState("");
+  const [meta, setMeta]         = useState(null);
+  const [sortField, setSortField] = useState("available");
+  const [sortAsc, setSortAsc]   = useState(false);
+  const [filterType, setFilterType] = useState("ALL");
+
+  async function load() {
+    setLoading(true);
+    setError("");
+    try {
+      const res  = await fetch(`${API_URL}/api/c2-prospects?limit=500`, { headers:{ Authorization:`Bearer ${token}` } });
+      const json = await res.json();
+      if (json.status === "success") {
+        setResults(json.data || []);
+        setMeta({ total_checked: json.total_c2_checked, already_filed: json.already_filed, prospects: json.count });
+        setLoaded(true);
+      } else { setError(json.message || "Failed"); }
+    } catch { setError("Connection error — check backend"); }
+    setLoading(false);
+  }
+
+  function toggleSort(field) {
+    if (sortField === field) setSortAsc(p => !p);
+    else { setSortField(field); setSortAsc(false); }
+  }
+
+  const filtered = results.filter(r => filterType === "ALL" || (r.applicant_type||"").toLowerCase().includes(filterType.toLowerCase()));
+
+  const sorted = [...filtered].sort((a,b) => {
+    const av = a[sortField] || 0;
+    const bv = b[sortField] || 0;
+    if (typeof av === "string") return sortAsc ? av.localeCompare(bv) : bv.localeCompare(av);
+    return sortAsc ? av - bv : bv - av;
+  });
+
+  const SortHdr = ({ field, label }) => (
+    <div onClick={() => toggleSort(field)} style={{ fontSize:6.5, letterSpacing:1.5, color: sortField===field ? "#22c97a" : "rgba(34,201,122,0.45)", fontFamily:"'DM Mono',monospace", cursor:"pointer", display:"flex", alignItems:"center", gap:3, userSelect:"none" }}>
+      {label} {sortField===field ? (sortAsc ? "↑" : "↓") : <span style={{ opacity:0.3 }}>↕</span>}
+    </div>
+  );
+
+  const totalAvailable = filtered.reduce((s,r) => s + (r.available||0), 0);
+
+  return (
+    <div style={{ position:"fixed", inset:0, background:"rgba(5,5,13,0.92)", display:"flex", alignItems:"center", justifyContent:"center", zIndex:300 }}
+      onClick={e => e.target === e.currentTarget && onClose()}>
+      <div style={{ background:"#07061a", border:"1px solid rgba(34,201,122,0.35)", clipPath:"polygon(0 0,calc(100% - 18px) 0,100% 18px,100% 100%,18px 100%,0 calc(100% - 18px))", width:"min(1100px, 96vw)", maxHeight:"90vh", display:"flex", flexDirection:"column", position:"relative" }}>
+        <div style={{ position:"absolute", top:0, left:"10%", right:"10%", height:1, background:"linear-gradient(90deg,transparent,rgba(34,201,122,0.6),transparent)" }}/>
+
+        {/* Header */}
+        <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"16px 22px", borderBottom:"1px solid rgba(34,201,122,0.12)", flexShrink:0 }}>
+          <div style={{ display:"flex", alignItems:"center", gap:12 }}>
+            <div style={{ width:6, height:6, borderRadius:"50%", background:"#22c97a", boxShadow:"0 0 8px rgba(34,201,122,0.9)" }}/>
+            <span style={{ fontFamily:"'Aldrich',sans-serif", fontSize:11, letterSpacing:2.5, color:"#22c97a" }}>C2 PROSPECT FINDER</span>
+            <span style={{ fontSize:7, letterSpacing:1.5, color:"rgba(232,228,240,0.25)" }}>· TX Schools & Districts · Available C2 Budget · No FY2026 Form 470 Filed</span>
+          </div>
+          <button onClick={onClose} style={{ background:"transparent", border:"1px solid rgba(232,228,240,0.15)", color:"rgba(232,228,240,0.4)", cursor:"pointer", fontFamily:"'DM Mono',monospace", fontSize:8, padding:"4px 10px", letterSpacing:1 }}>✕ CLOSE</button>
+        </div>
+
+        {/* Action bar */}
+        <div style={{ padding:"12px 22px", borderBottom:"1px solid rgba(34,201,122,0.08)", display:"flex", alignItems:"center", gap:12, flexShrink:0, flexWrap:"wrap" }}>
+          {!loaded && !loading && (
+            <button onClick={load}
+              style={{ padding:"8px 22px", fontFamily:"'DM Mono',monospace", fontSize:8, letterSpacing:2, border:"1px solid rgba(34,201,122,0.5)", background:"rgba(34,201,122,0.1)", color:"#22c97a", cursor:"pointer" }}>
+              RUN SEARCH →
+            </button>
+          )}
+          {loading && <div style={{ fontSize:8, color:"rgba(34,201,122,0.5)", letterSpacing:2 }}>QUERYING USAC + LOCAL DB...</div>}
+          {loaded && (
+            <>
+              {/* Type filter */}
+              <div style={{ display:"flex", gap:4 }}>
+                {["ALL","School","District"].map(t => (
+                  <button key={t} onClick={() => setFilterType(t)}
+                    style={{ padding:"4px 12px", fontFamily:"'DM Mono',monospace", fontSize:7, letterSpacing:1.5, border:`1px solid ${filterType===t ? "rgba(34,201,122,0.6)" : "rgba(34,201,122,0.15)"}`, background: filterType===t ? "rgba(34,201,122,0.1)" : "transparent", color: filterType===t ? "#22c97a" : "rgba(232,228,240,0.35)", cursor:"pointer" }}>
+                    {t}
+                  </button>
+                ))}
+              </div>
+              {/* Stats */}
+              <div style={{ display:"flex", gap:16, marginLeft:"auto" }}>
+                <div style={{ textAlign:"right" }}>
+                  <div style={{ fontFamily:"'Aldrich',sans-serif", fontSize:14, color:"#22c97a", lineHeight:1 }}>{sorted.length.toLocaleString()}</div>
+                  <div style={{ fontSize:6.5, color:"rgba(34,201,122,0.5)", letterSpacing:1.5 }}>PROSPECTS</div>
+                </div>
+                <div style={{ textAlign:"right" }}>
+                  <div style={{ fontFamily:"'Aldrich',sans-serif", fontSize:14, color:"#22c97a", lineHeight:1 }}>${(totalAvailable/1000000).toFixed(1)}M</div>
+                  <div style={{ fontSize:6.5, color:"rgba(34,201,122,0.5)", letterSpacing:1.5 }}>TOTAL AVAILABLE</div>
+                </div>
+                {meta && (
+                  <div style={{ textAlign:"right" }}>
+                    <div style={{ fontFamily:"'Aldrich',sans-serif", fontSize:14, color:"rgba(232,228,240,0.4)", lineHeight:1 }}>{meta.already_filed.toLocaleString()}</div>
+                    <div style={{ fontSize:6.5, color:"rgba(232,228,240,0.25)", letterSpacing:1.5 }}>ALREADY FILED</div>
+                  </div>
+                )}
+              </div>
+            </>
+          )}
+          {error && <div style={{ fontSize:8, color:"#f0614a" }}>⚠ {error}</div>}
+        </div>
+
+        {/* Results */}
+        <div style={{ flex:1, overflowY:"auto" }}>
+          {!loaded && !loading && (
+            <div style={{ padding:"60px 22px", textAlign:"center" }}>
+              <div style={{ fontSize:9, color:"rgba(34,201,122,0.3)", letterSpacing:2, marginBottom:10 }}>READY TO FIND PROSPECTS</div>
+              <div style={{ fontSize:7.5, color:"rgba(232,228,240,0.2)", maxWidth:500, margin:"0 auto" }}>
+                Queries USAC C2 budget data live for all TX schools and districts with available funding, then cross-references your local database to exclude anyone who already filed a Form 470 in FY2026.
+              </div>
+            </div>
+          )}
+          {loaded && sorted.length === 0 && (
+            <div style={{ padding:"48px", textAlign:"center", fontSize:9, color:"rgba(232,228,240,0.25)", letterSpacing:2 }}>NO PROSPECTS FOUND</div>
+          )}
+          {loaded && sorted.length > 0 && (
+            <>
+              {/* Table header */}
+              <div style={{ display:"grid", gridTemplateColumns:"2fr 120px 100px 130px 130px 130px 160px", padding:"8px 22px", borderBottom:"1px solid rgba(34,201,122,0.15)", background:"rgba(34,201,122,0.04)", position:"sticky", top:0 }}>
+                <SortHdr field="entity_name" label="ENTITY" />
+                <SortHdr field="city" label="CITY" />
+                <div style={{ fontSize:6.5, letterSpacing:1.5, color:"rgba(34,201,122,0.45)", fontFamily:"'DM Mono',monospace" }}>BEN</div>
+                <SortHdr field="applicant_type" label="TYPE" />
+                <SortHdr field="total_budget" label="TOTAL BUDGET" />
+                <SortHdr field="funded" label="FUNDED" />
+                <SortHdr field="available" label="AVAILABLE $$" />
+              </div>
+
+              {sorted.map((r, i) => {
+                const usedPct = r.total_budget ? Math.round(((r.funded||0) / r.total_budget) * 100) : 0;
+                const availPct = 100 - usedPct;
+                const isDistrict = (r.applicant_type||"").toLowerCase().includes("district");
+                return (
+                  <div key={i} style={{ display:"grid", gridTemplateColumns:"2fr 120px 100px 130px 130px 130px 160px", padding:"9px 22px", borderBottom:"1px solid rgba(34,201,122,0.06)", alignItems:"center", transition:"background 0.12s" }}
+                    onMouseEnter={e => e.currentTarget.style.background="rgba(34,201,122,0.03)"}
+                    onMouseLeave={e => e.currentTarget.style.background="transparent"}>
+                    <div>
+                      <div style={{ fontSize:8.5, color:"rgba(232,228,240,0.85)", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", paddingRight:10 }}>{r.entity_name || "—"}</div>
+                      {r.consulting_firm && <div style={{ fontSize:6.5, color:"rgba(240,180,41,0.5)", marginTop:2, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>Consultant: {r.consulting_firm.split("(")[0].trim()}</div>}
+                    </div>
+                    <div style={{ fontSize:7.5, color:"rgba(232,228,240,0.5)" }}>{r.city || "—"}</div>
+                    <div style={{ fontSize:8, color:"#3b9eff" }}>{r.ben || "—"}</div>
+                    <div>
+                      <span style={{ fontSize:7, padding:"2px 7px", border:`1px solid ${isDistrict ? "rgba(59,158,255,0.35)" : "rgba(138,99,210,0.35)"}`, background: isDistrict ? "rgba(59,158,255,0.06)" : "rgba(138,99,210,0.06)", color: isDistrict ? "#3b9eff" : "#a07ee0" }}>
+                        {r.applicant_type || "—"}
+                      </span>
+                    </div>
+                    <div style={{ fontSize:8, color:"rgba(232,228,240,0.5)" }}>{r.total_budget ? `$${Math.round(r.total_budget).toLocaleString()}` : "—"}</div>
+                    <div style={{ fontSize:8, color:"#f0b429" }}>{r.funded ? `$${Math.round(r.funded).toLocaleString()}` : "$0"}</div>
+                    <div>
+                      <div style={{ fontFamily:"'Aldrich',sans-serif", fontSize:12, color:"#22c97a", lineHeight:1, marginBottom:4 }}>${Math.round(r.available).toLocaleString()}</div>
+                      <div style={{ height:3, background:"rgba(255,255,255,0.06)", borderRadius:99, overflow:"hidden" }}>
+                        <div style={{ width:`${availPct}%`, height:"100%", background:"linear-gradient(90deg,#0e5e34,#22c97a)", borderRadius:99 }}/>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+              <div style={{ padding:"10px 22px", fontSize:7, color:"rgba(232,228,240,0.2)", letterSpacing:1.5, borderTop:"1px solid rgba(34,201,122,0.08)" }}>
+                {sorted.length} PROSPECTS · TX · FY{new Date().getFullYear()} · Sorted by {sortField} · Consultant shown if on file with USAC
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+
 // ── Entity Search Modal ────────────────────────────────────────────────────────
 const ENTITY_STATES = ["TX","CA","NY","FL","IL","PA","OH","GA","NC","MI","WA","AZ","CO","VA","MA","TN","IN","MO","WI","MN","OR","KY","OK","NV","CT","UT","AR","MS","KS","NM","NE","ID","WV","HI","NH","ME","RI","MT","DE","SD","ND","AK","VT","WY"];
 const ENTITY_TYPES  = ["","School","Library","School District","Library System","Non-Instructional Facility (Nif)","Consortium"];
@@ -1728,6 +1902,7 @@ export default function Dashboard({ session }) {
   const [ciOpen, setCiOpen]   = useState(false);
   const [c2Open, setC2Open]     = useState(false);
   const [entityOpen, setEntityOpen] = useState(false);
+  const [prospectsOpen, setProspectsOpen] = useState(false);
 
   const refreshTagCount = useCallback(async (t) => {
     if (!t) return;
@@ -1765,6 +1940,7 @@ export default function Dashboard({ session }) {
         {ciOpen && token && <CompetitiveIntelModal token={token} onClose={() => setCiOpen(false)} />}
         {c2Open && token && <C2BudgetModal token={token} onClose={() => setC2Open(false)} />}
         {entityOpen && token && <EntitySearchModal token={token} onClose={() => setEntityOpen(false)} />}
+        {prospectsOpen && token && <C2ProspectsModal token={token} onClose={() => setProspectsOpen(false)} />}
         <div style={{ position:"fixed", inset:0, background:"radial-gradient(ellipse 70% 50% at 15% 15%, rgba(138,99,210,0.09) 0%, transparent 60%)", pointerEvents:"none", zIndex:0 }}/>
         <div style={{ position:"fixed", inset:0, backgroundImage:"radial-gradient(circle, rgba(138,99,210,0.8) 1px, transparent 1px)", backgroundSize:"28px 28px", opacity:0.035, pointerEvents:"none", zIndex:0 }}/>
 
@@ -1833,6 +2009,7 @@ export default function Dashboard({ session }) {
                         <ToolBtn href="https://www.usac.org/e-rate/tools/window-status/"                                      color="gold"   icon="📅" name="WINDOW REPORTING"     desc="Check filing windows, open/close dates, and deadlines."/>
                         <ToolBtn onClick={() => setFrnOpen(true)}                                                              color="blue"   icon="📋" name="FRN STATUS FY2016+"   desc="Search FRN status from local USAC commitment data."/>
                         <ToolBtn onClick={() => setCiOpen(true)} wide color="purple" icon="📡" name="COMPETITIVE INTELLIGENCE" desc="Top providers, manufacturer presence, and service type breakdown from FY2026 TX commitments."/>
+                        <ToolBtn onClick={() => setProspectsOpen(true)} wide color="green" icon="🎯" name="C2 PROSPECT FINDER" desc="Find TX schools and districts with available C2 budget that have not yet filed a Form 470 in FY2026."/>
                       </div>
                     </div>
                   </Panel>
