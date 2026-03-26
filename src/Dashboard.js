@@ -1121,7 +1121,7 @@ function EntitySearchModal({ token, onClose }) {
                                     ))}
                                   </div>
                                   {h.data.map((d, di) => {
-                                    const statusC = (d.frn_status||"").toLowerCase().includes("commit") || (d.frn_status||"").toLowerCase().includes("fund") ? "#22c97a" : (d.frn_status||"").toLowerCase().includes("deny") ? "#f0614a" : "rgba(232,228,240,0.35)";
+
                                     return (
                                       <div key={di} style={{ display:"grid", gridTemplateColumns:"70px 1.4fr 1fr 110px 70px", gap:0, padding:"8px 10px", borderBottom:"1px solid rgba(240,180,41,0.06)", alignItems:"center" }}
                                         onMouseEnter={e => e.currentTarget.style.background="rgba(240,180,41,0.03)"}
