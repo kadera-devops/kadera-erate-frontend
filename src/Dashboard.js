@@ -965,7 +965,7 @@ function EntitySearchModal({ token, onClose }) {
     setDetail471({ data: null, loading: true, row });
     try {
       const params = new URLSearchParams({ ben });
-      if (row.frn) params.set("application_number", row.frn);
+      if (row.application_number) params.set("application_number", row.application_number);
       if (row.funding_year) params.set("funding_year", row.funding_year);
       const res  = await fetch(`${API_URL}/api/471-detail?${params}`, { headers:{ Authorization:`Bearer ${token}` } });
       const json = await res.json();
