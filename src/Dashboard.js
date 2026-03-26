@@ -537,6 +537,7 @@ function CompetitiveIntelModal({ token, onClose }) {
   const [partResults, setPartResults] = useState([]);
   const [partLoading, setPartLoading] = useState(false);
   const [partSearched, setPartSearched] = useState(false);
+  const [partSortAsc, setPartSortAsc] = useState(false);
 
   useEffect(() => {
     fetch(`${API_URL}/api/competitive-intel`, { headers:{ Authorization:`Bearer ${token}` } })
@@ -785,11 +786,20 @@ function CompetitiveIntelModal({ token, onClose }) {
                 <>
                   {/* Results header */}
                   <div style={{ display:"grid", gridTemplateColumns:"1.6fr 1.2fr 1fr 130px 80px 110px", gap:0, padding:"7px 12px", borderBottom:"1px solid rgba(138,99,210,0.2)", background:"rgba(138,99,210,0.05)" }}>
-                    {["MODEL (471)","APPLICANT","SERVICE PROVIDER","UNIT PRICE","QTY","TOTAL COST"].map((h,i) => (
-                      <div key={i} style={{ fontSize:6.5, letterSpacing:1.5, color: i === 3 ? "#a07ee0" : "rgba(138,99,210,0.55)", fontFamily:"'DM Mono',monospace" }}>{h}</div>
+                    {["MODEL (471)","APPLICANT","SERVICE PROVIDER","QTY","TOTAL COST"].map((h,i) => (
+                      <div key={i} style={{ fontSize:6.5, letterSpacing:1.5, color:"rgba(138,99,210,0.55)", fontFamily:"'DM Mono',monospace" }}>{h}</div>
                     ))}
+                    <div onClick={() => setPartSortAsc(p => !p)}
+                      style={{ fontSize:6.5, letterSpacing:1.5, color:"#a07ee0", fontFamily:"'DM Mono',monospace", cursor:"pointer", display:"flex", alignItems:"center", gap:4, userSelect:"none" }}
+                      title="Toggle sort order">
+                      UNIT PRICE <span style={{ fontSize:9 }}>{partSortAsc ? "↑" : "↓"}</span>
+                    </div>
                   </div>
-                  {partResults.map((r, i) => (
+                  {[...partResults].sort((a,b) => {
+                      const av = a.unit_price || 0;
+                      const bv = b.unit_price || 0;
+                      return partSortAsc ? av - bv : bv - av;
+                    }).map((r, i) => (
                     <div key={i} style={{ display:"grid", gridTemplateColumns:"1.6fr 1.2fr 1fr 130px 80px 110px", gap:0, padding:"9px 12px", borderBottom:"1px solid rgba(138,99,210,0.07)", alignItems:"center", transition:"background 0.12s" }}
                       onMouseEnter={e => e.currentTarget.style.background="rgba(138,99,210,0.04)"}
                       onMouseLeave={e => e.currentTarget.style.background="transparent"}>
@@ -801,22 +811,22 @@ function CompetitiveIntelModal({ token, onClose }) {
                       </div>
                       <div style={{ fontSize:7.5, color:"rgba(232,228,240,0.75)", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", paddingRight:8 }}>{r.organization_name || "—"}</div>
                       <div style={{ fontSize:7.5, color:"rgba(59,158,255,0.8)", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", paddingRight:8 }}>{r.spin_name || "—"}</div>
+                      <div style={{ fontSize:8, color:"rgba(232,228,240,0.5)" }}>{r.quantity ? r.quantity.toLocaleString() : "—"}</div>
+                      <div style={{ fontSize:8, color:"rgba(232,228,240,0.45)" }}>{r.total_cost ? `$${Math.round(r.total_cost).toLocaleString()}` : "—"}</div>
                       <div>
                         {r.unit_price ? (
                           <>
                             <div style={{ fontSize:9, color:"#a07ee0", fontWeight:500 }}>${Number(r.unit_price).toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})}</div>
-                            <div style={{ fontSize:6, color:"rgba(138,99,210,0.4)", marginTop:1, letterSpacing:1 }}>PER UNIT{r.quantity && !parseFloat(r.price_field) ? " (calc)" : ""}</div>
+                            <div style={{ fontSize:6, color:"rgba(138,99,210,0.4)", marginTop:1, letterSpacing:1 }}>PER UNIT</div>
                           </>
                         ) : (
                           <div style={{ fontSize:8, color:"rgba(232,228,240,0.2)" }}>—</div>
                         )}
                       </div>
-                      <div style={{ fontSize:8, color:"rgba(232,228,240,0.5)" }}>{r.quantity ? r.quantity.toLocaleString() : "—"}</div>
-                      <div style={{ fontSize:8, color:"#22c97a" }}>{r.total_cost ? `$${Math.round(r.total_cost).toLocaleString()}` : "—"}</div>
                     </div>
                   ))}
                   <div style={{ padding:"8px 12px", fontSize:7, color:"rgba(232,228,240,0.2)", letterSpacing:1.5, borderTop:"1px solid rgba(138,99,210,0.08)" }}>
-                    {partResults.length} RESULT{partResults.length !== 1 ? "S" : ""} · FY2025 TX · MODEL = form 471 model_of_equipment field · SORTED BY TOTAL COST
+                    {partResults.length} RESULT{partResults.length !== 1 ? "S" : ""} · FY2025 TX · Click UNIT PRICE header to toggle sort direction
                   </div>
                 </>
               )}
