@@ -784,27 +784,35 @@ function CompetitiveIntelModal({ token, onClose }) {
               {partSearched && !partLoading && partResults.length > 0 && (
                 <>
                   {/* Results header */}
-                  <div style={{ display:"grid", gridTemplateColumns:"1.6fr 1.2fr 1fr 120px 110px 110px", gap:0, padding:"7px 12px", borderBottom:"1px solid rgba(138,99,210,0.2)", background:"rgba(138,99,210,0.05)" }}>
-                    {["MODEL (471)","APPLICANT","SERVICE PROVIDER","UNIT PRICE","TOTAL COST","PRODUCT TYPE"].map((h,i) => (
+                  <div style={{ display:"grid", gridTemplateColumns:"1.6fr 1.2fr 1fr 130px 80px 110px", gap:0, padding:"7px 12px", borderBottom:"1px solid rgba(138,99,210,0.2)", background:"rgba(138,99,210,0.05)" }}>
+                    {["MODEL (471)","APPLICANT","SERVICE PROVIDER","UNIT PRICE","QTY","TOTAL COST"].map((h,i) => (
                       <div key={i} style={{ fontSize:6.5, letterSpacing:1.5, color: i === 3 ? "#a07ee0" : "rgba(138,99,210,0.55)", fontFamily:"'DM Mono',monospace" }}>{h}</div>
                     ))}
                   </div>
                   {partResults.map((r, i) => (
-                    <div key={i} style={{ display:"grid", gridTemplateColumns:"1.6fr 1.2fr 1fr 120px 110px 110px", gap:0, padding:"9px 12px", borderBottom:"1px solid rgba(138,99,210,0.07)", alignItems:"center", transition:"background 0.12s" }}
+                    <div key={i} style={{ display:"grid", gridTemplateColumns:"1.6fr 1.2fr 1fr 130px 80px 110px", gap:0, padding:"9px 12px", borderBottom:"1px solid rgba(138,99,210,0.07)", alignItems:"center", transition:"background 0.12s" }}
                       onMouseEnter={e => e.currentTarget.style.background="rgba(138,99,210,0.04)"}
                       onMouseLeave={e => e.currentTarget.style.background="transparent"}>
                       <div>
-                        <div style={{ fontSize:8, color:"#a07ee0", fontWeight:500, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{r.model_of_equipment || "—"}</div>
+                        <div title={r.model_of_equipment || ""} style={{ fontSize:8, color:"#a07ee0", fontWeight:500, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
+                          {r.model_of_equipment ? (r.model_of_equipment.length > 40 ? r.model_of_equipment.slice(0, 40) + "…" : r.model_of_equipment) : "—"}
+                        </div>
                         {r.manufacturer && <div style={{ fontSize:6.5, color:"rgba(232,228,240,0.35)", marginTop:2 }}>{r.manufacturer}</div>}
                       </div>
                       <div style={{ fontSize:7.5, color:"rgba(232,228,240,0.75)", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", paddingRight:8 }}>{r.organization_name || "—"}</div>
                       <div style={{ fontSize:7.5, color:"rgba(59,158,255,0.8)", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", paddingRight:8 }}>{r.spin_name || "—"}</div>
                       <div>
-                        <div style={{ fontSize:9, color:"#a07ee0", fontWeight:500 }}>{r.unit_price ? `$${Number(r.unit_price).toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})}` : "—"}</div>
-                        <div style={{ fontSize:6.5, color:"rgba(138,99,210,0.45)", marginTop:2, letterSpacing:1 }}>PER UNIT</div>
+                        {r.unit_price ? (
+                          <>
+                            <div style={{ fontSize:9, color:"#a07ee0", fontWeight:500 }}>${Number(r.unit_price).toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})}</div>
+                            <div style={{ fontSize:6, color:"rgba(138,99,210,0.4)", marginTop:1, letterSpacing:1 }}>PER UNIT{r.quantity && !parseFloat(r.price_field) ? " (calc)" : ""}</div>
+                          </>
+                        ) : (
+                          <div style={{ fontSize:8, color:"rgba(232,228,240,0.2)" }}>—</div>
+                        )}
                       </div>
-                      <div style={{ fontSize:8, color:"rgba(232,228,240,0.45)" }}>{r.total_cost ? `$${Math.round(r.total_cost).toLocaleString()}` : "—"}</div>
-                      <div style={{ fontSize:7, color:"rgba(232,228,240,0.35)", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{r.function_name || r.product_name || "—"}</div>
+                      <div style={{ fontSize:8, color:"rgba(232,228,240,0.5)" }}>{r.quantity ? r.quantity.toLocaleString() : "—"}</div>
+                      <div style={{ fontSize:8, color:"#22c97a" }}>{r.total_cost ? `$${Math.round(r.total_cost).toLocaleString()}` : "—"}</div>
                     </div>
                   ))}
                   <div style={{ padding:"8px 12px", fontSize:7, color:"rgba(232,228,240,0.2)", letterSpacing:1.5, borderTop:"1px solid rgba(138,99,210,0.08)" }}>
