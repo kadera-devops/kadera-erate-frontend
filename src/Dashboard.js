@@ -906,6 +906,7 @@ function EntitySearchModal({ token, onClose }) {
   const [expanded, setExpanded]     = useState(null);
   const [history, setHistory]       = useState({}); // keyed by entity_number
   const [historyLoading, setHistoryLoading] = useState({});
+  const [detail471, setDetail471]   = useState(null); // { data, loading, row }
 
   async function loadHistory(ben) {
     if (history[ben] || historyLoading[ben]) return;
@@ -916,6 +917,20 @@ function EntitySearchModal({ token, onClose }) {
       if (json.status === "success") setHistory(prev => ({ ...prev, [ben]: json }));
     } catch {}
     setHistoryLoading(prev => ({ ...prev, [ben]: false }));
+  }
+
+  async function loadDetail471(row, ben) {
+    setDetail471({ data: null, loading: true, row });
+    try {
+      const params = new URLSearchParams({ ben });
+      if (row.frn) params.set("application_number", row.frn);
+      if (row.funding_year) params.set("funding_year", row.funding_year);
+      const res  = await fetch(`${API_URL}/api/471-detail?${params}`, { headers:{ Authorization:`Bearer ${token}` } });
+      const json = await res.json();
+      setDetail471({ data: json.data || null, loading: false, row });
+    } catch {
+      setDetail471({ data: null, loading: false, row });
+    }
   }
 
   async function doSearch() {
@@ -1120,20 +1135,19 @@ function EntitySearchModal({ token, onClose }) {
                                       <div key={i} style={{ fontSize:6.5, letterSpacing:1.5, color:"rgba(240,180,41,0.5)", fontFamily:"'DM Mono',monospace" }}>{h}</div>
                                     ))}
                                   </div>
-                                  {h.data.map((d, di) => {
-
-                                    return (
-                                      <div key={di} style={{ display:"grid", gridTemplateColumns:"70px 1.4fr 1fr 110px 70px", gap:0, padding:"8px 10px", borderBottom:"1px solid rgba(240,180,41,0.06)", alignItems:"center" }}
-                                        onMouseEnter={e => e.currentTarget.style.background="rgba(240,180,41,0.03)"}
+                                  {h.data.map((d, di) => (
+                                      <div key={di}
+                                        onClick={() => loadDetail471(d, r.entity_number)}
+                                        style={{ display:"grid", gridTemplateColumns:"70px 1.4fr 1fr 110px 70px", gap:0, padding:"8px 10px", borderBottom:"1px solid rgba(240,180,41,0.06)", alignItems:"center", cursor:"pointer", transition:"background 0.12s" }}
+                                        onMouseEnter={e => e.currentTarget.style.background="rgba(240,180,41,0.06)"}
                                         onMouseLeave={e => e.currentTarget.style.background="transparent"}>
-                                        <div style={{ fontFamily:"'Aldrich',sans-serif", fontSize:9, color:"#f0b429" }}>FY{d.funding_year}</div>
+                                        <div style={{ fontSize:8, color:"#f0b429", textDecoration:"underline dotted", cursor:"pointer" }}>FY{d.funding_year}</div>
                                         <div style={{ fontSize:7.5, color:"rgba(232,228,240,0.7)", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", paddingRight:8 }}>{d.service_type || "—"}</div>
                                         <div style={{ fontSize:7.5, color:"rgba(59,158,255,0.8)", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", paddingRight:8 }}>{d.spin_name || "—"}</div>
                                         <div style={{ fontSize:8, color:"#22c97a" }}>{d.commitment ? `$${Math.round(d.commitment).toLocaleString()}` : "—"}</div>
                                         <div style={{ fontSize:8, color:"rgba(232,228,240,0.5)" }}>{d.discount_pct ? `${d.discount_pct}%` : "—"}</div>
                                       </div>
-                                    );
-                                  })}
+                                  ))}
                                 </>
                               )}
                             </div>
@@ -1145,13 +1159,76 @@ function EntitySearchModal({ token, onClose }) {
                 );
               })}
               <div style={{ padding:"10px 22px", fontSize:7, color:"rgba(232,228,240,0.2)", letterSpacing:1.5, borderTop:"1px solid rgba(59,158,255,0.08)" }}>
-                {results.length} RESULT{results.length !== 1 ? "S" : ""} · LIVE DATA FROM USAC · Click a row to expand details
+                {results.length} RESULT{results.length !== 1 ? "S" : ""} · LIVE DATA FROM USAC · Click a row to expand · Click a funding year to see 471 details
               </div>
             </>
           )}
         </div>
       </div>
     </div>
+
+    {/* 471 detail popup */}
+    {detail471 && (
+      <div style={{ position:"fixed", inset:0, background:"rgba(5,5,13,0.88)", display:"flex", alignItems:"center", justifyContent:"center", zIndex:400 }}
+        onClick={e => e.target === e.currentTarget && setDetail471(null)}>
+        <div style={{ background:"#0a0920", border:"1px solid rgba(138,99,210,0.4)", clipPath:"polygon(0 0,calc(100% - 14px) 0,100% 14px,100% 100%,14px 100%,0 calc(100% - 14px))", width:"min(580px, 92vw)", maxHeight:"70vh", display:"flex", flexDirection:"column", position:"relative" }}>
+          <div style={{ position:"absolute", top:0, left:"10%", right:"10%", height:1, background:"linear-gradient(90deg,transparent,rgba(138,99,210,0.5),transparent)" }}/>
+          <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"13px 18px", borderBottom:"1px solid rgba(138,99,210,0.15)", flexShrink:0 }}>
+            <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+              <span style={{ fontFamily:"'Aldrich',sans-serif", fontSize:9, letterSpacing:2, color:"#a07ee0" }}>FORM 471 DETAIL</span>
+              {detail471.row && <span style={{ fontSize:7, color:"rgba(232,228,240,0.3)" }}>· FY{detail471.row.funding_year}</span>}
+            </div>
+            <button onClick={() => setDetail471(null)} style={{ background:"transparent", border:"none", color:"rgba(232,228,240,0.35)", cursor:"pointer", fontFamily:"'DM Mono',monospace", fontSize:9, padding:"2px 6px" }}>✕</button>
+          </div>
+          <div style={{ flex:1, overflowY:"auto", padding:"16px 18px" }}>
+            {detail471.loading && <div style={{ textAlign:"center", padding:"32px", fontSize:9, color:"rgba(138,99,210,0.4)", letterSpacing:2 }}>FETCHING 471 DATA...</div>}
+            {!detail471.loading && !detail471.data && <div style={{ textAlign:"center", padding:"32px", fontSize:8, color:"rgba(232,228,240,0.25)" }}>No Form 471 found for this funding year</div>}
+            {!detail471.loading && detail471.data && (() => {
+              const d = detail471.data;
+              const fields = [
+                { label:"Application #",       value: d.application_number },
+                { label:"Organization",        value: d.organization_name },
+                { label:"Funding Year",        value: d.funding_year ? `FY${d.funding_year}` : null },
+                { label:"State",               value: d.org_state },
+                { label:"Category",            value: d.chosen_category_of_service },
+                { label:"471 Status",          value: d.form_471_status_name },
+                { label:"Funding Requested",   value: d.funding_request_amount ? `$${Number(d.funding_request_amount).toLocaleString()}` : null },
+                { label:"Pre-Discount Eligible", value: d.pre_discount_eligible_amount ? `$${Number(d.pre_discount_eligible_amount).toLocaleString()}` : null },
+                { label:"C1 Discount",         value: d.c1_discount ? `${Math.round(parseFloat(d.c1_discount)*100)}%` : null },
+                { label:"C2 Discount",         value: d.c2_discount ? `${Math.round(parseFloat(d.c2_discount)*100)}%` : null },
+                { label:"Contact",             value: [d.cnct_first_name, d.cnct_last_name].filter(Boolean).join(" ") || null },
+                { label:"Contact Email",       value: d.cnct_email },
+                { label:"Contact Phone",       value: d.cnct_phone },
+                { label:"Certified",           value: d.certified_datetime ? new Date(d.certified_datetime).toLocaleDateString() : null },
+              ];
+              return (
+                <>
+                  <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8, marginBottom:14 }}>
+                    {fields.filter(f => f.value).map(f => (
+                      <div key={f.label} style={{ background:"rgba(138,99,210,0.04)", border:"1px solid rgba(138,99,210,0.12)", padding:"8px 10px", borderRadius:4 }}>
+                        <div style={{ fontSize:6, letterSpacing:1.5, color:"rgba(138,99,210,0.45)", textTransform:"uppercase", marginBottom:3 }}>{f.label}</div>
+                        <div style={{ fontSize:8, color:"rgba(232,228,240,0.8)" }}>{f.value}</div>
+                      </div>
+                    ))}
+                  </div>
+                  {d.application_number && (
+                    <a href={`https://legacy.fundsforlearning.com/471/${d.application_number}`} target="_blank" rel="noreferrer"
+                      style={{ display:"flex", alignItems:"center", justifyContent:"center", gap:8, padding:"8px", border:"1px solid rgba(138,99,210,0.35)", background:"rgba(138,99,210,0.07)", color:"#a07ee0", textDecoration:"none", fontFamily:"'DM Mono',monospace", fontSize:8, letterSpacing:1.5 }}
+                      onMouseEnter={e => { e.currentTarget.style.background="rgba(138,99,210,0.15)"; }}
+                      onMouseLeave={e => { e.currentTarget.style.background="rgba(138,99,210,0.07)"; }}>
+                      View on FundsForLearning →
+                    </a>
+                  )}
+                  <div style={{ fontSize:6.5, color:"rgba(232,228,240,0.2)", textAlign:"center", marginTop:8, letterSpacing:1 }}>
+                    SOURCE: {d.source === "local_db" ? "LOCAL DB (FY2026)" : "USAC LIVE API"}
+                  </div>
+                </>
+              );
+            })()}
+          </div>
+        </div>
+      </div>
+    )}
   );
 }
 
