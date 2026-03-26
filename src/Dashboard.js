@@ -1054,14 +1054,15 @@ function C2ProspectsModal({ token, onClose }) {
           {loaded && sorted.length > 0 && (
             <>
               {/* Table header */}
-              <div style={{ display:"grid", gridTemplateColumns:"2fr 120px 100px 130px 130px 130px 160px", padding:"8px 22px", borderBottom:"1px solid rgba(34,201,122,0.15)", background:"rgba(34,201,122,0.04)", position:"sticky", top:0 }}>
+              <div style={{ display:"grid", gridTemplateColumns:"2fr 110px 90px 110px 120px 120px 140px 130px", padding:"8px 22px", borderBottom:"1px solid rgba(34,201,122,0.15)", background:"rgba(34,201,122,0.04)", position:"sticky", top:0, minWidth:1000 }}>
                 <SortHdr field="entity_name" label="ENTITY" />
                 <SortHdr field="city" label="CITY" />
                 <div style={{ fontSize:6.5, letterSpacing:1.5, color:"rgba(34,201,122,0.45)", fontFamily:"'DM Mono',monospace" }}>BEN</div>
                 <SortHdr field="applicant_type" label="TYPE" />
-                <SortHdr field="total_budget" label="TOTAL BUDGET" />
+                <SortHdr field="total_budget" label="BUDGET" />
                 <SortHdr field="funded" label="FUNDED" />
-                <SortHdr field="available" label="AVAILABLE $$" />
+                <SortHdr field="available" label="AVAILABLE" />
+                <SortHdr field="days_since_470" label="LAST 470" />
               </div>
 
               {sorted.map((r, i) => {
@@ -1069,7 +1070,7 @@ function C2ProspectsModal({ token, onClose }) {
                 const availPct = 100 - usedPct;
                 const isDistrict = (r.applicant_type||"").toLowerCase().includes("district");
                 return (
-                  <div key={i} style={{ display:"grid", gridTemplateColumns:"2fr 120px 100px 130px 130px 130px 160px", padding:"9px 22px", borderBottom:"1px solid rgba(34,201,122,0.06)", alignItems:"center", transition:"background 0.12s" }}
+                  <div key={i} style={{ display:"grid", gridTemplateColumns:"2fr 110px 90px 110px 120px 120px 140px 130px", padding:"9px 22px", borderBottom:"1px solid rgba(34,201,122,0.06)", alignItems:"center", transition:"background 0.12s", minWidth:1000 }}
                     onMouseEnter={e => e.currentTarget.style.background="rgba(34,201,122,0.03)"}
                     onMouseLeave={e => e.currentTarget.style.background="transparent"}>
                     <div>
@@ -1091,11 +1092,24 @@ function C2ProspectsModal({ token, onClose }) {
                         <div style={{ width:`${availPct}%`, height:"100%", background:"linear-gradient(90deg,#0e5e34,#22c97a)", borderRadius:99 }}/>
                       </div>
                     </div>
+                    <div>
+                      {r.days_since_470 === null ? (
+                        <div>
+                          <div style={{ fontSize:7.5, color:"#f0614a", fontWeight:500 }}>Never filed</div>
+                          <div style={{ fontSize:6, color:"rgba(240,97,74,0.5)", marginTop:1, letterSpacing:1 }}>NO HISTORY</div>
+                        </div>
+                      ) : (
+                        <div>
+                          <div style={{ fontSize:7.5, color: r.days_since_470 > 365 ? "#f0614a" : r.days_since_470 > 180 ? "#f0b429" : "#22c97a", fontWeight:500 }}>{r.days_since_470}d ago</div>
+                          <div style={{ fontSize:6, color:"rgba(232,228,240,0.3)", marginTop:1 }}>FY{r.last_470_year} · {r.last_470_date ? new Date(r.last_470_date).toLocaleDateString() : ""}</div>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 );
               })}
               <div style={{ padding:"10px 22px", fontSize:7, color:"rgba(232,228,240,0.2)", letterSpacing:1.5, borderTop:"1px solid rgba(34,201,122,0.08)" }}>
-                {sorted.length} PROSPECTS · TX · FY{new Date().getFullYear()} · Sorted by {sortField} · Consultant shown if on file with USAC
+                {sorted.length} PROSPECTS · TX · FY2026 · Red = never filed or >1yr ago · Amber = 6-12mo · Green = recent · Consultant shown if on file
               </div>
             </>
           )}
@@ -1210,6 +1224,15 @@ function EntitySearchModal({ token, onClose }) {
               <button key={key} onClick={() => setSearchBy(key)}
                 style={{ padding:"4px 12px", fontFamily:"'DM Mono',monospace", fontSize:7, letterSpacing:1.5, border:`1px solid ${searchBy===key ? "rgba(59,158,255,0.6)" : "rgba(59,158,255,0.15)"}`, background: searchBy===key ? "rgba(59,158,255,0.1)" : "transparent", color: searchBy===key ? "#3b9eff" : "rgba(232,228,240,0.35)", cursor:"pointer", transition:"all 0.15s" }}>
                 {label}
+              </button>
+            ))}
+          </div>
+          {/* Budget cycle toggle */}
+          <div style={{ display:"flex", gap:4 }}>
+            {["FY2026-2030","FY2021-2025"].map(c => (
+              <button key={c} onClick={() => setCycle(c)}
+                style={{ padding:"4px 10px", fontFamily:"'DM Mono',monospace", fontSize:7, letterSpacing:1, border:`1px solid ${cycle===c ? "rgba(240,180,41,0.6)" : "rgba(240,180,41,0.15)"}`, background: cycle===c ? "rgba(240,180,41,0.1)" : "transparent", color: cycle===c ? "#f0b429" : "rgba(232,228,240,0.35)", cursor:"pointer" }}>
+                {c}
               </button>
             ))}
           </div>
@@ -1425,6 +1448,7 @@ function C2BudgetModal({ token, onClose }) {
   const [error, setError]         = useState("");
   const [rawFields, setRawFields] = useState([]);
   const [expanded, setExpanded]   = useState(null);
+  const [cycle, setCycle]         = useState("FY2026-2030");
 
   const searchByOptions = [
     { key:"name", label:"Entity / District Name", placeholder:"Enter district or entity name..." },
@@ -1442,6 +1466,7 @@ function C2BudgetModal({ token, onClose }) {
       if (searchBy === "ben")  params.set("ben", query.trim());
       else                     params.set("search", query.trim());
       if (stateFilter !== "ALL") params.set("state", stateFilter);
+      if (cycle) params.set("cycle", cycle);
       const res  = await fetch(`${API_URL}/api/c2-budget?${params}`, { headers:{ Authorization:`Bearer ${token}` } });
       const json = await res.json();
       if (json.status === "success") {
@@ -1503,7 +1528,7 @@ function C2BudgetModal({ token, onClose }) {
           <div style={{ display:"flex", alignItems:"center", gap:12 }}>
             <div style={{ width:6, height:6, borderRadius:"50%", background:"#f0b429", boxShadow:"0 0 8px rgba(240,180,41,0.9)" }}/>
             <span style={{ fontFamily:"'Aldrich',sans-serif", fontSize:11, letterSpacing:2.5, color:"#f0b429" }}>C2 BUDGET LOOKUP</span>
-            <span style={{ fontSize:7, letterSpacing:1.5, color:"rgba(232,228,240,0.25)" }}>· LIVE · USAC OPEN DATA</span>
+            <span style={{ fontSize:7, letterSpacing:1.5, color:"rgba(232,228,240,0.25)" }}>· LIVE · USAC OPEN DATA · {cycle}</span>
           </div>
           <button onClick={onClose} style={{ background:"transparent", border:"1px solid rgba(232,228,240,0.15)", color:"rgba(232,228,240,0.4)", cursor:"pointer", fontFamily:"'DM Mono',monospace", fontSize:8, padding:"4px 10px", letterSpacing:1 }}>✕ CLOSE</button>
         </div>
