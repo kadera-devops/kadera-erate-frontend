@@ -890,6 +890,209 @@ function CompetitiveIntelModal({ token, onClose }) {
 
 
 
+// ── C2 Budget Modal ────────────────────────────────────────────────────────────
+const C2_STATES = ["TX","CA","NY","FL","IL","PA","OH","GA","NC","MI","WA","AZ","CO","VA","MA","TN","IN","MO","WI","MN","OR","KY","OK","NV","CT","UT","AR","MS","KS","NM","NE","ID","WV","HI","NH","ME","RI","MT","DE","SD","ND","AK","VT","WY"];
+
+function C2BudgetModal({ token, onClose }) {
+  const [searchBy, setSearchBy]   = useState("name");
+  const [query, setQuery]         = useState("");
+  const [stateFilter, setStateFilter] = useState("TX");
+  const [results, setResults]     = useState([]);
+  const [loading, setLoading]     = useState(false);
+  const [searched, setSearched]   = useState(false);
+  const [error, setError]         = useState("");
+  const [rawFields, setRawFields] = useState([]);
+  const [expanded, setExpanded]   = useState(null);
+
+  const searchByOptions = [
+    { key:"name", label:"Entity / District Name", placeholder:"Enter district or entity name..." },
+    { key:"ben",  label:"BEN",                    placeholder:"Enter BEN entity number..." },
+  ];
+
+  async function doSearch() {
+    if (!query.trim()) return;
+    setLoading(true);
+    setSearched(true);
+    setError("");
+    setExpanded(null);
+    try {
+      const params = new URLSearchParams({ limit: 50 });
+      if (searchBy === "ben")  params.set("ben", query.trim());
+      else                     params.set("search", query.trim());
+      if (stateFilter !== "ALL") params.set("state", stateFilter);
+      const res  = await fetch(`${API_URL}/api/c2-budget?${params}`, { headers:{ Authorization:`Bearer ${token}` } });
+      const json = await res.json();
+      if (json.status === "success") {
+        setResults(json.data || []);
+        if (json.fields) setRawFields(json.fields);
+      } else {
+        setError(json.message || "Search failed");
+        setResults([]);
+      }
+    } catch { setError("Connection error — check backend"); setResults([]); }
+    setLoading(false);
+  }
+
+  function handleKey(e) { if (e.key === "Enter") doSearch(); }
+
+  function fmt(val) {
+    if (val === null || val === undefined || val === 0) return "—";
+    return `$${Number(val).toLocaleString(undefined, { minimumFractionDigits:2, maximumFractionDigits:2 })}`;
+  }
+
+  function BudgetBar({ total, committed, disbursed }) {
+    if (!total) return null;
+    const committedPct  = Math.min(100, Math.round(((committed||0) / total) * 100));
+    const disbursedPct  = Math.min(committedPct, Math.round(((disbursed||0) / total) * 100));
+    const remainingPct  = 100 - committedPct;
+    return (
+      <div style={{ marginTop:6 }}>
+        <div style={{ height:6, background:"rgba(255,255,255,0.06)", borderRadius:99, overflow:"hidden", display:"flex" }}>
+          <div style={{ width:`${disbursedPct}%`, height:"100%", background:"#22c97a", borderRadius:"99px 0 0 99px" }}/>
+          <div style={{ width:`${committedPct - disbursedPct}%`, height:"100%", background:"rgba(240,180,41,0.7)" }}/>
+          <div style={{ width:`${remainingPct}%`, height:"100%", background:"rgba(138,99,210,0.25)", borderRadius:"0 99px 99px 0" }}/>
+        </div>
+        <div style={{ display:"flex", gap:12, marginTop:5 }}>
+          <div style={{ display:"flex", alignItems:"center", gap:4 }}>
+            <div style={{ width:6, height:6, borderRadius:"50%", background:"#22c97a", flexShrink:0 }}/>
+            <span style={{ fontSize:6.5, color:"rgba(232,228,240,0.4)" }}>Disbursed</span>
+          </div>
+          <div style={{ display:"flex", alignItems:"center", gap:4 }}>
+            <div style={{ width:6, height:6, borderRadius:"50%", background:"rgba(240,180,41,0.7)", flexShrink:0 }}/>
+            <span style={{ fontSize:6.5, color:"rgba(232,228,240,0.4)" }}>Committed</span>
+          </div>
+          <div style={{ display:"flex", alignItems:"center", gap:4 }}>
+            <div style={{ width:6, height:6, borderRadius:"50%", background:"rgba(138,99,210,0.4)", flexShrink:0 }}/>
+            <span style={{ fontSize:6.5, color:"rgba(232,228,240,0.4)" }}>Remaining</span>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ position:"fixed", inset:0, background:"rgba(5,5,13,0.9)", display:"flex", alignItems:"center", justifyContent:"center", zIndex:300 }}
+      onClick={e => e.target === e.currentTarget && onClose()}>
+      <div style={{ background:"#07061a", border:"1px solid rgba(240,180,41,0.35)", clipPath:"polygon(0 0,calc(100% - 18px) 0,100% 18px,100% 100%,18px 100%,0 calc(100% - 18px))", width:"min(920px, 96vw)", maxHeight:"88vh", display:"flex", flexDirection:"column", position:"relative" }}>
+        <div style={{ position:"absolute", top:0, left:"10%", right:"10%", height:1, background:"linear-gradient(90deg,transparent,rgba(240,180,41,0.5),transparent)" }}/>
+
+        {/* Header */}
+        <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"16px 22px", borderBottom:"1px solid rgba(240,180,41,0.12)", flexShrink:0 }}>
+          <div style={{ display:"flex", alignItems:"center", gap:12 }}>
+            <div style={{ width:6, height:6, borderRadius:"50%", background:"#f0b429", boxShadow:"0 0 8px rgba(240,180,41,0.9)" }}/>
+            <span style={{ fontFamily:"'Aldrich',sans-serif", fontSize:11, letterSpacing:2.5, color:"#f0b429" }}>C2 BUDGET LOOKUP</span>
+            <span style={{ fontSize:7, letterSpacing:1.5, color:"rgba(232,228,240,0.25)" }}>· LIVE · USAC OPEN DATA</span>
+          </div>
+          <button onClick={onClose} style={{ background:"transparent", border:"1px solid rgba(232,228,240,0.15)", color:"rgba(232,228,240,0.4)", cursor:"pointer", fontFamily:"'DM Mono',monospace", fontSize:8, padding:"4px 10px", letterSpacing:1 }}>✕ CLOSE</button>
+        </div>
+
+        {/* Search bar */}
+        <div style={{ padding:"14px 22px", borderBottom:"1px solid rgba(240,180,41,0.08)", display:"flex", gap:8, alignItems:"center", flexWrap:"wrap", flexShrink:0 }}>
+          {/* Search by toggle */}
+          <div style={{ display:"flex", gap:4 }}>
+            {searchByOptions.map(o => (
+              <button key={o.key} onClick={() => setSearchBy(o.key)}
+                style={{ padding:"4px 12px", fontFamily:"'DM Mono',monospace", fontSize:7, letterSpacing:1.5, border:`1px solid ${searchBy===o.key ? "rgba(240,180,41,0.6)" : "rgba(240,180,41,0.15)"}`, background: searchBy===o.key ? "rgba(240,180,41,0.1)" : "transparent", color: searchBy===o.key ? "#f0b429" : "rgba(232,228,240,0.35)", cursor:"pointer", transition:"all 0.15s" }}>
+                {o.label}
+              </button>
+            ))}
+          </div>
+          {/* State dropdown */}
+          <select value={stateFilter} onChange={e => setStateFilter(e.target.value)}
+            style={{ background:"rgba(255,255,255,0.03)", border:"1px solid rgba(240,180,41,0.2)", color:"#e8e4f0", fontFamily:"'DM Mono',monospace", fontSize:8, padding:"6px 8px", outline:"none" }}>
+            <option value="ALL">ALL STATES</option>
+            {C2_STATES.map(s => <option key={s} value={s} style={{ background:"#0a0814" }}>{s}</option>)}
+          </select>
+          {/* Query input */}
+          <input value={query} onChange={e => setQuery(e.target.value)} onKeyDown={handleKey}
+            placeholder={searchByOptions.find(o => o.key === searchBy)?.placeholder}
+            style={{ flex:1, minWidth:220, background:"rgba(255,255,255,0.03)", border:"1px solid rgba(240,180,41,0.25)", outline:"none", fontFamily:"'DM Mono',monospace", fontSize:9, color:"#e8e4f0", padding:"7px 12px" }}/>
+          <button onClick={doSearch}
+            style={{ padding:"7px 18px", fontFamily:"'DM Mono',monospace", fontSize:8, letterSpacing:2, border:"1px solid rgba(240,180,41,0.5)", background:"rgba(240,180,41,0.1)", color:"#f0b429", cursor:"pointer", whiteSpace:"nowrap" }}>
+            SEARCH →
+          </button>
+        </div>
+
+        {/* Results */}
+        <div style={{ flex:1, overflowY:"auto" }}>
+          {!searched && (
+            <div style={{ padding:"48px 22px", textAlign:"center" }}>
+              <div style={{ fontSize:9, color:"rgba(240,180,41,0.3)", letterSpacing:2, marginBottom:8 }}>SEARCH FOR AN ENTITY ABOVE</div>
+              <div style={{ fontSize:7.5, color:"rgba(232,228,240,0.2)" }}>Returns live C2 budget data directly from USAC · Shows total budget, committed, disbursed, and remaining amounts</div>
+            </div>
+          )}
+          {searched && loading && <div style={{ padding:"48px", textAlign:"center", fontSize:9, color:"rgba(240,180,41,0.4)", letterSpacing:2 }}>FETCHING FROM USAC...</div>}
+          {searched && !loading && error && <div style={{ padding:"24px 22px", fontSize:8, color:"#f0614a" }}>⚠ {error}</div>}
+          {searched && !loading && !error && results.length === 0 && (
+            <div style={{ padding:"48px", textAlign:"center", fontSize:9, color:"rgba(232,228,240,0.25)", letterSpacing:2 }}>NO RESULTS FOUND</div>
+          )}
+          {searched && !loading && results.length > 0 && (
+            <>
+              {/* Table header */}
+              <div style={{ display:"grid", gridTemplateColumns:"1fr 60px 80px 130px 130px 130px 120px", padding:"8px 22px", borderBottom:"1px solid rgba(240,180,41,0.15)", background:"rgba(240,180,41,0.04)", position:"sticky", top:0 }}>
+                {["ENTITY","STATE","BEN","TOTAL BUDGET","COMMITTED","DISBURSED","REMAINING"].map((h,i) => (
+                  <div key={i} style={{ fontSize:6.5, letterSpacing:1.5, color:"rgba(240,180,41,0.55)", fontFamily:"'DM Mono',monospace" }}>{h}</div>
+                ))}
+              </div>
+
+              {results.map((r, i) => {
+                const remaining    = r.remaining || (r.total_budget - (r.committed||0)) || null;
+                const remainingPct = r.total_budget ? Math.round(((remaining||0) / r.total_budget) * 100) : null;
+                const isExpanded   = expanded === i;
+                const rawKeys      = rawFields.filter(k => !["billed_entity_name","billed_entity_number","state","entity_type"].includes(k));
+                return (
+                  <div key={i} style={{ borderBottom:"1px solid rgba(240,180,41,0.07)" }}>
+                    {/* Main row */}
+                    <div onClick={() => setExpanded(isExpanded ? null : i)}
+                      style={{ display:"grid", gridTemplateColumns:"1fr 60px 80px 130px 130px 130px 120px", padding:"10px 22px", alignItems:"center", cursor:"pointer", transition:"background 0.15s", background: isExpanded ? "rgba(240,180,41,0.05)" : "transparent" }}
+                      onMouseEnter={e => { if (!isExpanded) e.currentTarget.style.background="rgba(240,180,41,0.03)"; }}
+                      onMouseLeave={e => { if (!isExpanded) e.currentTarget.style.background="transparent"; }}>
+                      <div>
+                        <div style={{ fontSize:8, color:"rgba(232,228,240,0.85)", fontWeight:500 }}>{r.entity_name || "—"}</div>
+                        {r.entity_type && <div style={{ fontSize:6.5, color:"rgba(232,228,240,0.3)", marginTop:2 }}>{r.entity_type}</div>}
+                      </div>
+                      <div style={{ fontSize:8, color:"rgba(232,228,240,0.45)" }}>{r.state || "—"}</div>
+                      <div style={{ fontSize:8, color:"#3b9eff" }}>{r.ben || "—"}</div>
+                      <div style={{ fontSize:8, color:"rgba(232,228,240,0.6)" }}>{fmt(r.total_budget)}</div>
+                      <div style={{ fontSize:8, color:"#f0b429" }}>{fmt(r.committed)}</div>
+                      <div style={{ fontSize:8, color:"#22c97a" }}>{fmt(r.disbursed)}</div>
+                      <div>
+                        <div style={{ fontSize:8, color: remainingPct > 50 ? "#22c97a" : remainingPct > 20 ? "#f0b429" : "#f0614a", fontWeight:500 }}>{fmt(remaining)}</div>
+                        {remainingPct !== null && <div style={{ fontSize:6.5, color:"rgba(232,228,240,0.3)", marginTop:1 }}>{remainingPct}% left</div>}
+                      </div>
+                    </div>
+
+                    {/* Expanded detail */}
+                    {isExpanded && (
+                      <div style={{ padding:"12px 22px 16px", background:"rgba(240,180,41,0.03)", borderTop:"1px solid rgba(240,180,41,0.08)" }}>
+                        <BudgetBar total={r.total_budget} committed={r.committed} disbursed={r.disbursed} />
+                        {rawKeys.length > 0 && (
+                          <div style={{ marginTop:14, display:"grid", gridTemplateColumns:"repeat(auto-fill, minmax(200px, 1fr))", gap:8 }}>
+                            {rawKeys.map(k => (
+                              <div key={k} style={{ background:"rgba(255,255,255,0.02)", border:"1px solid rgba(255,255,255,0.05)", padding:"7px 10px", borderRadius:4 }}>
+                                <div style={{ fontSize:6, letterSpacing:1.5, color:"rgba(232,228,240,0.25)", textTransform:"uppercase", marginBottom:3 }}>{k.replace(/_/g," ")}</div>
+                                <div style={{ fontSize:8, color:"rgba(232,228,240,0.7)" }}>{r.raw[k] !== null && r.raw[k] !== undefined ? String(r.raw[k]) : "—"}</div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+              <div style={{ padding:"10px 22px", fontSize:7, color:"rgba(232,228,240,0.2)", letterSpacing:1.5, borderTop:"1px solid rgba(240,180,41,0.08)" }}>
+                {results.length} RESULT{results.length !== 1 ? "S" : ""} · LIVE DATA FROM USAC · Click a row to expand all fields
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+
 // ── FRN Status Modal ──────────────────────────────────────────────────────────
 function FRNStatusModal({ token, onClose }) {
   const [query, setQuery]         = useState("");
@@ -1176,6 +1379,7 @@ export default function Dashboard({ session }) {
   const [tagCount, setTagCount] = useState(0);
   const [frnOpen, setFrnOpen] = useState(false);
   const [ciOpen, setCiOpen]   = useState(false);
+  const [c2Open, setC2Open]     = useState(false);
 
   const refreshTagCount = useCallback(async (t) => {
     if (!t) return;
@@ -1211,6 +1415,7 @@ export default function Dashboard({ session }) {
       <div style={{ minHeight:"100vh", background:"#05050d", position:"relative" }}>
         {frnOpen && token && <FRNStatusModal token={token} onClose={() => setFrnOpen(false)} />}
         {ciOpen && token && <CompetitiveIntelModal token={token} onClose={() => setCiOpen(false)} />}
+        {c2Open && token && <C2BudgetModal token={token} onClose={() => setC2Open(false)} />}
         <div style={{ position:"fixed", inset:0, background:"radial-gradient(ellipse 70% 50% at 15% 15%, rgba(138,99,210,0.09) 0%, transparent 60%)", pointerEvents:"none", zIndex:0 }}/>
         <div style={{ position:"fixed", inset:0, backgroundImage:"radial-gradient(circle, rgba(138,99,210,0.8) 1px, transparent 1px)", backgroundSize:"28px 28px", opacity:0.035, pointerEvents:"none", zIndex:0 }}/>
 
@@ -1274,7 +1479,7 @@ export default function Dashboard({ session }) {
                     <PTitle>{'// E-RATE '}<span style={{ color:"#a07ee0" }}>QUICK ACCESS TOOLS</span></PTitle>
                     <div style={{ padding:"12px 14px" }}>
                       <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8 }}>
-                        <ToolBtn href="https://www.usac.org/e-rate/applicant-process/before-you-begin/budget-tool/"          color="purple" icon="💰" name="E-RATE C2 BUDGET"     desc="Calculate and track your Category 2 five-year budget cycle."/>
+                        <ToolBtn onClick={() => setC2Open(true)} color="gold" icon="💰" name="E-RATE C2 BUDGET" desc="Look up Category 2 budget, committed, disbursed, and remaining amounts by entity or BEN."/>
                         <ToolBtn href="https://opendata.usac.org/E-rate/E-Rate-Entity-Search/qe3b-nkqm"                       color="blue"   icon="🔍" name="ENTITY SEARCH"        desc="Search schools, libraries, and providers by name or BEN."/>
                         <ToolBtn href="https://www.usac.org/e-rate/tools/window-status/"                                      color="gold"   icon="📅" name="WINDOW REPORTING"     desc="Check filing windows, open/close dates, and deadlines."/>
                         <ToolBtn onClick={() => setFrnOpen(true)}                                                              color="blue"   icon="📋" name="FRN STATUS FY2016+"   desc="Search FRN status from local USAC commitment data."/>
