@@ -1227,15 +1227,6 @@ function EntitySearchModal({ token, onClose }) {
               </button>
             ))}
           </div>
-          {/* Budget cycle toggle */}
-          <div style={{ display:"flex", gap:4 }}>
-            {["FY2026-2030","FY2021-2025"].map(c => (
-              <button key={c} onClick={() => setCycle(c)}
-                style={{ padding:"4px 10px", fontFamily:"'DM Mono',monospace", fontSize:7, letterSpacing:1, border:`1px solid ${cycle===c ? "rgba(240,180,41,0.6)" : "rgba(240,180,41,0.15)"}`, background: cycle===c ? "rgba(240,180,41,0.1)" : "transparent", color: cycle===c ? "#f0b429" : "rgba(232,228,240,0.35)", cursor:"pointer" }}>
-                {c}
-              </button>
-            ))}
-          </div>
           {/* State */}
           <select value={stateFilter} onChange={e => setStateFilter(e.target.value)}
             style={{ background:"rgba(255,255,255,0.03)", border:"1px solid rgba(59,158,255,0.2)", color:"#e8e4f0", fontFamily:"'DM Mono',monospace", fontSize:8, padding:"6px 8px", outline:"none" }}>
@@ -1541,6 +1532,15 @@ function C2BudgetModal({ token, onClose }) {
               <button key={o.key} onClick={() => setSearchBy(o.key)}
                 style={{ padding:"4px 12px", fontFamily:"'DM Mono',monospace", fontSize:7, letterSpacing:1.5, border:`1px solid ${searchBy===o.key ? "rgba(240,180,41,0.6)" : "rgba(240,180,41,0.15)"}`, background: searchBy===o.key ? "rgba(240,180,41,0.1)" : "transparent", color: searchBy===o.key ? "#f0b429" : "rgba(232,228,240,0.35)", cursor:"pointer", transition:"all 0.15s" }}>
                 {o.label}
+              </button>
+            ))}
+          </div>
+          {/* Budget cycle toggle */}
+          <div style={{ display:"flex", gap:4 }}>
+            {["FY2026-2030","FY2021-2025"].map(c => (
+              <button key={c} onClick={() => setCycle(c)}
+                style={{ padding:"4px 10px", fontFamily:"'DM Mono',monospace", fontSize:7, letterSpacing:1, border:`1px solid ${cycle===c ? "rgba(240,180,41,0.6)" : "rgba(240,180,41,0.15)"}`, background: cycle===c ? "rgba(240,180,41,0.1)" : "transparent", color: cycle===c ? "#f0b429" : "rgba(232,228,240,0.35)", cursor:"pointer" }}>
+                {c}
               </button>
             ))}
           </div>
