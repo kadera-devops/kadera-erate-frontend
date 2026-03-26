@@ -890,6 +890,48 @@ function CompetitiveIntelModal({ token, onClose }) {
 
 
 
+function Detail471Fields({ data: d }) {
+  const fields = [
+    { label:"Application #",         value: d.application_number },
+    { label:"Organization",          value: d.organization_name },
+    { label:"Funding Year",          value: d.funding_year ? `FY${d.funding_year}` : null },
+    { label:"State",                 value: d.org_state },
+    { label:"Category",              value: d.chosen_category_of_service },
+    { label:"471 Status",            value: d.form_471_status_name },
+    { label:"Funding Requested",     value: d.funding_request_amount ? `$${Number(d.funding_request_amount).toLocaleString()}` : null },
+    { label:"Pre-Discount Eligible", value: d.pre_discount_eligible_amount ? `$${Number(d.pre_discount_eligible_amount).toLocaleString()}` : null },
+    { label:"C1 Discount",           value: d.c1_discount ? `${Math.round(parseFloat(d.c1_discount)*100)}%` : null },
+    { label:"C2 Discount",           value: d.c2_discount ? `${Math.round(parseFloat(d.c2_discount)*100)}%` : null },
+    { label:"Contact",               value: [d.cnct_first_name, d.cnct_last_name].filter(Boolean).join(" ") || null },
+    { label:"Contact Email",         value: d.cnct_email },
+    { label:"Contact Phone",         value: d.cnct_phone },
+    { label:"Certified",             value: d.certified_datetime ? new Date(d.certified_datetime).toLocaleDateString() : null },
+  ];
+  return (
+    <>
+      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8, marginBottom:14 }}>
+        {fields.filter(f => f.value).map(f => (
+          <div key={f.label} style={{ background:"rgba(138,99,210,0.04)", border:"1px solid rgba(138,99,210,0.12)", padding:"8px 10px", borderRadius:4 }}>
+            <div style={{ fontSize:6, letterSpacing:1.5, color:"rgba(138,99,210,0.45)", textTransform:"uppercase", marginBottom:3 }}>{f.label}</div>
+            <div style={{ fontSize:8, color:"rgba(232,228,240,0.8)" }}>{f.value}</div>
+          </div>
+        ))}
+      </div>
+      {d.application_number && (
+        <a href={`https://legacy.fundsforlearning.com/471/${d.application_number}`} target="_blank" rel="noreferrer"
+          style={{ display:"flex", alignItems:"center", justifyContent:"center", gap:8, padding:"8px", border:"1px solid rgba(138,99,210,0.35)", background:"rgba(138,99,210,0.07)", color:"#a07ee0", textDecoration:"none", fontFamily:"'DM Mono',monospace", fontSize:8, letterSpacing:1.5 }}
+          onMouseEnter={e => { e.currentTarget.style.background="rgba(138,99,210,0.15)"; }}
+          onMouseLeave={e => { e.currentTarget.style.background="rgba(138,99,210,0.07)"; }}>
+          View on FundsForLearning →
+        </a>
+      )}
+      <div style={{ fontSize:6.5, color:"rgba(232,228,240,0.2)", textAlign:"center", marginTop:8, letterSpacing:1 }}>
+        SOURCE: {d.source === "local_db" ? "LOCAL DB (FY2026)" : "USAC LIVE API"}
+      </div>
+    </>
+  );
+}
+
 // ── Entity Search Modal ────────────────────────────────────────────────────────
 const ENTITY_STATES = ["TX","CA","NY","FL","IL","PA","OH","GA","NC","MI","WA","AZ","CO","VA","MA","TN","IN","MO","WI","MN","OR","KY","OK","NV","CT","UT","AR","MS","KS","NM","NE","ID","WV","HI","NH","ME","RI","MT","DE","SD","ND","AK","VT","WY"];
 const ENTITY_TYPES  = ["","School","Library","School District","Library System","Non-Instructional Facility (Nif)","Consortium"];
@@ -1184,47 +1226,9 @@ function EntitySearchModal({ token, onClose }) {
           <div style={{ flex:1, overflowY:"auto", padding:"16px 18px" }}>
             {detail471.loading && <div style={{ textAlign:"center", padding:"32px", fontSize:9, color:"rgba(138,99,210,0.4)", letterSpacing:2 }}>FETCHING 471 DATA...</div>}
             {!detail471.loading && !detail471.data && <div style={{ textAlign:"center", padding:"32px", fontSize:8, color:"rgba(232,228,240,0.25)" }}>No Form 471 found for this funding year</div>}
-            {!detail471.loading && detail471.data && (() => {
-              const d = detail471.data;
-              const fields = [
-                { label:"Application #",       value: d.application_number },
-                { label:"Organization",        value: d.organization_name },
-                { label:"Funding Year",        value: d.funding_year ? `FY${d.funding_year}` : null },
-                { label:"State",               value: d.org_state },
-                { label:"Category",            value: d.chosen_category_of_service },
-                { label:"471 Status",          value: d.form_471_status_name },
-                { label:"Funding Requested",   value: d.funding_request_amount ? `$${Number(d.funding_request_amount).toLocaleString()}` : null },
-                { label:"Pre-Discount Eligible", value: d.pre_discount_eligible_amount ? `$${Number(d.pre_discount_eligible_amount).toLocaleString()}` : null },
-                { label:"C1 Discount",         value: d.c1_discount ? `${Math.round(parseFloat(d.c1_discount)*100)}%` : null },
-                { label:"C2 Discount",         value: d.c2_discount ? `${Math.round(parseFloat(d.c2_discount)*100)}%` : null },
-                { label:"Contact",             value: [d.cnct_first_name, d.cnct_last_name].filter(Boolean).join(" ") || null },
-                { label:"Contact Email",       value: d.cnct_email },
-                { label:"Contact Phone",       value: d.cnct_phone },
-                { label:"Certified",           value: d.certified_datetime ? new Date(d.certified_datetime).toLocaleDateString() : null },
-              ];
-              return (
-                <>
-                  <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8, marginBottom:14 }}>
-                    {fields.filter(f => f.value).map(f => (
-                      <div key={f.label} style={{ background:"rgba(138,99,210,0.04)", border:"1px solid rgba(138,99,210,0.12)", padding:"8px 10px", borderRadius:4 }}>
-                        <div style={{ fontSize:6, letterSpacing:1.5, color:"rgba(138,99,210,0.45)", textTransform:"uppercase", marginBottom:3 }}>{f.label}</div>
-                        <div style={{ fontSize:8, color:"rgba(232,228,240,0.8)" }}>{f.value}</div>
-                      </div>
-                    ))}
-                  </div>
-                  {d.application_number && (
-                    <a href={`https://legacy.fundsforlearning.com/471/${d.application_number}`} target="_blank" rel="noreferrer"
-                      style={{ display:"flex", alignItems:"center", justifyContent:"center", gap:8, padding:"8px", border:"1px solid rgba(138,99,210,0.35)", background:"rgba(138,99,210,0.07)", color:"#a07ee0", textDecoration:"none", fontFamily:"'DM Mono',monospace", fontSize:8, letterSpacing:1.5 }}
-                      onMouseEnter={e => { e.currentTarget.style.background="rgba(138,99,210,0.15)"; }}
-                      onMouseLeave={e => { e.currentTarget.style.background="rgba(138,99,210,0.07)"; }}>
-                      View on FundsForLearning →
-                    </a>
-                  )}
-                  <div style={{ fontSize:6.5, color:"rgba(232,228,240,0.2)", textAlign:"center", marginTop:8, letterSpacing:1 }}>
-                    SOURCE: {d.source === "local_db" ? "LOCAL DB (FY2026)" : "USAC LIVE API"}
-                  </div>
-                </>
-            })()}
+            {!detail471.loading && detail471.data && (
+              <Detail471Fields data={detail471.data} />
+            )}
           </div>
         </div>
       </div>
