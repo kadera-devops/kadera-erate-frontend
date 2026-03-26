@@ -904,6 +904,19 @@ function EntitySearchModal({ token, onClose }) {
   const [searched, setSearched]     = useState(false);
   const [error, setError]           = useState("");
   const [expanded, setExpanded]     = useState(null);
+  const [history, setHistory]       = useState({}); // keyed by entity_number
+  const [historyLoading, setHistoryLoading] = useState({});
+
+  async function loadHistory(ben) {
+    if (history[ben] || historyLoading[ben]) return;
+    setHistoryLoading(prev => ({ ...prev, [ben]: true }));
+    try {
+      const res  = await fetch(`${API_URL}/api/entity-history?ben=${encodeURIComponent(ben)}`, { headers:{ Authorization:`Bearer ${token}` } });
+      const json = await res.json();
+      if (json.status === "success") setHistory(prev => ({ ...prev, [ben]: json }));
+    } catch {}
+    setHistoryLoading(prev => ({ ...prev, [ben]: false }));
+  }
 
   async function doSearch() {
     if (!query.trim()) return;
@@ -1035,34 +1048,94 @@ function EntitySearchModal({ token, onClose }) {
 
                     {/* Expanded detail */}
                     {isExpanded && (
-                      <div style={{ padding:"14px 22px 16px", background:"rgba(59,158,255,0.03)", borderTop:"1px solid rgba(59,158,255,0.08)" }}>
-                        <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill, minmax(200px, 1fr))", gap:10, marginBottom:12 }}>
-                          {[
-                            { label:"Full Address", value:`${r.address || ""} ${r.city || ""}, ${r.state || ""} ${r.zip || ""}`.trim() },
-                            { label:"County", value:r.county },
-                            { label:"Phone", value:r.phone },
-                            { label:"BEN", value:r.entity_number },
-                            { label:"Entity Type", value:r.entity_type },
-                            { label:"Last Updated", value:r.last_updated ? new Date(r.last_updated).toLocaleDateString() : null },
-                          ].map(({ label, value }) => value && (
-                            <div key={label} style={{ background:"rgba(255,255,255,0.02)", border:"1px solid rgba(59,158,255,0.1)", padding:"8px 10px", borderRadius:4 }}>
-                              <div style={{ fontSize:6, letterSpacing:1.5, color:"rgba(59,158,255,0.4)", textTransform:"uppercase", marginBottom:3 }}>{label}</div>
-                              <div style={{ fontSize:8, color:"rgba(232,228,240,0.75)" }}>{value}</div>
-                            </div>
-                          ))}
+                      <div style={{ background:"rgba(59,158,255,0.03)", borderTop:"1px solid rgba(59,158,255,0.08)" }}>
+                        {/* Entity details */}
+                        <div style={{ padding:"14px 22px 12px" }}>
+                          <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill, minmax(200px, 1fr))", gap:10, marginBottom:12 }}>
+                            {[
+                              { label:"Full Address", value:`${r.address || ""} ${r.city || ""}, ${r.state || ""} ${r.zip || ""}`.trim() },
+                              { label:"County", value:r.county },
+                              { label:"Phone", value:r.phone },
+                              { label:"BEN", value:r.entity_number },
+                              { label:"Entity Type", value:r.entity_type },
+                              { label:"Last Updated", value:r.last_updated ? new Date(r.last_updated).toLocaleDateString() : null },
+                            ].map(({ label, value }) => value && (
+                              <div key={label} style={{ background:"rgba(255,255,255,0.02)", border:"1px solid rgba(59,158,255,0.1)", padding:"8px 10px", borderRadius:4 }}>
+                                <div style={{ fontSize:6, letterSpacing:1.5, color:"rgba(59,158,255,0.4)", textTransform:"uppercase", marginBottom:3 }}>{label}</div>
+                                <div style={{ fontSize:8, color:"rgba(232,228,240,0.75)" }}>{value}</div>
+                              </div>
+                            ))}
+                          </div>
+                          {/* Active flags */}
+                          {(() => {
+                            const flags = ["public_school","private_school","charter_school","tribal_school","public_library","private_library","main_branch","head_start","pre_k","bie","public_school_district","charter_school_district","non_profit_purchasing_group"];
+                            const active = flags.filter(f => r.raw[f] === "Yes");
+                            if (!active.length) return null;
+                            return (
+                              <div style={{ display:"flex", flexWrap:"wrap", gap:5, marginBottom:12 }}>
+                                {active.map(f => (
+                                  <span key={f} style={{ fontSize:6.5, letterSpacing:1, padding:"2px 8px", border:"1px solid rgba(59,158,255,0.25)", background:"rgba(59,158,255,0.06)", color:"#3b9eff", borderRadius:2 }}>
+                                    {f.replace(/_/g," ").toUpperCase()}
+                                  </span>
+                                ))}
+                              </div>
+                            );
+                          })()}
+                          {/* E-Rate History button */}
+                          {r.entity_number && (
+                            <button onClick={() => loadHistory(r.entity_number)}
+                              style={{ padding:"6px 16px", fontFamily:"'DM Mono',monospace", fontSize:7.5, letterSpacing:1.5, border:"1px solid rgba(240,180,41,0.4)", background:"rgba(240,180,41,0.08)", color:"#f0b429", cursor:"pointer", transition:"all 0.15s" }}>
+                              {historyLoading[r.entity_number] ? "LOADING..." : history[r.entity_number] ? "↑ HIDE E-RATE HISTORY" : "↓ VIEW E-RATE HISTORY"}
+                            </button>
+                          )}
                         </div>
-                        {/* Active flags */}
-                        {(() => {
-                          const flags = ["public_school","private_school","charter_school","tribal_school","public_library","private_library","main_branch","head_start","pre_k","bie","public_school_district","charter_school_district","non_profit_purchasing_group"];
-                          const active = flags.filter(f => r.raw[f] === "Yes");
-                          if (!active.length) return null;
+
+                        {/* E-Rate history panel */}
+                        {history[r.entity_number] && (() => {
+                          const h = history[r.entity_number];
+                          const totalCommitted = h.data.reduce((sum, d) => sum + (d.commitment||0), 0);
                           return (
-                            <div style={{ display:"flex", flexWrap:"wrap", gap:5 }}>
-                              {active.map(f => (
-                                <span key={f} style={{ fontSize:6.5, letterSpacing:1, padding:"2px 8px", border:"1px solid rgba(59,158,255,0.25)", background:"rgba(59,158,255,0.06)", color:"#3b9eff", borderRadius:2 }}>
-                                  {f.replace(/_/g," ").toUpperCase()}
-                                </span>
-                              ))}
+                            <div style={{ borderTop:"1px solid rgba(240,180,41,0.12)", padding:"14px 22px 16px" }}>
+                              {/* Year summary strip */}
+                              <div style={{ display:"flex", gap:6, flexWrap:"wrap", marginBottom:14 }}>
+                                {h.summary.map(y => (
+                                  <div key={y.year} style={{ background:"rgba(240,180,41,0.06)", border:"1px solid rgba(240,180,41,0.2)", borderRadius:4, padding:"6px 10px", textAlign:"center" }}>
+                                    <div style={{ fontFamily:"'Aldrich',sans-serif", fontSize:11, color:"#f0b429", lineHeight:1 }}>FY{y.year}</div>
+                                    <div style={{ fontSize:6.5, color:"rgba(240,180,41,0.6)", marginTop:3 }}>${(y.total/1000).toFixed(0)}k · {y.count} FRN{y.count!==1?"s":""}</div>
+                                  </div>
+                                ))}
+                                <div style={{ background:"rgba(34,201,122,0.06)", border:"1px solid rgba(34,201,122,0.2)", borderRadius:4, padding:"6px 10px", textAlign:"center", marginLeft:"auto" }}>
+                                  <div style={{ fontFamily:"'Aldrich',sans-serif", fontSize:11, color:"#22c97a", lineHeight:1 }}>${Math.round(totalCommitted/1000)}k</div>
+                                  <div style={{ fontSize:6.5, color:"rgba(34,201,122,0.6)", marginTop:3 }}>TOTAL COMMITTED</div>
+                                </div>
+                              </div>
+
+                              {/* Commitment rows */}
+                              {h.data.length === 0 ? (
+                                <div style={{ fontSize:8, color:"rgba(232,228,240,0.25)", textAlign:"center", padding:"12px" }}>No commitment history found</div>
+                              ) : (
+                                <>
+                                  <div style={{ display:"grid", gridTemplateColumns:"70px 1.4fr 1fr 110px 70px", gap:0, padding:"6px 10px", borderBottom:"1px solid rgba(240,180,41,0.15)", background:"rgba(240,180,41,0.04)" }}>
+                                    {["YEAR","SERVICE TYPE","PROVIDER","COMMITTED","DISC %"].map((h,i) => (
+                                      <div key={i} style={{ fontSize:6.5, letterSpacing:1.5, color:"rgba(240,180,41,0.5)", fontFamily:"'DM Mono',monospace" }}>{h}</div>
+                                    ))}
+                                  </div>
+                                  {h.data.map((d, di) => {
+                                    const statusC = (d.frn_status||"").toLowerCase().includes("commit") || (d.frn_status||"").toLowerCase().includes("fund") ? "#22c97a" : (d.frn_status||"").toLowerCase().includes("deny") ? "#f0614a" : "rgba(232,228,240,0.35)";
+                                    return (
+                                      <div key={di} style={{ display:"grid", gridTemplateColumns:"70px 1.4fr 1fr 110px 70px", gap:0, padding:"8px 10px", borderBottom:"1px solid rgba(240,180,41,0.06)", alignItems:"center" }}
+                                        onMouseEnter={e => e.currentTarget.style.background="rgba(240,180,41,0.03)"}
+                                        onMouseLeave={e => e.currentTarget.style.background="transparent"}>
+                                        <div style={{ fontFamily:"'Aldrich',sans-serif", fontSize:9, color:"#f0b429" }}>FY{d.funding_year}</div>
+                                        <div style={{ fontSize:7.5, color:"rgba(232,228,240,0.7)", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", paddingRight:8 }}>{d.service_type || "—"}</div>
+                                        <div style={{ fontSize:7.5, color:"rgba(59,158,255,0.8)", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", paddingRight:8 }}>{d.spin_name || "—"}</div>
+                                        <div style={{ fontSize:8, color:"#22c97a" }}>{d.commitment ? `$${Math.round(d.commitment).toLocaleString()}` : "—"}</div>
+                                        <div style={{ fontSize:8, color:"rgba(232,228,240,0.5)" }}>{d.discount_pct ? `${d.discount_pct}%` : "—"}</div>
+                                      </div>
+                                    );
+                                  })}
+                                </>
+                              )}
                             </div>
                           );
                         })()}
