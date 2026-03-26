@@ -1229,7 +1229,6 @@ function C2BudgetModal({ token, onClose }) {
               </div>
 
               {results.map((r, i) => {
-                const remaining    = r.available;
                 const remainingPct = r.total_budget ? Math.round(((r.available||0) / r.total_budget) * 100) : null;
                 const isExpanded   = expanded === i;
                 const rawKeys      = rawFields.filter(k => !["billed_entity_name","billed_entity_number","state","entity_type"].includes(k));
