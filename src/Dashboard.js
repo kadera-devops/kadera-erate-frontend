@@ -8,9 +8,7 @@ const css = `
   @import url('https://fonts.googleapis.com/css2?family=Aldrich&family=DM+Mono:wght@400;500&display=swap');
   *, *::before, *::after { box-sizing:border-box; margin:0; padding:0; }
   body { background:#05050d; font-family:'DM Mono',monospace; color:#e8e4f0; overflow-x:hidden; }
-  .light-mode { filter: invert(1) hue-rotate(180deg); }
-  .light-mode img, .light-mode video, .light-mode canvas { filter: invert(1) hue-rotate(180deg); }
-  .light-mode .no-invert { filter: invert(1) hue-rotate(180deg); }
+  .scale-ui { zoom: 1.18; }
   ::-webkit-scrollbar { width:2px; } ::-webkit-scrollbar-thumb { background:rgba(138,99,210,0.4); }
   @keyframes spin        { from{transform:rotate(0deg)} to{transform:rotate(360deg)} }
   @keyframes scan        { 0%{top:-2px} 100%{top:100%} }
@@ -1927,7 +1925,6 @@ export default function Dashboard({ session }) {
   const [clock, setClock]     = useState("");
   const [tagCount, setTagCount] = useState(0);
   const [frnOpen, setFrnOpen] = useState(false);
-  const [darkMode, setDarkMode] = useState(false);
   const [ciOpen, setCiOpen]   = useState(false);
   const [c2Open, setC2Open]     = useState(false);
   const [entityOpen, setEntityOpen] = useState(false);
@@ -1964,7 +1961,7 @@ export default function Dashboard({ session }) {
   return (
     <>
       <style>{css}</style>
-      <div className={darkMode ? "" : "light-mode"} style={{ minHeight:"100vh", background:"#05050d", position:"relative" }}>
+      <div className="scale-ui" style={{ minHeight:"100vh", background:"#05050d", position:"relative" }}>
         {frnOpen && token && <FRNStatusModal token={token} onClose={() => setFrnOpen(false)} />}
         {ciOpen && token && <CompetitiveIntelModal token={token} onClose={() => setCiOpen(false)} />}
         {c2Open && token && <C2BudgetModal token={token} onClose={() => setC2Open(false)} />}
@@ -2010,10 +2007,6 @@ export default function Dashboard({ session }) {
                 <div style={{ width:6, height:6, borderRadius:"50%", background:"#a07ee0", animation:"pulse-dot 1.5s infinite" }}/>
                 USAC PORTAL
               </a>
-              <button onClick={() => setDarkMode(p => !p)}
-                style={{ padding:"7px 12px", fontFamily:"'DM Mono',monospace", fontSize:7, letterSpacing:2, border:"1px solid rgba(138,99,210,0.3)", background: darkMode ? "transparent" : "rgba(138,99,210,0.1)", color:"#a07ee0", cursor:"pointer" }}>
-                {darkMode ? "☀ LIGHT" : "☽ DARK"}
-              </button>
               <button onClick={() => signOut()} style={{ padding:"7px 12px", fontFamily:"'DM Mono',monospace", fontSize:7, letterSpacing:2, border:"1px solid rgba(240,97,74,0.3)", background:"transparent", color:"rgba(240,97,74,0.6)", cursor:"pointer" }}>SIGN OUT</button>
             </div>
           </div>
