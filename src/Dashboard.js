@@ -546,6 +546,7 @@ function CompetitiveIntelModal({ token, onClose }) {
   const [providerSortAsc, setProviderSortAsc]     = useState(false);
   const [areaQuery, setAreaQuery]                 = useState("");
   const [areaSvcType, setAreaSvcType]             = useState("c2");
+  const [areaKeyword, setAreaKeyword]             = useState("");
   const [areaResults, setAreaResults]             = useState(null);
   const [areaLoading, setAreaLoading]             = useState(false);
   const [areaView, setAreaView]                   = useState("providers"); // providers | detail
@@ -694,6 +695,7 @@ function CompetitiveIntelModal({ token, onClose }) {
     setAreaResults(null);
     try {
       const params = new URLSearchParams({ area: areaQuery.trim(), service_type: areaSvcType, limit: 200 });
+      if (areaKeyword.trim()) params.set("service_keyword", areaKeyword.trim());
       const res  = await fetch(`${API_URL}/api/service-area-search?${params}`, { headers:{ Authorization:`Bearer ${token}` } });
       const json = await res.json();
       setAreaResults(json.status === "success" ? json : null);
@@ -986,7 +988,10 @@ function CompetitiveIntelModal({ token, onClose }) {
                 </div>
                 <input value={areaQuery} onChange={e => setAreaQuery(e.target.value)} onKeyDown={e => e.key === "Enter" && doAreaSearch()}
                   placeholder="Enter city, district name, or county (e.g. Houston, Garland ISD, Travis County)..."
-                  style={{ flex:1, minWidth:260, background:"rgba(255,255,255,0.03)", border:"1px solid rgba(0,212,255,0.25)", outline:"none", fontFamily:"'DM Mono',monospace", fontSize:9, color:"#e8e4f0", padding:"8px 12px" }}/>
+                  style={{ flex:1, minWidth:220, background:"rgba(255,255,255,0.03)", border:"1px solid rgba(0,212,255,0.25)", outline:"none", fontFamily:"'DM Mono',monospace", fontSize:9, color:"#e8e4f0", padding:"8px 12px" }}/>
+                <input value={areaKeyword} onChange={e => setAreaKeyword(e.target.value)} onKeyDown={e => e.key === "Enter" && doAreaSearch()}
+                  placeholder="Service keyword (e.g. cabling, fiber, wifi)..."
+                  style={{ width:200, background:"rgba(255,255,255,0.03)", border:"1px solid rgba(0,212,255,0.25)", outline:"none", fontFamily:"'DM Mono',monospace", fontSize:9, color:"#e8e4f0", padding:"8px 12px" }}/>
                 <button onClick={doAreaSearch}
                   style={{ padding:"8px 18px", fontFamily:"'DM Mono',monospace", fontSize:8, letterSpacing:2, border:"1px solid rgba(0,212,255,0.5)", background:"rgba(0,212,255,0.08)", color:"#00d4ff", cursor:"pointer", whiteSpace:"nowrap" }}>
                   SEARCH →
