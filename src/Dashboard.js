@@ -8,7 +8,7 @@ const css = `
   @import url('https://fonts.googleapis.com/css2?family=Aldrich&family=DM+Mono:wght@400;500&display=swap');
   *, *::before, *::after { box-sizing:border-box; margin:0; padding:0; }
   body { background:#05050d; font-family:'DM Mono',monospace; color:#e8e4f0; overflow-x:hidden; }
-  .scale-ui { zoom: 1.18; }
+  .scale-ui { zoom: 1.25; }
   ::-webkit-scrollbar { width:2px; } ::-webkit-scrollbar-thumb { background:rgba(138,99,210,0.4); }
   @keyframes spin        { from{transform:rotate(0deg)} to{transform:rotate(360deg)} }
   @keyframes scan        { 0%{top:-2px} 100%{top:100%} }
