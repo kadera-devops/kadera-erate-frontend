@@ -738,12 +738,7 @@ function CompetitiveIntelModal({ token, onClose }) {
               )}
             </div>
           ))}
-          <div style={{ marginLeft:"auto" }}>
-            <button onClick={onClose}
-              style={{ padding:"5px 14px", fontFamily:"'DM Mono',monospace", fontSize:7.5, letterSpacing:1.5, border:"1px solid rgba(240,97,74,0.35)", background:"rgba(240,97,74,0.06)", color:"rgba(240,97,74,0.7)", cursor:"pointer", borderRadius:4 }}>
-              ✕ CLOSE DASHBOARD
-            </button>
-          </div>
+
         </div>
 
         {/* Body */}
