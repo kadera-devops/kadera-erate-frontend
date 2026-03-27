@@ -543,7 +543,12 @@ function CompetitiveIntelModal({ token, onClose }) {
   const [providerResults, setProviderResults] = useState(null);
   const [providerLoading, setProviderLoading] = useState(false);
   const [providerSortField, setProviderSortField] = useState("commitment");
-  const [providerSortAsc, setProviderSortAsc] = useState(false);
+  const [providerSortAsc, setProviderSortAsc]     = useState(false);
+  const [areaQuery, setAreaQuery]                 = useState("");
+  const [areaSvcType, setAreaSvcType]             = useState("c2");
+  const [areaResults, setAreaResults]             = useState(null);
+  const [areaLoading, setAreaLoading]             = useState(false);
+  const [areaView, setAreaView]                   = useState("providers"); // providers | detail
 
   useEffect(() => {
     fetch(`${API_URL}/api/competitive-intel`, { headers:{ Authorization:`Bearer ${token}` } })
@@ -683,6 +688,19 @@ function CompetitiveIntelModal({ token, onClose }) {
     else { setProviderSortField(field); setProviderSortAsc(false); }
   }
 
+  async function doAreaSearch() {
+    if (!areaQuery.trim() || areaQuery.trim().length < 2) return;
+    setAreaLoading(true);
+    setAreaResults(null);
+    try {
+      const params = new URLSearchParams({ area: areaQuery.trim(), service_type: areaSvcType, limit: 200 });
+      const res  = await fetch(`${API_URL}/api/service-area-search?${params}`, { headers:{ Authorization:`Bearer ${token}` } });
+      const json = await res.json();
+      setAreaResults(json.status === "success" ? json : null);
+    } catch { setAreaResults(null); }
+    setAreaLoading(false);
+  }
+
   const providerColors = ["#a07ee0","#8a63d2","#7a53c2","#6a43b2","#5a33a2","#4a2392","#3b9eff","#2b8eef","#1b7edf","#0b6ecf",
     "#22c97a","#18b96a","#0ea95a","#f0b429","#e0a419","#d09409","#f0614a","#e0513a","#d0412a","#ff9f43","#ef8f33","#00d4ff","#00c4ef","#a07ee0","#8a63d2"];
 
@@ -704,7 +722,7 @@ function CompetitiveIntelModal({ token, onClose }) {
 
         {/* Tab strip */}
         <div style={{ display:"flex", gap:4, padding:"10px 22px", borderBottom:"1px solid rgba(138,99,210,0.1)", flexShrink:0 }}>
-          {[["providers","TOP 25 PROVIDERS"],["manufacturers","MANUFACTURER BREAKDOWN"],["services","SERVICE TYPES"],["products","TOP PRODUCTS"],["partlookup","PART LOOKUP"],["providersearch","PROVIDER SEARCH"]].map(([key,label]) => (
+          {[["providers","TOP 25 PROVIDERS"],["manufacturers","MANUFACTURER BREAKDOWN"],["services","SERVICE TYPES"],["products","TOP PRODUCTS"],["partlookup","PART LOOKUP"],["providersearch","PROVIDER SEARCH"],["areaservice","SERVICE AREA"]].map(([key,label]) => (
             <button key={key} onClick={() => setView(key)}
               style={{ padding:"5px 14px", fontFamily:"'DM Mono',monospace", fontSize:7.5, letterSpacing:1.5, border:`1px solid ${view===key ? "rgba(138,99,210,0.6)" : "rgba(138,99,210,0.15)"}`, background: view===key ? "rgba(138,99,210,0.12)" : "transparent", color: view===key ? "#a07ee0" : "rgba(232,228,240,0.35)", cursor:"pointer", transition:"all 0.15s" }}>
               {label}
@@ -951,6 +969,129 @@ function CompetitiveIntelModal({ token, onClose }) {
                   </>
                 );
               })()}
+            </>
+          )}
+          {view === "areaservice" && (
+            <>
+              {/* Search controls */}
+              <div style={{ display:"flex", gap:8, alignItems:"center", marginBottom:16, flexWrap:"wrap" }}>
+                {/* Service type toggle */}
+                <div style={{ display:"flex", gap:4 }}>
+                  {[["c2","Category 2"],["internal","Internal Connections"],["all","All Services"]].map(([key,label]) => (
+                    <button key={key} onClick={() => setAreaSvcType(key)}
+                      style={{ padding:"5px 12px", fontFamily:"'DM Mono',monospace", fontSize:7, letterSpacing:1.5, border:`1px solid ${areaSvcType===key ? "rgba(0,212,255,0.6)" : "rgba(0,212,255,0.15)"}`, background: areaSvcType===key ? "rgba(0,212,255,0.1)" : "transparent", color: areaSvcType===key ? "#00d4ff" : "rgba(232,228,240,0.35)", cursor:"pointer" }}>
+                      {label}
+                    </button>
+                  ))}
+                </div>
+                <input value={areaQuery} onChange={e => setAreaQuery(e.target.value)} onKeyDown={e => e.key === "Enter" && doAreaSearch()}
+                  placeholder="Enter city, district name, or county (e.g. Houston, Garland ISD, Travis County)..."
+                  style={{ flex:1, minWidth:260, background:"rgba(255,255,255,0.03)", border:"1px solid rgba(0,212,255,0.25)", outline:"none", fontFamily:"'DM Mono',monospace", fontSize:9, color:"#e8e4f0", padding:"8px 12px" }}/>
+                <button onClick={doAreaSearch}
+                  style={{ padding:"8px 18px", fontFamily:"'DM Mono',monospace", fontSize:8, letterSpacing:2, border:"1px solid rgba(0,212,255,0.5)", background:"rgba(0,212,255,0.08)", color:"#00d4ff", cursor:"pointer", whiteSpace:"nowrap" }}>
+                  SEARCH →
+                </button>
+              </div>
+
+              {areaLoading && <div style={{ textAlign:"center", padding:"40px", fontSize:9, color:"rgba(0,212,255,0.4)", letterSpacing:2 }}>SEARCHING...</div>}
+
+              {!areaLoading && !areaResults && (
+                <div style={{ padding:"40px 20px", textAlign:"center" }}>
+                  <div style={{ fontSize:9, color:"rgba(0,212,255,0.3)", letterSpacing:2, marginBottom:8 }}>FIND PROVIDERS BY SERVICE AREA</div>
+                  <div style={{ fontSize:7.5, color:"rgba(232,228,240,0.2)", maxWidth:500, margin:"0 auto" }}>Enter a city, school district name, or county to see which providers have won C2 or cabling commitments in that area — sorted by total dollars won</div>
+                </div>
+              )}
+
+              {!areaLoading && areaResults && areaResults.count === 0 && (
+                <div style={{ padding:"40px", textAlign:"center", fontSize:9, color:"rgba(232,228,240,0.25)", letterSpacing:2 }}>NO RESULTS FOUND · Try a broader search term</div>
+              )}
+
+              {!areaLoading && areaResults && areaResults.count > 0 && (
+                <>
+                  {/* Summary + sub-tab */}
+                  <div style={{ display:"flex", alignItems:"center", gap:16, marginBottom:14 }}>
+                    <div style={{ display:"flex", gap:4 }}>
+                      {[["providers","PROVIDERS"],["detail","ALL RECORDS"]].map(([key,label]) => (
+                        <button key={key} onClick={() => setAreaView(key)}
+                          style={{ padding:"4px 12px", fontFamily:"'DM Mono',monospace", fontSize:7, letterSpacing:1.5, border:`1px solid ${areaView===key ? "rgba(0,212,255,0.6)" : "rgba(0,212,255,0.15)"}`, background: areaView===key ? "rgba(0,212,255,0.1)" : "transparent", color: areaView===key ? "#00d4ff" : "rgba(232,228,240,0.35)", cursor:"pointer" }}>
+                          {label}
+                        </button>
+                      ))}
+                    </div>
+                    <div style={{ display:"flex", gap:16, marginLeft:"auto" }}>
+                      <div style={{ textAlign:"right" }}>
+                        <div style={{ fontFamily:"'Aldrich',sans-serif", fontSize:14, color:"#00d4ff", lineHeight:1 }}>{areaResults.providerSummary.length}</div>
+                        <div style={{ fontSize:6.5, color:"rgba(0,212,255,0.5)", letterSpacing:1.5 }}>PROVIDERS</div>
+                      </div>
+                      <div style={{ textAlign:"right" }}>
+                        <div style={{ fontFamily:"'Aldrich',sans-serif", fontSize:14, color:"#22c97a", lineHeight:1 }}>${Math.round(areaResults.total_committed/1000)}k</div>
+                        <div style={{ fontSize:6.5, color:"rgba(34,201,122,0.5)", letterSpacing:1.5 }}>TOTAL COMMITTED</div>
+                      </div>
+                      <div style={{ textAlign:"right" }}>
+                        <div style={{ fontFamily:"'Aldrich',sans-serif", fontSize:14, color:"rgba(232,228,240,0.5)", lineHeight:1 }}>{areaResults.count}</div>
+                        <div style={{ fontSize:6.5, color:"rgba(232,228,240,0.3)", letterSpacing:1.5 }}>RECORDS</div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Providers view */}
+                  {areaView === "providers" && (
+                    <>
+                      <div style={{ display:"grid", gridTemplateColumns:"2fr 80px 120px 80px", padding:"7px 12px", borderBottom:"1px solid rgba(0,212,255,0.2)", background:"rgba(0,212,255,0.04)" }}>
+                        {["PROVIDER","AWARDS","TOTAL COMMITTED","ORGS SERVED"].map((h,i) => (
+                          <div key={i} style={{ fontSize:6.5, letterSpacing:1.5, color:"rgba(0,212,255,0.55)", fontFamily:"'DM Mono',monospace" }}>{h}</div>
+                        ))}
+                      </div>
+                      {areaResults.providerSummary.map((p, i) => {
+                        const pct = Math.round((p.total / areaResults.total_committed) * 100);
+                        return (
+                          <div key={i} style={{ display:"grid", gridTemplateColumns:"2fr 80px 120px 80px", padding:"10px 12px", borderBottom:"1px solid rgba(0,212,255,0.06)", alignItems:"center", transition:"background 0.12s" }}
+                            onMouseEnter={e => e.currentTarget.style.background="rgba(0,212,255,0.04)"}
+                            onMouseLeave={e => e.currentTarget.style.background="transparent"}>
+                            <div>
+                              <div style={{ fontSize:8.5, color:"#00d4ff", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", paddingRight:10 }}>{p.spin_name || "—"}</div>
+                              <div style={{ height:2, background:"rgba(0,212,255,0.1)", borderRadius:99, marginTop:4, overflow:"hidden" }}>
+                                <div style={{ width:`${pct}%`, height:"100%", background:"rgba(0,212,255,0.5)", borderRadius:99 }}/>
+                              </div>
+                            </div>
+                            <div style={{ fontSize:8, color:"rgba(232,228,240,0.6)" }}>{p.count}</div>
+                            <div style={{ fontSize:8, color:"#22c97a", fontWeight:500 }}>${p.total.toLocaleString()}<span style={{ fontSize:6.5, color:"rgba(34,201,122,0.5)", marginLeft:4 }}>{pct}%</span></div>
+                            <div style={{ fontSize:8, color:"rgba(232,228,240,0.45)" }}>{p.orgs}</div>
+                          </div>
+                        );
+                      })}
+                    </>
+                  )}
+
+                  {/* Detail view */}
+                  {areaView === "detail" && (
+                    <>
+                      <div style={{ display:"grid", gridTemplateColumns:"1.2fr 1.2fr 1fr 70px 110px 80px", padding:"7px 12px", borderBottom:"1px solid rgba(0,212,255,0.2)", background:"rgba(0,212,255,0.04)" }}>
+                        {["PROVIDER","APPLICANT","SERVICE TYPE","FY","COMMITTED","DISC %"].map((h,i) => (
+                          <div key={i} style={{ fontSize:6.5, letterSpacing:1.5, color:"rgba(0,212,255,0.55)", fontFamily:"'DM Mono',monospace" }}>{h}</div>
+                        ))}
+                      </div>
+                      {areaResults.data.map((r, i) => (
+                        <div key={i}
+                          style={{ display:"grid", gridTemplateColumns:"1.2fr 1.2fr 1fr 70px 110px 80px", padding:"8px 12px", borderBottom:"1px solid rgba(0,212,255,0.06)", alignItems:"center", cursor:"pointer", transition:"background 0.12s" }}
+                          onMouseEnter={e => e.currentTarget.style.background="rgba(0,212,255,0.04)"}
+                          onMouseLeave={e => e.currentTarget.style.background="transparent"}
+                          onClick={() => r.application_number && window.open(`https://legacy.fundsforlearning.com/471/${r.application_number}`, "_blank")}>
+                          <div style={{ fontSize:7.5, color:"#00d4ff", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", paddingRight:8 }}>{r.spin_name || "—"}</div>
+                          <div style={{ fontSize:7.5, color:"rgba(232,228,240,0.8)", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", paddingRight:8 }}>{r.organization || "—"}</div>
+                          <div style={{ fontSize:7, color:"rgba(232,228,240,0.5)", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", paddingRight:8 }}>{r.service_type || "—"}</div>
+                          <div style={{ fontSize:8, color:"#f0b429" }}>FY{r.funding_year}</div>
+                          <div style={{ fontSize:8, color:"#22c97a", fontWeight:500 }}>{r.commitment ? `$${Math.round(r.commitment).toLocaleString()}` : "—"}</div>
+                          <div style={{ fontSize:8, color:"rgba(232,228,240,0.5)" }}>{r.discount_pct ? `${r.discount_pct}%` : "—"}</div>
+                        </div>
+                      ))}
+                      <div style={{ padding:"8px 12px", fontSize:7, color:"rgba(232,228,240,0.2)", letterSpacing:1.5, borderTop:"1px solid rgba(0,212,255,0.08)" }}>
+                        {areaResults.count} RECORDS · Click a row to view 471 on FundsForLearning
+                      </div>
+                    </>
+                  )}
+                </>
+              )}
             </>
           )}
         </div>
