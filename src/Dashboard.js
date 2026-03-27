@@ -725,11 +725,25 @@ function CompetitiveIntelModal({ token, onClose }) {
         {/* Tab strip */}
         <div style={{ display:"flex", gap:4, padding:"10px 22px", borderBottom:"1px solid rgba(138,99,210,0.1)", flexShrink:0 }}>
           {[["providers","TOP 25 PROVIDERS"],["manufacturers","MANUFACTURER BREAKDOWN"],["services","SERVICE TYPES"],["products","TOP PRODUCTS"],["partlookup","PART LOOKUP"],["providersearch","PROVIDER SEARCH"],["areaservice","SERVICE AREA"]].map(([key,label]) => (
-            <button key={key} onClick={() => setView(key)}
-              style={{ padding:"5px 14px", fontFamily:"'DM Mono',monospace", fontSize:7.5, letterSpacing:1.5, border:`1px solid ${view===key ? "rgba(138,99,210,0.6)" : "rgba(138,99,210,0.15)"}`, background: view===key ? "rgba(138,99,210,0.12)" : "transparent", color: view===key ? "#a07ee0" : "rgba(232,228,240,0.35)", cursor:"pointer", transition:"all 0.15s" }}>
-              {label}
-            </button>
+            <div key={key} style={{ display:"flex", alignItems:"center", gap:0 }}>
+              <button onClick={() => setView(key)}
+                style={{ padding:"5px 14px", fontFamily:"'DM Mono',monospace", fontSize:7.5, letterSpacing:1.5, border:`1px solid ${view===key ? "rgba(138,99,210,0.6)" : "rgba(138,99,210,0.15)"}`, borderRight: view===key ? "none" : undefined, background: view===key ? "rgba(138,99,210,0.12)" : "transparent", color: view===key ? "#a07ee0" : "rgba(232,228,240,0.35)", cursor:"pointer", transition:"all 0.15s", borderRadius:"4px 0 0 4px" }}>
+                {label}
+              </button>
+              {view === key && (
+                <button onClick={onClose}
+                  style={{ padding:"5px 8px", fontFamily:"'DM Mono',monospace", fontSize:8, border:"1px solid rgba(138,99,210,0.6)", borderLeft:"none", background:"rgba(138,99,210,0.12)", color:"rgba(232,228,240,0.5)", cursor:"pointer", borderRadius:"0 4px 4px 0", lineHeight:1 }}>
+                  ✕
+                </button>
+              )}
+            </div>
           ))}
+          <div style={{ marginLeft:"auto" }}>
+            <button onClick={onClose}
+              style={{ padding:"5px 14px", fontFamily:"'DM Mono',monospace", fontSize:7.5, letterSpacing:1.5, border:"1px solid rgba(240,97,74,0.35)", background:"rgba(240,97,74,0.06)", color:"rgba(240,97,74,0.7)", cursor:"pointer", borderRadius:4 }}>
+              ✕ CLOSE DASHBOARD
+            </button>
+          </div>
         </div>
 
         {/* Body */}
