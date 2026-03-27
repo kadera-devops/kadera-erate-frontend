@@ -538,7 +538,12 @@ function CompetitiveIntelModal({ token, onClose }) {
   const [partResults, setPartResults] = useState([]);
   const [partLoading, setPartLoading] = useState(false);
   const [partSearched, setPartSearched] = useState(false);
-  const [partSortAsc, setPartSortAsc] = useState(false);
+  const [partSortAsc, setPartSortAsc]   = useState(false);
+  const [providerQuery, setProviderQuery] = useState("");
+  const [providerResults, setProviderResults] = useState(null);
+  const [providerLoading, setProviderLoading] = useState(false);
+  const [providerSortField, setProviderSortField] = useState("commitment");
+  const [providerSortAsc, setProviderSortAsc] = useState(false);
 
   useEffect(() => {
     fetch(`${API_URL}/api/competitive-intel`, { headers:{ Authorization:`Bearer ${token}` } })
@@ -662,6 +667,22 @@ function CompetitiveIntelModal({ token, onClose }) {
     );
   }
 
+  async function doProviderSearch() {
+    if (!providerQuery.trim() || providerQuery.trim().length < 2) return;
+    setProviderLoading(true);
+    try {
+      const res  = await fetch(`${API_URL}/api/provider-search?q=${encodeURIComponent(providerQuery.trim())}&limit=200`, { headers:{ Authorization:`Bearer ${token}` } });
+      const json = await res.json();
+      setProviderResults(json.status === "success" ? json : null);
+    } catch { setProviderResults(null); }
+    setProviderLoading(false);
+  }
+
+  function toggleProviderSort(field) {
+    if (providerSortField === field) setProviderSortAsc(p => !p);
+    else { setProviderSortField(field); setProviderSortAsc(false); }
+  }
+
   const providerColors = ["#a07ee0","#8a63d2","#7a53c2","#6a43b2","#5a33a2","#4a2392","#3b9eff","#2b8eef","#1b7edf","#0b6ecf",
     "#22c97a","#18b96a","#0ea95a","#f0b429","#e0a419","#d09409","#f0614a","#e0513a","#d0412a","#ff9f43","#ef8f33","#00d4ff","#00c4ef","#a07ee0","#8a63d2"];
 
@@ -683,7 +704,7 @@ function CompetitiveIntelModal({ token, onClose }) {
 
         {/* Tab strip */}
         <div style={{ display:"flex", gap:4, padding:"10px 22px", borderBottom:"1px solid rgba(138,99,210,0.1)", flexShrink:0 }}>
-          {[["providers","TOP 25 PROVIDERS"],["manufacturers","MANUFACTURER BREAKDOWN"],["services","SERVICE TYPES"],["products","TOP PRODUCTS"],["partlookup","PART LOOKUP"]].map(([key,label]) => (
+          {[["providers","TOP 25 PROVIDERS"],["manufacturers","MANUFACTURER BREAKDOWN"],["services","SERVICE TYPES"],["products","TOP PRODUCTS"],["partlookup","PART LOOKUP"],["providersearch","PROVIDER SEARCH"]].map(([key,label]) => (
             <button key={key} onClick={() => setView(key)}
               style={{ padding:"5px 14px", fontFamily:"'DM Mono',monospace", fontSize:7.5, letterSpacing:1.5, border:`1px solid ${view===key ? "rgba(138,99,210,0.6)" : "rgba(138,99,210,0.15)"}`, background: view===key ? "rgba(138,99,210,0.12)" : "transparent", color: view===key ? "#a07ee0" : "rgba(232,228,240,0.35)", cursor:"pointer", transition:"all 0.15s" }}>
               {label}
@@ -831,6 +852,105 @@ function CompetitiveIntelModal({ token, onClose }) {
                   </div>
                 </>
               )}
+            </>
+          )}
+          {view === "providersearch" && (
+            <>
+              {/* Search bar */}
+              <div style={{ display:"flex", gap:8, alignItems:"center", marginBottom:16 }}>
+                <input value={providerQuery} onChange={e => setProviderQuery(e.target.value)} onKeyDown={e => e.key === "Enter" && doProviderSearch()}
+                  placeholder="Enter service provider name (e.g. AT&T, Spectrum, Lumen)..."
+                  style={{ flex:1, background:"rgba(255,255,255,0.03)", border:"1px solid rgba(138,99,210,0.25)", outline:"none", fontFamily:"'DM Mono',monospace", fontSize:9, color:"#e8e4f0", padding:"8px 12px" }}/>
+                <button onClick={doProviderSearch}
+                  style={{ padding:"8px 20px", fontFamily:"'DM Mono',monospace", fontSize:8, letterSpacing:2, border:"1px solid rgba(138,99,210,0.5)", background:"rgba(138,99,210,0.1)", color:"#a07ee0", cursor:"pointer", whiteSpace:"nowrap" }}>
+                  SEARCH →
+                </button>
+              </div>
+
+              {providerLoading && <div style={{ textAlign:"center", padding:"40px", fontSize:9, color:"rgba(138,99,210,0.4)", letterSpacing:2 }}>SEARCHING...</div>}
+
+              {!providerLoading && !providerResults && (
+                <div style={{ padding:"40px 20px", textAlign:"center" }}>
+                  <div style={{ fontSize:9, color:"rgba(138,99,210,0.3)", letterSpacing:2, marginBottom:8 }}>SEARCH PROVIDER COMMITMENTS</div>
+                  <div style={{ fontSize:7.5, color:"rgba(232,228,240,0.2)" }}>Search by provider name to see all FY2026 TX commitments — what they won, who they won it from, and amounts</div>
+                </div>
+              )}
+
+              {!providerLoading && providerResults && providerResults.data.length === 0 && (
+                <div style={{ padding:"40px", textAlign:"center", fontSize:9, color:"rgba(232,228,240,0.25)", letterSpacing:2 }}>NO RESULTS FOUND</div>
+              )}
+
+              {!providerLoading && providerResults && providerResults.data.length > 0 && (() => {
+                const sorted = [...providerResults.data].sort((a,b) => {
+                  const av = a[providerSortField] || 0;
+                  const bv = b[providerSortField] || 0;
+                  if (typeof av === "string") return providerSortAsc ? av.localeCompare(bv) : bv.localeCompare(av);
+                  return providerSortAsc ? av - bv : bv - av;
+                });
+                const SHdr = ({ field, label }) => (
+                  <div onClick={() => toggleProviderSort(field)} style={{ fontSize:6.5, letterSpacing:1.5, color: providerSortField===field ? "#a07ee0" : "rgba(138,99,210,0.45)", cursor:"pointer", display:"flex", alignItems:"center", gap:3, userSelect:"none", fontFamily:"'DM Mono',monospace" }}>
+                    {label} {providerSortField===field ? (providerSortAsc ? "↑" : "↓") : <span style={{ opacity:0.3 }}>↕</span>}
+                  </div>
+                );
+                return (
+                  <>
+                    {/* Summary strip */}
+                    <div style={{ display:"flex", gap:16, marginBottom:14, padding:"10px 14px", background:"rgba(138,99,210,0.06)", border:"1px solid rgba(138,99,210,0.15)", borderRadius:6 }}>
+                      <div>
+                        <div style={{ fontFamily:"'Aldrich',sans-serif", fontSize:16, color:"#a07ee0", lineHeight:1 }}>{providerResults.count}</div>
+                        <div style={{ fontSize:6.5, color:"rgba(138,99,210,0.5)", letterSpacing:1.5, marginTop:3 }}>COMMITMENTS</div>
+                      </div>
+                      <div>
+                        <div style={{ fontFamily:"'Aldrich',sans-serif", fontSize:16, color:"#22c97a", lineHeight:1 }}>${Math.round(providerResults.total_committed/1000)}k</div>
+                        <div style={{ fontSize:6.5, color:"rgba(34,201,122,0.5)", letterSpacing:1.5, marginTop:3 }}>TOTAL COMMITTED</div>
+                      </div>
+                      <div>
+                        <div style={{ fontFamily:"'Aldrich',sans-serif", fontSize:16, color:"#3b9eff", lineHeight:1 }}>{providerResults.unique_orgs}</div>
+                        <div style={{ fontSize:6.5, color:"rgba(59,158,255,0.5)", letterSpacing:1.5, marginTop:3 }}>ORGANIZATIONS</div>
+                      </div>
+                      {providerResults.unique_providers > 1 && (
+                        <div>
+                          <div style={{ fontFamily:"'Aldrich',sans-serif", fontSize:16, color:"rgba(232,228,240,0.5)", lineHeight:1 }}>{providerResults.unique_providers}</div>
+                          <div style={{ fontSize:6.5, color:"rgba(232,228,240,0.3)", letterSpacing:1.5, marginTop:3 }}>PROVIDER NAMES</div>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Table header */}
+                    <div style={{ display:"grid", gridTemplateColumns:"1.4fr 1.2fr 1fr 90px 110px 110px 90px", padding:"7px 12px", borderBottom:"1px solid rgba(138,99,210,0.2)", background:"rgba(138,99,210,0.05)" }}>
+                      <SHdr field="spin_name"    label="PROVIDER" />
+                      <SHdr field="organization" label="APPLICANT" />
+                      <SHdr field="service_type" label="SERVICE TYPE" />
+                      <SHdr field="funding_year" label="FY" />
+                      <SHdr field="commitment"   label="COMMITTED" />
+                      <SHdr field="frn_status"   label="STATUS" />
+                      <SHdr field="discount_pct" label="DISC %" />
+                    </div>
+
+                    {sorted.map((r, i) => {
+                      const sc = (r.frn_status||"").toLowerCase().includes("commit") || (r.frn_status||"").toLowerCase().includes("fund") ? "#22c97a" : (r.frn_status||"").toLowerCase().includes("deny") ? "#f0614a" : "#a07ee0";
+                      return (
+                        <div key={i}
+                          style={{ display:"grid", gridTemplateColumns:"1.4fr 1.2fr 1fr 90px 110px 110px 90px", padding:"8px 12px", borderBottom:"1px solid rgba(138,99,210,0.07)", alignItems:"center", transition:"background 0.12s", cursor:"pointer" }}
+                          onMouseEnter={e => e.currentTarget.style.background="rgba(138,99,210,0.05)"}
+                          onMouseLeave={e => e.currentTarget.style.background="transparent"}
+                          onClick={() => r.application_number && window.open(`https://legacy.fundsforlearning.com/471/${r.application_number}`, "_blank")}>
+                          <div style={{ fontSize:7.5, color:"#a07ee0", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", paddingRight:8 }}>{r.spin_name || "—"}</div>
+                          <div style={{ fontSize:7.5, color:"rgba(232,228,240,0.8)", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", paddingRight:8 }}>{r.organization || "—"}</div>
+                          <div style={{ fontSize:7, color:"rgba(232,228,240,0.5)", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", paddingRight:8 }}>{r.service_type || "—"}</div>
+                          <div style={{ fontSize:8, color:"#f0b429" }}>FY{r.funding_year}</div>
+                          <div style={{ fontSize:8, color:"#22c97a", fontWeight:500 }}>{r.commitment ? `$${Math.round(r.commitment).toLocaleString()}` : "—"}</div>
+                          <div><span style={{ fontSize:6.5, padding:"2px 6px", border:`1px solid ${sc}40`, background:`${sc}10`, color:sc, borderRadius:2 }}>{(r.frn_status||"—").split(" ").slice(0,2).join(" ")}</span></div>
+                          <div style={{ fontSize:8, color:"rgba(232,228,240,0.5)" }}>{r.discount_pct ? `${r.discount_pct}%` : "—"}</div>
+                        </div>
+                      );
+                    })}
+                    <div style={{ padding:"8px 12px", fontSize:7, color:"rgba(232,228,240,0.2)", letterSpacing:1.5, borderTop:"1px solid rgba(138,99,210,0.08)" }}>
+                      {sorted.length} RECORDS · FY2026 TX · Click a row to view 471 on FundsForLearning
+                    </div>
+                  </>
+                );
+              })()}
             </>
           )}
         </div>
