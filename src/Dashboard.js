@@ -1,19 +1,8 @@
-import { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback } from "react";
+import { getAuthToken, signOut as supaSignOut } from "./supabaseClient";
 import SearchPanel from "./SearchPanel";
 
 const API_URL = process.env.REACT_APP_API_URL || "https://kadera-backend-production-6a21.up.railway.app";
-
-async function getAuthToken() {
-  try {
-    const { createClient } = await import("https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm");
-    const sb = createClient(
-      process.env.REACT_APP_SUPABASE_URL,
-      process.env.REACT_APP_SUPABASE_ANON_KEY
-    );
-    const { data } = await sb.auth.getSession();
-    return data?.session?.access_token || null;
-  } catch { return null; }
-}
 
 // ── Design tokens ────────────────────────────────────────────────────────────
 const css = `
@@ -191,10 +180,15 @@ function Feed470({ token, onTagsUpdated }) {
   useEffect(() => {
     if (!token) return;
     setLoading(true);
-    const params = new URLSearchParams({ state, limit:200, offset:0, status:"open" });
-    if (filter === "urgent") params.set("urgent", "true");
+    const params = new URLSearchParams({ state, limit:500, offset:0 });
     fetch(`${API_URL}/api/470s?${params}`, { headers:{ Authorization:`Bearer ${token}` } })
-      .then(r => r.json()).then(d => { if (d.status === "success") setData(d.data || []); })
+      .then(r => r.json()).then(d => {
+        if (d.status === "success") {
+          // Filter to open (bid_due_date in future or null)
+          const open = (d.data||[]).filter(x => !x.bid_due_date || new Date(x.bid_due_date) >= new Date());
+          setData(open);
+        }
+      })
       .catch(() => {}).finally(() => setLoading(false));
   }, [token, state, filter]);
 
@@ -214,8 +208,20 @@ function Feed470({ token, onTagsUpdated }) {
     onTagsUpdated?.();
   }
 
-  const paged = data.slice(page * PAGE, (page + 1) * PAGE);
-  const totalPages = Math.ceil(data.length / PAGE);
+  // Compute days remaining from bid_due_date
+  const withDays = data.map(item => ({
+    ...item,
+    days_until_due: item.bid_due_date
+      ? Math.ceil((new Date(item.bid_due_date) - new Date()) / (1000*60*60*24))
+      : null
+  }));
+
+  const displayed = filter === "urgent"
+    ? withDays.filter(x => x.days_until_due != null && x.days_until_due <= 7)
+    : withDays;
+
+  const paged = displayed.slice(page * PAGE, (page + 1) * PAGE);
+  const totalPages = Math.ceil(displayed.length / PAGE);
 
   function cdClass(days) {
     if (days == null || days < 0) return "cd cd-r";
@@ -280,7 +286,7 @@ function Feed470({ token, onTagsUpdated }) {
             );
           })}
           <div style={{ padding:"10px 16px", borderTop:"1.5px solid #e2e8f0", background:"#f8fafc", display:"flex", justifyContent:"space-between", alignItems:"center" }}>
-            <span style={{ fontSize:10, color:"#94a3b8" }}>{data.length} results · showing {page*PAGE+1}–{Math.min((page+1)*PAGE, data.length)}</span>
+            <span style={{ fontSize:10, color:"#94a3b8" }}>{displayed.length} results · showing {page*PAGE+1}–{Math.min((page+1)*PAGE, displayed.length)}</span>
             <div style={{ display:"flex", gap:6 }}>
               <button className="btn btn-sm" disabled={page===0} onClick={() => setPage(p=>p-1)}>← Prev</button>
               <button className="btn btn-sm" disabled={page>=totalPages-1} onClick={() => setPage(p=>p+1)}>Next →</button>
@@ -1451,11 +1457,7 @@ export default function Dashboard({ session }) {
   }
 
   async function signOut() {
-    try {
-      const { createClient } = await import("https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm");
-      const sb = createClient(process.env.REACT_APP_SUPABASE_URL, process.env.REACT_APP_SUPABASE_ANON_KEY);
-      await sb.auth.signOut();
-    } catch {}
+    try { await supaSignOut(); } catch {}
     window.location.reload();
   }
 
