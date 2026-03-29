@@ -303,198 +303,353 @@ function Feed470({ token, onTagsUpdated, onView470 }) {
 
 // ── Form 470 Detail Modal ─────────────────────────────────────────────────────
 function Form470Modal({ token, appNum, onClose }) {
-  const [data, setData]     = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError]   = useState("");
-  const [rawOpen, setRawOpen] = useState(false);
+  const [form, setForm]             = useState(null);
+  const [services, setServices]     = useState([]);
+  const [consultants, setConsultants] = useState([]);
+  const [loading, setLoading]       = useState(true);
+  const [error, setError]           = useState(false);
+
+  const USAC = "https://opendata.usac.org/resource";
 
   useEffect(() => {
-    if (!appNum || !token) return;
-    fetch(`${API_URL}/api/470-detail?app_num=${encodeURIComponent(appNum)}`, { headers:{ Authorization:`Bearer ${token}` } })
-      .then(r => r.json())
-      .then(json => {
-        if (json.status === "success" && json.data) setData(json.data);
-        else setError("Could not load 470 details");
-      })
-      .catch(() => setError("Connection error"))
+    if (!appNum) return;
+    const where = encodeURIComponent(`application_number='${appNum}'`);
+    Promise.all([
+      fetch(`${USAC}/jp7a-89nd.json?$where=${where}&$limit=1`).then(r => r.json()),
+      fetch(`${USAC}/39tn-hjzv.json?$where=${where}&$limit=200`).then(r => r.json()),
+      fetch(`${USAC}/g55z-erud.json?$where=${where}&$limit=10`).then(r => r.json()),
+    ]).then(([fData, sData, cData]) => {
+      if (!fData?.length) { setError(true); return; }
+      setForm(fData[0]);
+      setServices(Array.isArray(sData) ? sData : []);
+      setConsultants(Array.isArray(cData) ? cData : []);
+    }).catch(() => setError(true))
       .finally(() => setLoading(false));
-  }, [appNum, token]);
+  }, [appNum]);
 
-  const fmtDate = v => v ? new Date(v).toLocaleDateString("en-US", { year:"numeric", month:"long", day:"numeric" }) : null;
+  const fmtDt = v => {
+    if (!v) return null;
+    const d = new Date(v);
+    if (isNaN(d)) return v;
+    return d.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
+  };
+  const fmtDtFull = v => {
+    if (!v) return null;
+    const d = new Date(v);
+    if (isNaN(d)) return v;
+    return d.toLocaleString("en-US", { month: "numeric", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" });
+  };
 
-  const days = data?.bid_due_date
-    ? Math.ceil((new Date(data.bid_due_date) - new Date()) / (1000*60*60*24))
+  const f = form || {};
+
+  const status = f.application_status || f.fcc_form_470_status || "";
+  const statusColor = status.toLowerCase().includes("certif") ? { bg:"#dcfce7", color:"#15803d" }
+    : status.toLowerCase().includes("post") ? { bg:"#dbeafe", color:"#1d4ed8" }
+    : { bg:"#f1f5f9", color:"#64748b" };
+
+  const days = f.allowable_contract_date
+    ? Math.ceil((new Date(f.allowable_contract_date) - new Date()) / (1000*60*60*24))
     : null;
 
-  // Pick all non-null raw fields not already shown
-  const extraRawFields = data?.raw ? Object.entries(data.raw)
-    .filter(([k, v]) => v && !["application_number","billed_entity_name","billed_entity_number","billed_entity_state","funding_year","fcc_form_470_status","application_status","certified_date_time","allowable_contract_date","technical_contact_name","technical_contact_email","technical_contact_phone","form_nickname","category_one_description","category_two_description","service_category"].includes(k))
-    .sort(([a],[b]) => a.localeCompare(b)) : [];
+  // Field row — label + value in two columns
+  const Row = ({ label, value, children, link }) => {
+    const content = children || (link && value
+      ? <a href={link} target="_blank" rel="noreferrer" style={{ color:"#2563eb", textDecoration:"none" }}>{value}</a>
+      : value);
+    if (!content && content !== 0) return null;
+    return (
+      <div style={{ display:"grid", gridTemplateColumns:"200px 1fr", padding:"7px 0", borderBottom:"1px solid #f1f5f9", gap:8 }}>
+        <div style={{ fontSize:12, color:"#111827", fontWeight:700, paddingTop:1 }}>{label}</div>
+        <div style={{ fontSize:12, color:"#1e293b", lineHeight:1.5 }}>{content}</div>
+      </div>
+    );
+  };
+
+  // Collapsible section
+  const Sec = ({ title, children, defaultOpen = true }) => {
+    const [open, setOpen] = useState(defaultOpen);
+    return (
+      <div style={{ marginBottom:20 }}>
+        <div onClick={() => setOpen(p => !p)}
+          style={{ display:"flex", alignItems:"center", justifyContent:"space-between", paddingBottom:8, borderBottom:"2px solid #0f1e3d", marginBottom:4, cursor:"pointer", userSelect:"none" }}>
+          <div style={{ fontSize:13, fontWeight:700, color:"#2563eb", letterSpacing:0.2 }}>{title}</div>
+          <div style={{ fontSize:11, color:"#94a3b8" }}>{open ? "▲ Hide section" : "▼ Show section"}</div>
+        </div>
+        {open && <div style={{ paddingTop:4 }}>{children}</div>}
+      </div>
+    );
+  };
+
+  const CatBadge = ({ cat }) => {
+    const is2 = String(cat || "").includes("2");
+    return (
+      <span style={{ display:"inline-flex", alignItems:"center", padding:"2px 7px", borderRadius:4, fontSize:10, fontWeight:700,
+        background: is2 ? "#ede9fe" : "#dbeafe", color: is2 ? "#6d28d9" : "#1d4ed8" }}>
+        {is2 ? "Cat 2" : "Cat 1"}
+      </span>
+    );
+  };
 
   return (
     <div className="modal-backdrop" onClick={e => e.target === e.currentTarget && onClose()}>
-      <div className="modal-box modal-box-sm" style={{ width:"min(680px,96vw)" }}>
-        <div className="modal-hdr">
-          <div>
-            <div className="modal-title">Form 470 — {appNum}</div>
-            <div className="modal-sub">{loading ? "Loading..." : data ? `${data.billed_entity_name} · FY${data.funding_year}` : "Not found"}</div>
+      <div className="modal-box" style={{ width:"min(860px,96vw)", maxHeight:"92vh" }}>
+
+        {/* Header */}
+        <div style={{ background:"#fff", padding:"24px 28px 20px", borderBottom:"1px solid #e2e8f0", flexShrink:0 }}>
+          <div style={{ fontSize:11, color:"#94a3b8", marginBottom:10, fontWeight:400, letterSpacing:0.2 }}>
+            Form 470 › FY{f.funding_year || "2026"} › {f.physical_state || f.billed_entity_state || "TX"}
           </div>
-          <button className="modal-close" onClick={onClose}>✕ Close</button>
+          <h2 style={{ fontSize:26, fontWeight:300, color:"#2563eb", lineHeight:1.15, marginBottom:6, letterSpacing:-0.3 }}>
+            {f.billed_entity_name || `Form 470 · ${appNum}`}
+          </h2>
+          <div style={{ fontSize:13, color:"#64748b", fontWeight:400, marginBottom:4 }}>
+            Form 470 · Application <span style={{ color:"#2563eb", fontWeight:500 }}>#{appNum}</span> · FY {f.funding_year || "2026"}
+          </div>
+          {f.form_nickname && (
+            <div style={{ fontSize:12, color:"#94a3b8", fontStyle:"italic", marginBottom:14 }}>"{f.form_nickname}"</div>
+          )}
+          <div style={{ display:"flex", alignItems:"center", gap:20, flexWrap:"wrap", marginTop:14 }}>
+            {status && (
+              <span style={{ fontSize:12, color: status.toLowerCase().includes("certif") ? "#15803d" : "#64748b", fontWeight:500 }}>
+                {status}
+              </span>
+            )}
+            {days != null && days >= 0 && (
+              <span style={{ fontSize:12, color:"#dc2626", fontWeight:500 }}>
+                {days === 0 ? "Due today" : `Due ${fmtDt(f.allowable_contract_date)}`}
+              </span>
+            )}
+            <button onClick={onClose}
+              style={{ marginLeft:"auto", padding:"5px 14px", borderRadius:6, border:"1px solid #e2e8f0", background:"#fff", color:"#64748b", fontSize:11, fontWeight:500, cursor:"pointer" }}>
+              ✕ Close
+            </button>
+          </div>
         </div>
 
-        <div className="modal-body" style={{ padding:0 }}>
-          {loading && <div style={{ padding:"48px", textAlign:"center", fontSize:12, color:"#94a3b8" }}>Loading 470 details...</div>}
-          {error && <div style={{ padding:24, fontSize:12, color:"#dc2626" }}>⚠ {error}</div>}
-          {!loading && data && (
+        {/* Notice bar */}
+        <div style={{ padding:"9px 20px", background:"#fffbeb", borderBottom:"1px solid #fde68a", fontSize:11, color:"#92400e", flexShrink:0 }}>
+          <strong>Note:</strong> Contact Name and Phone Number reflect current USAC profile data. To review data as certified, see the original document on USAC EPC.
+        </div>
+
+        {/* Body */}
+        <div className="modal-body" style={{ padding:"20px 24px" }}>
+
+          {loading && (
+            <div style={{ textAlign:"center", padding:"60px", fontSize:13, color:"#94a3b8" }}>
+              <div style={{ width:32, height:32, border:"3px solid #e2e8f0", borderTopColor:"#2563eb", borderRadius:"50%", animation:"spin 0.8s linear infinite", margin:"0 auto 16px" }}/>
+              Loading Form 470 data...
+            </div>
+          )}
+
+          {!loading && error && (
+            <div style={{ textAlign:"center", padding:"60px" }}>
+              <div style={{ fontSize:32, marginBottom:12 }}>📭</div>
+              <div style={{ fontSize:15, fontWeight:600, color:"#1e293b", marginBottom:6 }}>Form 470 Not Found</div>
+              <div style={{ fontSize:13, color:"#94a3b8" }}>Application #{appNum} could not be located in the USAC Open Data system.</div>
+            </div>
+          )}
+
+          {!loading && !error && form && (
             <>
-              {/* Status banner */}
-              <div style={{ padding:"14px 20px", background: (data.application_status||"").toLowerCase().includes("open") ? "#f0fdf4" : "#f8fafc", borderBottom:"1.5px solid #e2e8f0", display:"flex", alignItems:"center", justifyContent:"space-between", flexWrap:"wrap", gap:10 }}>
-                <div style={{ display:"flex", alignItems:"center", gap:10 }}>
-                  <span style={{ fontFamily:"'Aldrich',sans-serif", fontSize:20, color:"#0f1e3d" }}>{appNum}</span>
-                  <span className={`badge ${(data.application_status||"").toLowerCase().includes("open") ? "badge-green" : "badge-gray"}`}>
-                    {data.application_status || "—"}
+              {/* Application Information */}
+              <Sec title="Application Information">
+                <Row label="Nickname"              value={f.form_nickname} />
+                <Row label="Application Number"   value={f.application_number} />
+                <Row label="Funding Year"          value={f.funding_year} />
+                <Row label="Status"                value={status} />
+                <Row label="Allowable Contract Date">
+                  <span style={{ color: days != null && days >= 0 && days <= 7 ? "#c2410c" : "#1e293b", fontWeight: days != null && days >= 0 && days <= 7 ? 600 : 400 }}>
+                    {fmtDt(f.allowable_contract_date) || "—"}
                   </span>
-                  {days != null && days >= 0 && (
-                    <span className={`badge ${days <= 3 ? "badge-red" : days <= 7 ? "badge-amber" : "badge-blue"}`}>
-                      {days === 0 ? "Due Today" : `${days} days left`}
-                    </span>
-                  )}
-                  {days != null && days < 0 && <span className="badge badge-gray">Closed</span>}
-                </div>
-                {/* External links */}
-                <div style={{ display:"flex", gap:8 }}>
-                  <a href={`https://legacy.fundsforlearning.com/470/${appNum}`} target="_blank" rel="noreferrer"
-                    style={{ padding:"5px 12px", borderRadius:6, border:"1.5px solid #cbd5e1", background:"#f8fafc", color:"#475569", fontSize:11, fontWeight:500, textDecoration:"none" }}>
-                    FundsForLearning ↗
-                  </a>
-                  <a href={`https://portal.usac.org/suite/#/470/${appNum}`} target="_blank" rel="noreferrer"
-                    style={{ padding:"5px 12px", borderRadius:6, border:"1.5px solid #93c5fd", background:"#eff6ff", color:"#2563eb", fontSize:11, fontWeight:500, textDecoration:"none" }}>
-                    View on USAC EPC ↗
-                  </a>
-                </div>
-              </div>
+                </Row>
+                <Row label="Created Date"          value={fmtDtFull(f.created_date)} />
+                <Row label="Created By"            value={f.created_by} />
+                <Row label="Certified Date"        value={fmtDtFull(f.certified_date)} />
+                <Row label="Certified By"          value={f.certified_by} />
+                <Row label="Last Modified Date"    value={fmtDtFull(f.last_modified_date)} />
+                <Row label="Last Modified By"      value={f.last_modified_by} />
+              </Sec>
 
-              <div style={{ padding:"16px 20px", display:"flex", flexDirection:"column", gap:16 }}>
+              {/* Billed Entity Information */}
+              <Sec title="Billed Entity Information">
+                <Row label="Name"                    value={f.billed_entity_name} />
+                <Row label="Billed Entity Number (BEN)" value={f.billed_entity_number} />
+                <Row label="Address"                 value={f.physical_address} />
+                <Row label="City / State / ZIP"      value={[f.physical_city, f.physical_state, f.physical_zipcode].filter(Boolean).join(", ")} />
+                <Row label="Phone"                   value={f.phone_number} />
+                <Row label="Email"                   value={f.email_address} link={f.email_address ? `mailto:${f.email_address}` : null} />
+                <Row label="FCC Registration #"      value={f.fcc_registration_number} />
+              </Sec>
 
-                {/* Entity info */}
-                <Section title="Applicant Information">
-                  <FieldGrid fields={[
-                    { label:"Entity Name",   value: data.billed_entity_name },
-                    { label:"BEN",           value: data.billed_entity_number },
-                    { label:"State",         value: data.state },
-                    { label:"Funding Year",  value: data.funding_year ? `FY${data.funding_year}` : null },
-                  ]} />
-                </Section>
+              {/* Application Type & Recipients */}
+              <Sec title="Application Type and Recipients of Service">
+                <Row label="Applicant Type"            value={f.entity_type || f.applicant_type} />
+                <Row label="Recipient(s) of Service"   value={f.recipient_of_service} />
+                <Row label="Number of Eligible Entities" value={f.number_of_eligible_entities} />
+              </Sec>
 
-                {/* Service info */}
-                <Section title="Service Details">
-                  <FieldGrid fields={[
-                    { label:"Service Category",   value: data.service_category },
-                    { label:"Category of Service", value: data.category_of_service !== data.service_category ? data.category_of_service : null },
-                    { label:"Narrative / Nickname", value: data.narrative || data.form_nickname },
-                    { label:"Signal Type",          value: data.signal_type },
-                    { label:"Function Type",        value: data.function_type },
-                    { label:"Pricing Type",         value: data.pricing_type },
-                    { label:"WAN",                  value: data.wan },
-                    { label:"Fiber Type",           value: data.fiber_type },
-                    { label:"Special Construction", value: data.special_construction },
-                  ]} />
-                  {data.narrative_description && (
-                    <div style={{ marginTop:10, padding:"12px 14px", background:"#f8fafc", borderRadius:8, border:"1.5px solid #e2e8f0" }}>
-                      <div style={{ fontSize:10, fontWeight:600, color:"#94a3b8", marginBottom:6, textTransform:"uppercase", letterSpacing:0.5 }}>Service Description</div>
-                      <div style={{ fontSize:12, color:"#334155", lineHeight:1.6 }}>{data.narrative_description}</div>
-                    </div>
-                  )}
-                </Section>
+              {/* Contact Information */}
+              <Sec title="Contact Information">
+                <Row label="Name"         value={f.contact_name} />
+                <Row label="Email"        value={f.contact_email} link={f.contact_email ? `mailto:${f.contact_email}` : null} />
+                <Row label="Phone Number" value={f.contact_phone} />
+              </Sec>
 
-                {/* Dates */}
-                <Section title="Key Dates">
-                  <FieldGrid fields={[
-                    { label:"Date Posted / Certified", value: fmtDate(data.date_posted) },
-                    { label:"Bid Due Date",             value: fmtDate(data.bid_due_date), highlight: days != null && days <= 7 },
-                  ]} />
-                </Section>
-
-                {/* Contact */}
-                <Section title="Technical Contact">
-                  <FieldGrid fields={[
-                    { label:"Name",  value: data.tech_contact_name },
-                    { label:"Email", value: data.tech_contact_email, link: data.tech_contact_email ? `mailto:${data.tech_contact_email}` : null },
-                    { label:"Phone", value: data.tech_contact_phone },
-                  ]} />
-                  {(data.consultant_name || data.consultant_phone) && (
-                    <>
-                      <div style={{ fontSize:11, fontWeight:600, color:"#475569", margin:"10px 0 6px" }}>Consultant</div>
-                      <FieldGrid fields={[
-                        { label:"Consultant Name",  value: data.consultant_name },
-                        { label:"Consultant Phone", value: data.consultant_phone },
-                      ]} />
-                    </>
-                  )}
-                </Section>
-
-                {/* RFP / Documents */}
-                {data.rfp_document_url && (
-                  <Section title="RFP / Documents">
-                    <a href={data.rfp_document_url} target="_blank" rel="noreferrer"
-                      style={{ display:"flex", alignItems:"center", gap:10, padding:"12px 14px", borderRadius:8, border:"1.5px solid #93c5fd", background:"#eff6ff", textDecoration:"none", color:"#2563eb", fontSize:12, fontWeight:500 }}>
-                      <span style={{ fontSize:20 }}>📄</span>
-                      <div>
-                        <div style={{ fontWeight:600 }}>RFP / Bid Document</div>
-                        <div style={{ fontSize:10, color:"#64748b", marginTop:2 }}>{data.rfp_document_url}</div>
-                      </div>
-                      <span style={{ marginLeft:"auto", fontSize:14 }}>↗</span>
-                    </a>
-                  </Section>
-                )}
-
-                {/* Extra raw fields toggle */}
-                {extraRawFields.length > 0 && (
-                  <div>
-                    <button onClick={() => setRawOpen(p => !p)}
-                      style={{ fontSize:11, fontWeight:500, color:"#64748b", background:"none", border:"none", cursor:"pointer", padding:0, display:"flex", alignItems:"center", gap:4 }}>
-                      {rawOpen ? "▲" : "▼"} {rawOpen ? "Hide" : "Show"} all USAC fields ({extraRawFields.length})
-                    </button>
-                    {rawOpen && (
-                      <div style={{ marginTop:10 }}>
-                        <FieldGrid fields={extraRawFields.map(([k, v]) => ({ label: k.replace(/_/g," "), value: String(v) }))} />
+              {/* Services Requested */}
+              <Sec title="Services Requested">
+                {!services.length ? (
+                  <div style={{ fontSize:12, color:"#94a3b8", padding:"8px 0" }}>No service line items found.</div>
+                ) : (
+                  <>
+                    {/* Cat 1 / Cat 2 descriptions */}
+                    {f.category_one_description && (
+                      <div style={{ marginBottom:14 }}>
+                        <div style={{ fontSize:11, fontWeight:700, color:"#1d4ed8", textTransform:"uppercase", letterSpacing:0.5, marginBottom:6 }}>
+                          Category 1 — Internet &amp; Transport
+                        </div>
+                        <pre style={{ background:"#f8fafc", border:"1px solid #e2e8f0", borderRadius:8, padding:"12px 14px", fontSize:12, color:"#334155", whiteSpace:"pre-wrap", fontFamily:"inherit", lineHeight:1.75, margin:0 }}>
+                          {f.category_one_description}
+                        </pre>
                       </div>
                     )}
-                  </div>
+                    {f.category_two_description && (
+                      <div style={{ marginBottom:14 }}>
+                        <div style={{ fontSize:11, fontWeight:700, color:"#6d28d9", textTransform:"uppercase", letterSpacing:0.5, marginBottom:6 }}>
+                          Category 2 — Internal Connections
+                        </div>
+                        <pre style={{ background:"#f8fafc", border:"1px solid #e2e8f0", borderRadius:8, padding:"12px 14px", fontSize:12, color:"#334155", whiteSpace:"pre-wrap", fontFamily:"inherit", lineHeight:1.75, margin:0 }}>
+                          {f.category_two_description}
+                        </pre>
+                      </div>
+                    )}
+                    {/* Line items table */}
+                    <div style={{ fontSize:12, fontWeight:600, color:"#0f1e3d", marginBottom:8 }}>
+                      {services.length} Line Item{services.length !== 1 ? "s" : ""}
+                    </div>
+                    <div style={{ overflowX:"auto", margin:"0 -4px" }}>
+                      <table style={{ width:"100%", borderCollapse:"collapse", fontSize:11 }}>
+                        <thead>
+                          <tr style={{ background:"#f8fafc", borderBottom:"1.5px solid #e2e8f0" }}>
+                            {["#","Category","Service Type","Function","Manufacturer","Qty","Unit","Install","Entities","RFP"].map(h => (
+                              <th key={h} style={{ padding:"8px 10px", textAlign:"left", fontWeight:600, color:"#64748b", whiteSpace:"nowrap" }}>{h}</th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {services.map((s, i) => (
+                            <tr key={i} style={{ borderBottom:"1px solid #f1f5f9" }}
+                              onMouseEnter={e => e.currentTarget.style.background="#f8fafc"}
+                              onMouseLeave={e => e.currentTarget.style.background="transparent"}>
+                              <td style={{ padding:"8px 10px", color:"#94a3b8", fontSize:11 }}>{i + 1}</td>
+                              <td style={{ padding:"8px 10px" }}><CatBadge cat={s.category_of_service || s.service_category} /></td>
+                              <td style={{ padding:"8px 10px", color:"#1e293b", fontWeight:500 }}>{s.service_type_name || s.type_of_service || "—"}</td>
+                              <td style={{ padding:"8px 10px", color:"#475569" }}>{s.function_type || s.function || "—"}</td>
+                              <td style={{ padding:"8px 10px", color:"#475569" }}>{s.manufacturer_name || s.manufacturer || "—"}</td>
+                              <td style={{ padding:"8px 10px", color:"#475569" }}>{s.quantity || "—"}</td>
+                              <td style={{ padding:"8px 10px", color:"#475569" }}>{s.unit || "—"}</td>
+                              <td style={{ padding:"8px 10px", color:"#475569" }}>{s.installation_and_initial_configuration || s.installation || "—"}</td>
+                              <td style={{ padding:"8px 10px", color:"#475569" }}>{s.number_of_entities || "—"}</td>
+                              <td style={{ padding:"8px 10px" }}>
+                                {(s.rfp_document_url || s.rfp_url)
+                                  ? <a href={s.rfp_document_url || s.rfp_url} target="_blank" rel="noreferrer"
+                                      style={{ color:"#2563eb", fontSize:11, fontWeight:600, textDecoration:"none" }}
+                                      onMouseEnter={e => e.currentTarget.style.textDecoration="underline"}
+                                      onMouseLeave={e => e.currentTarget.style.textDecoration="none"}>
+                                      View RFP Documents ↗
+                                    </a>
+                                  : <span style={{ color:"#cbd5e1" }}>—</span>}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </>
                 )}
+              </Sec>
 
-              </div>
+              {/* Technical Contact */}
+              <Sec title="Technical Contact Information">
+                <Row label="Name"         value={f.technical_contact_name || f.tech_contact_name} />
+                <Row label="Title"        value={f.technical_contact_title || f.tech_contact_title} />
+                <Row label="Phone Number" value={f.technical_contact_phone || f.tech_contact_phone} />
+                <Row label="Email"        value={f.technical_contact_email || f.tech_contact_email}
+                  link={(f.technical_contact_email || f.tech_contact_email) ? `mailto:${f.technical_contact_email || f.tech_contact_email}` : null} />
+              </Sec>
+
+              {/* State/Local Procurement */}
+              {f.state_or_local_restrictions && (
+                <Sec title="State or Local Procurement Requirements">
+                  {f.state_or_local_restrictions === "Yes" && (
+                    <div style={{ display:"flex", gap:10, padding:"10px 14px", background:"#fffbeb", border:"1px solid #fcd34d", borderRadius:8, marginBottom:10 }}>
+                      <span style={{ color:"#d97706", fontSize:16, flexShrink:0 }}>⚠</span>
+                      <div style={{ fontSize:12, color:"#92400e", lineHeight:1.6 }}>
+                        <strong>State or local procurement restrictions apply.</strong> Review all applicable bidding laws before submitting a bid.
+                        {f.state_or_local_restrictions_narrative && <><br/>{f.state_or_local_restrictions_narrative}</>}
+                      </div>
+                    </div>
+                  )}
+                </Sec>
+              )}
+
+              {/* Consultants */}
+              {consultants.length > 0 && (
+                <Sec title={`Consultants (${consultants.length})`}>
+                  <div style={{ borderTop:"1px solid #f1f5f9" }}>
+                    {consultants.map((c, i) => (
+                      <div key={i} style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"10px 0", borderBottom:"1px solid #f1f5f9", gap:12 }}>
+                        <div>
+                          <div style={{ fontSize:13, fontWeight:500, color:"#1e293b" }}>{c.consultant_name || c.name || "Unknown"}</div>
+                          {c.consulting_firm_name && c.consulting_firm_name !== c.consultant_name && (
+                            <div style={{ fontSize:11, color:"#64748b", marginTop:2 }}>{c.consulting_firm_name}</div>
+                          )}
+                        </div>
+                        {(c.spin || c.consultant_registration_id || c.fcc_registration_number) && (
+                          <span style={{ flexShrink:0, fontSize:11, fontFamily:"monospace", background:"#f1f5f9", color:"#475569", padding:"3px 8px", borderRadius:5 }}>
+                            {c.spin || c.consultant_registration_id || c.fcc_registration_number}
+                          </span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </Sec>
+              )}
+
+              {/* Generated Documents */}
+              {(() => {
+                const rfpDocs = [...new Map(
+                  services
+                    .filter(s => s.rfp_document_url || s.rfp_url)
+                    .map(s => ({ url: s.rfp_document_url || s.rfp_url, label: s.service_type_name || s.type_of_service || "RFP Document" }))
+                    .map(d => [d.url, d])
+                ).values()];
+                return (
+                  <Sec title="Generated Documents">
+                    {rfpDocs.length === 0 && (
+                      <div style={{ fontSize:12, color:"#94a3b8", padding:"8px 0" }}>No RFP documents associated with this Form 470.</div>
+                    )}
+                    {rfpDocs.map((doc, i) => (
+                      <a key={i} href={doc.url} target="_blank" rel="noreferrer"
+                        style={{ display:"flex", alignItems:"center", gap:12, padding:"12px 16px", border:"1.5px solid #93c5fd", borderRadius:8, background:"#eff6ff", textDecoration:"none", marginBottom:8, transition:"background 0.1s" }}
+                        onMouseEnter={e => e.currentTarget.style.background="#dbeafe"}
+                        onMouseLeave={e => e.currentTarget.style.background="#eff6ff"}>
+                        <span style={{ fontSize:22, flexShrink:0 }}>📄</span>
+                        <div style={{ flex:1, minWidth:0 }}>
+                          <div style={{ fontSize:13, fontWeight:600, color:"#1d4ed8" }}>View RFP Documents — {doc.label}</div>
+                          <div style={{ fontSize:11, color:"#3b82f6", marginTop:3, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{doc.url}</div>
+                        </div>
+                        <span style={{ fontSize:16, color:"#2563eb", flexShrink:0, fontWeight:600 }}>↗</span>
+                      </a>
+                    ))}
+
+                  </Sec>
+                );
+              })()}
+
             </>
           )}
         </div>
       </div>
-    </div>
-  );
-}
-
-function Section({ title, children }) {
-  return (
-    <div>
-      <div style={{ fontSize:11, fontWeight:700, color:"#0f1e3d", letterSpacing:0.5, marginBottom:8, paddingBottom:6, borderBottom:"1.5px solid #e2e8f0" }}>{title}</div>
-      {children}
-    </div>
-  );
-}
-
-function FieldGrid({ fields }) {
-  const visible = fields.filter(f => f.value);
-  if (!visible.length) return <div style={{ fontSize:11, color:"#94a3b8" }}>No data available</div>;
-  return (
-    <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill, minmax(200px, 1fr))", gap:8 }}>
-      {visible.map(({ label, value, link, highlight }) => (
-        <div key={label} style={{ background: highlight ? "#fff7ed" : "#f8fafc", border:`1.5px solid ${highlight ? "#fed7aa" : "#e2e8f0"}`, padding:"8px 12px", borderRadius:8 }}>
-          <div style={{ fontSize:9, fontWeight:600, color:"#94a3b8", textTransform:"uppercase", letterSpacing:0.5, marginBottom:3 }}>{label}</div>
-          {link
-            ? <a href={link} style={{ fontSize:12, color:"#2563eb", textDecoration:"none" }}>{value}</a>
-            : <div style={{ fontSize:12, color: highlight ? "#c2410c" : "#334155", fontWeight: highlight ? 600 : 400 }}>{value}</div>
-          }
-        </div>
-      ))}
     </div>
   );
 }
