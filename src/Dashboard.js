@@ -1,676 +1,1083 @@
-import React, { useState, useEffect, useCallback } from "react";
-import { getAuthToken, signOut } from "./supabaseClient";
+import { useState, useEffect, useCallback } from "react";
 import SearchPanel from "./SearchPanel";
 
 const API_URL = process.env.REACT_APP_API_URL || "https://kadera-backend-production-6a21.up.railway.app";
 
+async function getAuthToken() {
+  try {
+    const { createClient } = await import("https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm");
+    const sb = createClient(
+      process.env.REACT_APP_SUPABASE_URL,
+      process.env.REACT_APP_SUPABASE_ANON_KEY
+    );
+    const { data } = await sb.auth.getSession();
+    return data?.session?.access_token || null;
+  } catch { return null; }
+}
+
+// ── Design tokens ────────────────────────────────────────────────────────────
 const css = `
-  @import url('https://fonts.googleapis.com/css2?family=Aldrich&family=DM+Mono:wght@400;500&display=swap');
-  *, *::before, *::after { box-sizing:border-box; margin:0; padding:0; }
-  body { background:#05050d; font-family:'DM Mono',monospace; color:#e8e4f0; overflow-x:hidden; }
-  .scale-ui { zoom: 1.25; }
-  ::-webkit-scrollbar { width:2px; } ::-webkit-scrollbar-thumb { background:rgba(138,99,210,0.4); }
-  @keyframes spin        { from{transform:rotate(0deg)} to{transform:rotate(360deg)} }
-  @keyframes scan        { 0%{top:-2px} 100%{top:100%} }
-  @keyframes pulse-dot   { 0%,100%{opacity:1} 50%{opacity:0.2} }
-  @keyframes pulse-slow  { 0%,100%{opacity:1} 50%{opacity:0.25} }
-  @keyframes fade-up     { from{opacity:0;transform:translateY(12px)} to{opacity:1;transform:translateY(0)} }
-  @keyframes glow-p      { 0%,100%{box-shadow:0 0 10px rgba(138,99,210,0.2)} 50%{box-shadow:0 0 22px rgba(138,99,210,0.5)} }
-  @keyframes shimmer     { 0%{background-position:200% 0} 100%{background-position:-200% 0} }
-  .pulse-urgent          { animation: pulse-slow 2.4s ease-in-out infinite; }
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Aldrich&display=swap');
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #fff; font-family: 'Inter', system-ui, sans-serif; color: #1a2035; overflow-x: hidden; }
+  input, select, button, textarea { font-family: inherit; }
+  @keyframes fade-in { from { opacity:0; transform:translateY(6px); } to { opacity:1; transform:translateY(0); } }
+  .fade-in { animation: fade-in 0.25s ease both; }
+  ::-webkit-scrollbar { width: 6px; } ::-webkit-scrollbar-track { background: #f1f5f9; } ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 99px; }
+
+  /* Modal backdrop */
+  .modal-backdrop { position:fixed; inset:0; background:rgba(15,30,61,0.5); display:flex; align-items:center; justify-content:center; z-index:200; backdrop-filter:blur(2px); }
+  .modal-box { background:#fff; border-radius:16px; border:1.5px solid #cbd5e1; box-shadow:0 20px 60px rgba(15,30,61,0.18); width:min(1060px,96vw); max-height:90vh; display:flex; flex-direction:column; overflow:hidden; }
+  .modal-box-sm { width:min(600px,96vw); }
+  .modal-hdr { padding:16px 20px; border-bottom:1.5px solid #e2e8f0; background:#f8fafc; display:flex; align-items:center; justify-content:space-between; flex-shrink:0; }
+  .modal-title { font-size:14px; font-weight:600; color:#1e293b; }
+  .modal-sub { font-size:11px; color:#94a3b8; margin-top:2px; }
+  .modal-body { flex:1; overflow-y:auto; }
+  .modal-close { padding:6px 14px; border-radius:8px; border:1.5px solid #e2e8f0; background:transparent; font-size:11px; font-weight:500; color:#64748b; cursor:pointer; transition:all 0.15s; }
+  .modal-close:hover { border-color:#cbd5e1; background:#f1f5f9; }
+
+  /* Tab strip */
+  .tab-strip { display:flex; gap:4px; padding:10px 16px; border-bottom:1.5px solid #e2e8f0; background:#f8fafc; flex-shrink:0; flex-wrap:wrap; }
+  .tab-btn { padding:5px 14px; border-radius:6px; border:1.5px solid transparent; background:transparent; font-size:11px; font-weight:500; color:#64748b; cursor:pointer; transition:all 0.15s; display:flex; align-items:center; gap:0; }
+  .tab-btn.active { background:#fff; border-color:#cbd5e1; color:#1e293b; box-shadow:0 1px 3px rgba(15,30,61,0.07); }
+  .tab-close { padding:3px 6px; border-radius:0 4px 4px 0; border:none; background:transparent; color:#94a3b8; cursor:pointer; font-size:11px; margin-left:4px; }
+  .tab-close:hover { color:#dc2626; }
+
+  /* Cards */
+  .card { background:#fff; border-radius:12px; border:1.5px solid #cbd5e1; box-shadow:0 1px 4px rgba(15,30,61,0.07); overflow:hidden; }
+  .card-hdr { padding:12px 16px; border-bottom:1.5px solid #e2e8f0; background:#f8fafc; display:flex; align-items:center; justify-content:space-between; }
+  .card-title { font-size:12px; font-weight:600; color:#1e293b; }
+  .card-badge { font-size:10px; font-weight:500; padding:2px 8px; border-radius:99px; background:#e2e8f0; color:#64748b; }
+
+  /* Buttons */
+  .btn { padding:7px 16px; border-radius:8px; border:1.5px solid #cbd5e1; background:#fff; font-size:11px; font-weight:500; color:#334155; cursor:pointer; transition:all 0.15s; }
+  .btn:hover { border-color:#93b4fd; background:#eff6ff; color:#2563eb; }
+  .btn-primary { background:#2563eb; border-color:#2563eb; color:#fff; }
+  .btn-primary:hover { background:#1d4ed8; border-color:#1d4ed8; color:#fff; }
+  .btn-sm { padding:4px 10px; font-size:10px; }
+  .btn-active { background:#0f1e3d; border-color:#0f1e3d; color:#fff; }
+
+  /* Inputs */
+  .inp { padding:8px 12px; border-radius:8px; border:1.5px solid #cbd5e1; background:#fff; font-size:12px; color:#1e293b; outline:none; width:100%; transition:border-color 0.15s; }
+  .inp:focus { border-color:#2563eb; }
+  .inp-sm { padding:5px 10px; font-size:11px; border-radius:6px; }
+
+  /* Table */
+  .tbl-hdr { display:grid; padding:8px 14px; border-bottom:1.5px solid #e2e8f0; background:#f8fafc; }
+  .tbl-hdr-cell { font-size:10px; font-weight:600; color:#64748b; letter-spacing:0.3px; cursor:pointer; display:flex; align-items:center; gap:3px; user-select:none; }
+  .tbl-hdr-cell:hover { color:#2563eb; }
+  .tbl-row { display:grid; padding:9px 14px; border-bottom:1px solid #f1f5f9; align-items:center; transition:background 0.1s; cursor:pointer; }
+  .tbl-row:hover { background:#f8fafc; }
+  .tbl-cell { font-size:11px; color:#334155; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; padding-right:8px; }
+
+  /* Badges */
+  .badge { display:inline-flex; align-items:center; padding:2px 8px; border-radius:4px; font-size:10px; font-weight:600; }
+  .badge-green { background:#dcfce7; color:#15803d; border:1px solid #86efac; }
+  .badge-amber { background:#fef3c7; color:#92400e; border:1px solid #fcd34d; }
+  .badge-red   { background:#fff1f2; color:#be123c; border:1px solid #fca5a5; }
+  .badge-blue  { background:#dbeafe; color:#1d4ed8; border:1px solid #93c5fd; }
+  .badge-purple{ background:#ede9fe; color:#6d28d9; border:1px solid #c4b5fd; }
+  .badge-gray  { background:#f1f5f9; color:#64748b; border:1px solid #cbd5e1; }
+
+  /* Countdown badges — keep the glow */
+  .cd { display:flex; flex-direction:column; align-items:center; padding:6px 10px; border-radius:8px; min-width:58px; flex-shrink:0; }
+  .cd-num { font-family:'Aldrich',sans-serif; font-size:20px; line-height:1; }
+  .cd-lbl { font-size:8px; letter-spacing:1px; margin-top:2px; font-weight:600; }
+  .cd-dt  { font-size:9px; color:#94a3b8; margin-top:2px; }
+  .cd-g { background:#f0fdf4; border:1.5px solid #86efac; box-shadow:0 0 10px rgba(34,197,94,0.2); }
+  .cd-a { background:#fffbeb; border:1.5px solid #fcd34d; box-shadow:0 0 10px rgba(245,158,11,0.2); }
+  .cd-r { background:#fff1f2; border:1.5px solid #fca5a5; box-shadow:0 0 10px rgba(239,68,68,0.2); }
+
+  /* Form fields */
+  .field { margin-bottom:12px; }
+  .field label { display:block; font-size:11px; font-weight:600; color:#475569; margin-bottom:4px; }
+
+  /* Empty state */
+  .empty { padding:48px 24px; text-align:center; }
+  .empty-title { font-size:13px; font-weight:600; color:#94a3b8; margin-bottom:6px; }
+  .empty-sub { font-size:11px; color:#cbd5e1; }
+
+  /* Stat cards */
+  .stat-icon { width:40px; height:40px; border-radius:10px; display:flex; align-items:center; justify-content:center; font-size:18px; flex-shrink:0; }
+
+  /* Tool buttons */
+  .tool-btn { padding:10px 12px; border-radius:8px; border:1.5px solid #cbd5e1; background:#f8fafc; cursor:pointer; transition:all 0.15s; text-align:left; width:100%; }
+  .tool-btn:hover { border-color:#93b4fd; background:#eff6ff; }
+  .tool-btn.green { border-color:#86efac; background:#f0fdf4; }
+  .tool-btn.green:hover { border-color:#4ade80; background:#dcfce7; }
+
+  /* Feed */
+  .feed-item { display:flex; align-items:center; gap:12px; padding:10px 16px; border-bottom:1px solid #f1f5f9; transition:background 0.1s; cursor:pointer; }
+  .feed-item:hover { background:#f8fafc; }
+
+  /* Summary strip in modals */
+  .summary-strip { display:flex; gap:20px; padding:12px 16px; background:#f8fafc; border-bottom:1.5px solid #e2e8f0; flex-wrap:wrap; }
+  .summary-item { }
+  .summary-val { font-family:'Aldrich',sans-serif; font-size:18px; line-height:1; }
+  .summary-lbl { font-size:10px; color:#94a3b8; margin-top:2px; font-weight:500; }
+
+  /* Provider bar */
+  .prov-bar { height:3px; background:#e2e8f0; border-radius:99px; overflow:hidden; margin-top:4px; }
+  .prov-bar-fill { height:100%; background:linear-gradient(90deg,#93b4fd,#2563eb); border-radius:99px; }
 `;
 
-function Panel({ children, style }) {
+// ── Helpers ───────────────────────────────────────────────────────────────────
+const fmt = v => v == null ? "—" : `$${Math.round(v).toLocaleString()}`;
+const fmtPct = v => v == null ? "—" : `${v}%`;
+const fmtDate = v => v ? new Date(v).toLocaleDateString() : "—";
+
+function SortHdr({ label, field, sortField, sortAsc, onSort, style }) {
+  const active = sortField === field;
   return (
-    <div style={{ background:"rgba(10,8,20,0.95)", border:"1px solid rgba(138,99,210,0.3)", position:"relative", overflow:"hidden", clipPath:"polygon(0 0,100% 0,100% calc(100% - 14px),calc(100% - 14px) 100%,0 100%)", ...style }}>
-      <div style={{ position:"absolute", top:0, left:0, width:12, height:12, borderTop:"1.5px solid #a07ee0", borderLeft:"1.5px solid #a07ee0", zIndex:5, pointerEvents:"none" }}/>
-      <div style={{ position:"absolute", bottom:13, right:-1, width:20, height:1.5, background:"rgba(138,99,210,0.35)", transform:"rotate(-45deg)", transformOrigin:"right center", zIndex:5, pointerEvents:"none" }}/>
-      <div style={{ position:"absolute", left:0, right:0, height:2, background:"linear-gradient(90deg,transparent,rgba(138,99,210,0.18),transparent)", animation:"scan 4s linear infinite", pointerEvents:"none", zIndex:4 }}/>
-      {children}
+    <div className="tbl-hdr-cell" style={{ color: active ? "#2563eb" : undefined, ...style }} onClick={() => onSort(field)}>
+      {label} {active ? (sortAsc ? "↑" : "↓") : <span style={{ opacity:0.3 }}>↕</span>}
     </div>
   );
 }
 
-function PTitle({ children }) {
-  return <div style={{ fontSize:7, letterSpacing:2.5, color:"rgba(232,228,240,0.45)", padding:"11px 14px 8px", borderBottom:"1px solid rgba(138,99,210,0.15)", position:"relative", zIndex:5 }}>{children}</div>;
+function useSort(initial = "id", asc = false) {
+  const [sortField, setSortField] = useState(initial);
+  const [sortAsc, setSortAsc] = useState(asc);
+  function toggle(field) {
+    if (sortField === field) setSortAsc(p => !p);
+    else { setSortField(field); setSortAsc(false); }
+  }
+  function apply(arr, key) {
+    return [...arr].sort((a, b) => {
+      const av = a[key ?? sortField]; const bv = b[key ?? sortField];
+      if (av == null) return 1; if (bv == null) return -1;
+      if (typeof av === "string") return sortAsc ? av.localeCompare(bv) : bv.localeCompare(av);
+      return sortAsc ? av - bv : bv - av;
+    });
+  }
+  return { sortField, sortAsc, toggle, apply };
 }
 
-function ToolBtn({ href, onClick, color, icon, name, desc, wide }) {
-  const colors = {
-    purple: { border:"rgba(138,99,210,0.35)", bg:"rgba(138,99,210,0.05)", hover:"rgba(138,99,210,0.12)", text:"#a07ee0", corner:"#a07ee0" },
-    blue:   { border:"rgba(59,158,255,0.3)",  bg:"rgba(59,158,255,0.04)",  hover:"rgba(59,158,255,0.1)",  text:"#3b9eff", corner:"#3b9eff" },
-    gold:   { border:"rgba(240,180,41,0.3)",  bg:"rgba(240,180,41,0.04)",  hover:"rgba(240,180,41,0.1)",  text:"#f0b429", corner:"#f0b429" },
-  };
-  const c = colors[color] || colors.purple;
-  const [hov, setHov] = useState(false);
-  const sharedStyle = { display:"flex", flexDirection: wide ? "row" : "column", alignItems: wide ? "center" : "flex-start", gap: wide ? 12 : 5, padding:"12px 12px", border:`1px solid ${c.border}`, background: hov ? c.hover : c.bg, cursor:"pointer", textDecoration:"none", position:"relative", transition:"all 0.2s", clipPath:"polygon(0 0,100% 0,100% calc(100% - 7px),calc(100% - 7px) 100%,0 100%)", gridColumn: wide ? "span 2" : undefined };
-  const inner = (
-    <>
-      <div style={{ position:"absolute", top:0, left:0, width:7, height:7, borderTop:`1px solid ${c.corner}`, borderLeft:`1px solid ${c.corner}` }}/>
-      <div style={{ fontSize:wide ? 18 : 16 }}>{icon}</div>
-      <div style={{ flex: wide ? 1 : undefined }}>
-        <div style={{ fontSize:7.5, letterSpacing:1.5, color:c.text, marginBottom:3 }}>{name}</div>
-        <div style={{ fontSize:6.5, color:"rgba(232,228,240,0.45)", lineHeight:1.5 }}>{desc}</div>
-      </div>
-      <div style={{ fontSize:7.5, color:c.text, opacity:0.5, marginTop: wide ? 0 : "auto", alignSelf: wide ? "center" : "flex-end" }}>→</div>
-    </>
-  );
-  if (onClick) return (
-    <div onClick={onClick} onMouseEnter={() => setHov(true)} onMouseLeave={() => setHov(false)} style={{ ...sharedStyle, fontFamily:"inherit" }}>{inner}</div>
-  );
-  return (
-    <a href={href} target="_blank" rel="noreferrer" onMouseEnter={() => setHov(true)} onMouseLeave={() => setHov(false)} style={sharedStyle}>{inner}</a>
-  );
+function Spinner({ color = "#2563eb" }) {
+  return <div style={{ textAlign:"center", padding:"48px", fontSize:12, color, fontWeight:500 }}>Loading...</div>;
 }
 
-function StatCard({ label, value, sub, color }) {
-  const colors = { purple:"#a07ee0", gold:"#f0b429", blue:"#3b9eff", green:"#39ff14" };
-  const borders = { purple:"rgba(138,99,210,0.4)", gold:"rgba(240,180,41,0.5)", blue:"rgba(59,158,255,0.4)", green:"rgba(57,255,20,0.4)" };
-  const c = colors[color] || colors.purple;
-  const b = borders[color] || borders.purple;
+function Empty({ title = "No results found", sub = "" }) {
   return (
-    <div style={{ background:"rgba(10,8,20,0.95)", border:"1px solid rgba(138,99,210,0.15)", padding:"12px 14px", position:"relative", overflow:"hidden", clipPath:"polygon(0 0,100% 0,100% calc(100% - 10px),calc(100% - 10px) 100%,0 100%)" }}>
-      <div style={{ position:"absolute", top:0, left:0, width:10, height:10, borderTop:`1.5px solid ${b}`, borderLeft:`1.5px solid ${b}` }}/>
-      <div style={{ position:"absolute", top:0, left:0, right:0, height:1, background:`linear-gradient(90deg,${c},transparent)` }}/>
-      <div style={{ fontSize:6.5, letterSpacing:2, color:"rgba(232,228,240,0.45)", marginBottom:5 }}>{label}</div>
-      <div style={{ fontFamily:"'Aldrich',sans-serif", fontSize:20, color:c }}>{value}</div>
-      <div style={{ fontSize:7, color:"rgba(232,228,240,0.35)", marginTop:3 }}>{sub}</div>
+    <div className="empty">
+      <div className="empty-title">{title}</div>
+      {sub && <div className="empty-sub">{sub}</div>}
     </div>
   );
 }
 
+function StatusDot({ ok = true }) {
+  return <span style={{ width:8, height:8, borderRadius:"50%", background: ok ? "#22c55e" : "#ef4444", display:"inline-block", boxShadow: ok ? "0 0 6px rgba(34,197,94,0.5)" : "0 0 6px rgba(239,68,68,0.5)", flexShrink:0 }}/>;
+}
+
+
+// ── Feed470 ───────────────────────────────────────────────────────────────────
 function Feed470({ token, onTagsUpdated }) {
-  const [data, setData]       = useState([]);
+  const [data, setData]     = useState([]);
   const [loading, setLoading] = useState(true);
-  const [state, setState]     = useState("TX");
-  const [filter, setFilter]   = useState("all");
-  const [page, setPage]       = useState(0);
-  const [tags, setTags]       = useState(new Set());
-  const PAGE_SIZE = 10;
+  const [state]             = useState("TX");
+  const [filter, setFilter] = useState("all");
+  const [page, setPage]     = useState(0);
+  const [tags, setTags]     = useState(new Set());
+  const PAGE = 8;
 
-  const loadTags = useCallback(async () => {
-    try {
-      const res  = await fetch(`${API_URL}/api/tags`, { headers:{ Authorization:`Bearer ${token}` } });
-      const json = await res.json();
-      if (json.status === "success") setTags(new Set((json.data||[]).map(t => t.application_number)));
-    } catch {}
+  useEffect(() => {
+    if (!token) return;
+    fetch(`${API_URL}/api/tags`, { headers:{ Authorization:`Bearer ${token}` } })
+      .then(r => r.json()).then(d => {
+        if (d.status === "success") setTags(new Set(d.data.map(t => String(t.application_number))));
+      }).catch(() => {});
   }, [token]);
 
-  const load = useCallback(async () => {
+  useEffect(() => {
+    if (!token) return;
     setLoading(true);
-    try {
-      const params = new URLSearchParams({ limit:200, ...(state !== "ALL" && { state }) });
-      const res  = await fetch(`${API_URL}/api/470s?${params}`, { headers:{ Authorization:`Bearer ${token}` } });
-      const json = await res.json();
-      setData(json.data || []);
-      setPage(0);
-    } catch { setData([]); }
-    setLoading(false);
-  }, [token, state]);
+    const params = new URLSearchParams({ state, limit:200, offset:0, status:"open" });
+    if (filter === "urgent") params.set("urgent", "true");
+    fetch(`${API_URL}/api/470s?${params}`, { headers:{ Authorization:`Bearer ${token}` } })
+      .then(r => r.json()).then(d => { if (d.status === "success") setData(d.data || []); })
+      .catch(() => {}).finally(() => setLoading(false));
+  }, [token, state, filter]);
 
-  useEffect(() => { load(); loadTags(); }, [load, loadTags]);
-
-  async function toggleTag(e, item) {
-    e.preventDefault();
-    e.stopPropagation();
-    const appNum = item.application_number;
+  async function toggleTag(item) {
+    const appNum = String(item.application_number);
     const isTagged = tags.has(appNum);
-    try {
-      if (isTagged) {
-        await fetch(`${API_URL}/api/tags/${appNum}`, { method:"DELETE", headers:{ Authorization:`Bearer ${token}` } });
-        setTags(prev => { const n = new Set(prev); n.delete(appNum); return n; });
-      } else {
-        await fetch(`${API_URL}/api/tags`, { method:"POST", headers:{ Authorization:`Bearer ${token}`, "Content-Type":"application/json" },
-          body: JSON.stringify({ application_number: appNum, billed_entity_name: item.billed_entity_name, state: item.state, service_category: item.service_category, bid_due_date: item.bid_due_date, funding_year: item.funding_year }) });
-        setTags(prev => new Set([...prev, appNum]));
-      }
-      if (onTagsUpdated) onTagsUpdated();
-    } catch {}
-  }
-
-  function getStatus(item) {
-    if (item.bid_due_date) {
-      const bidDate = new Date(item.bid_due_date);
-      const now     = new Date();
-      return bidDate >= now ? "open" : "closed";
+    const next = new Set(tags);
+    if (isTagged) {
+      await fetch(`${API_URL}/api/tags/${appNum}`, { method:"DELETE", headers:{ Authorization:`Bearer ${token}` } });
+      next.delete(appNum);
+    } else {
+      await fetch(`${API_URL}/api/tags`, { method:"POST", headers:{ Authorization:`Bearer ${token}`, "Content-Type":"application/json" },
+        body: JSON.stringify({ application_number: appNum, billed_entity_name: item.billed_entity_name, state: item.billed_entity_state, service_category: item.service_category, bid_due_date: item.bid_due_date, funding_year: item.funding_year }) });
+      next.add(appNum);
     }
-    const s = (item.application_status || "").toLowerCase();
-    if (s.includes("certif") && !s.includes("pending")) return "open";
-    if (s.includes("pending") || s.includes("review") || s.includes("progress")) return "review";
-    if (s.includes("cancel") || s.includes("withdraw")) return "closed";
-    return "open";
+    setTags(next);
+    onTagsUpdated?.();
   }
 
-  function isNew(item) {
-    if (!item.date_posted && !item.synced_at) return false;
-    const posted = new Date(item.date_posted || item.synced_at);
-    const today  = new Date();
-    return posted.getFullYear() === today.getFullYear() &&
-           posted.getMonth()    === today.getMonth()    &&
-           posted.getDate()     === today.getDate();
+  const paged = data.slice(page * PAGE, (page + 1) * PAGE);
+  const totalPages = Math.ceil(data.length / PAGE);
+
+  function cdClass(days) {
+    if (days == null || days < 0) return "cd cd-r";
+    if (days <= 7) return "cd cd-r";
+    if (days <= 14) return "cd cd-a";
+    return "cd cd-g";
   }
-
-  function daysLeft(item) {
-    if (!item.bid_due_date) return null;
-    return Math.ceil((new Date(item.bid_due_date) - new Date()) / (1000*60*60*24));
-  }
-
-  // Always show open only — closed filtered out at source
-  const openData = data.filter(d => getStatus(d) === "open");
-  const filtered = filter === "all" ? openData : openData.filter(d => {
-    const days = daysLeft(d);
-    if (filter === "urgent") return days !== null && days <= 7;
-    return true;
-  });
-  const totalPages = Math.ceil(filtered.length / PAGE_SIZE);
-  const paged = filtered.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
-  const STATES = ["ALL","TX","CA","NY","FL","IL","PA","OH","GA","NC","MI"];
-
-  function get470Link(appNum) {
-    return `https://legacy.fundsforlearning.com/470/${appNum}`;
+  function cdColor(days) {
+    if (days == null || days < 0) return "#dc2626";
+    if (days <= 7) return "#dc2626";
+    if (days <= 14) return "#d97706";
+    return "#16a34a";
   }
 
   return (
-    <Panel style={{ display:"flex", flexDirection:"column", height:"100%" }}>
-      <PTitle>{'// USAC OPEN API — '}<span style={{ color:"#a07ee0" }}>FORM 470 LIVE FEED</span></PTitle>
-      <div style={{ display:"flex", alignItems:"center", gap:6, padding:"5px 14px", borderBottom:"1px solid rgba(138,99,210,0.12)" }}>
-        <div style={{ width:5, height:5, borderRadius:"50%", background:"#39ff14", animation:"pulse-dot 1s infinite", boxShadow:"0 0 5px #39ff14" }}/>
-        <span style={{ fontSize:6.5, letterSpacing:2, color:"rgba(57,255,20,0.55)" }}>LIVE · USAC OPEN DATA API</span>
-      </div>
-      <div style={{ display:"flex", gap:5, padding:"7px 14px", borderBottom:"1px solid rgba(138,99,210,0.12)", flexWrap:"wrap" }}>
-        <span style={{ fontSize:6.5, color:"rgba(232,228,240,0.35)", alignSelf:"center", marginRight:4 }}>STATE:</span>
-        {STATES.map(s => (
-          <button key={s} onClick={() => setState(s)} style={{ padding:"3px 8px", fontFamily:"'DM Mono',monospace", fontSize:6.5, letterSpacing:1, border:`1px solid ${state===s ? "rgba(240,180,41,0.6)" : "rgba(138,99,210,0.2)"}`, background: state===s ? "rgba(240,180,41,0.08)" : "transparent", color: state===s ? "#f0b429" : "rgba(232,228,240,0.4)", cursor:"pointer" }}>{s}</button>
-        ))}
-      </div>
-      <div style={{ display:"flex", gap:5, padding:"7px 14px", borderBottom:"1px solid rgba(138,99,210,0.12)" }}>
-        {["all","urgent"].map(f => (
-          <button key={f} onClick={() => { setFilter(f); setPage(0); }} style={{ padding:"3px 9px", fontFamily:"'DM Mono',monospace", fontSize:7, letterSpacing:1.5, border:`1px solid ${filter===f ? (f==="urgent" ? "rgba(240,97,74,0.6)" : "rgba(138,99,210,0.6)") : "rgba(138,99,210,0.2)"}`, background: filter===f ? (f==="urgent" ? "rgba(240,97,74,0.1)" : "rgba(138,99,210,0.1)") : "transparent", color: filter===f ? (f==="urgent" ? "#f0614a" : "#a07ee0") : "rgba(232,228,240,0.4)", cursor:"pointer" }}>{f === "urgent" ? "⚠ URGENT ≤7d" : "ALL OPEN"}</button>
-        ))}
-        <span style={{ marginLeft:"auto", fontSize:7, color:"rgba(232,228,240,0.35)", alignSelf:"center" }}>{openData.length} OPEN 470s</span>
-      </div>
-      <div style={{ flex:1, overflow:"hidden" }}>
-        {loading ? (
-          [1,2,3,4,5].map(i => (
-            <div key={i} style={{ padding:"10px 14px", borderBottom:"1px solid rgba(138,99,210,0.1)", display:"flex", flexDirection:"column", gap:5 }}>
-              <div style={{ height:10, width:`${55+i*5}%`, borderRadius:1, background:"linear-gradient(90deg,rgba(138,99,210,0.07) 25%,rgba(138,99,210,0.14) 50%,rgba(138,99,210,0.07) 75%)", backgroundSize:"200% 100%", animation:"shimmer 1.5s infinite" }}/>
-              <div style={{ height:8, width:"40%", borderRadius:1, background:"linear-gradient(90deg,rgba(138,99,210,0.07) 25%,rgba(138,99,210,0.14) 50%,rgba(138,99,210,0.07) 75%)", backgroundSize:"200% 100%", animation:"shimmer 1.5s infinite" }}/>
-            </div>
-          ))
-        ) : paged.length === 0 ? (
-          <div style={{ padding:"24px 14px", textAlign:"center", fontSize:9, color:"rgba(138,99,210,0.4)" }}>NO 470s FOUND</div>
-        ) : paged.map((item, i) => {
-          const isTagged = tags.has(item.application_number);
-          const newToday = isNew(item);
-          const days     = daysLeft(item);
-          const cdColor  = days === null ? "rgba(232,228,240,0.3)" : days > 14 ? "#39ff14" : days > 7 ? "#f0b429" : "#f0614a";
-          const cdBg     = days === null ? "rgba(138,99,210,0.04)" : days > 14 ? "rgba(57,255,20,0.07)" : days > 7 ? "rgba(240,180,41,0.08)" : "rgba(240,97,74,0.1)";
-          const cdBorder = days === null ? "rgba(138,99,210,0.15)" : days > 14 ? "rgba(57,255,20,0.35)" : days > 7 ? "rgba(240,180,41,0.5)" : "rgba(240,97,74,0.65)";
-          const urgent   = days !== null && days <= 7;
-          return (
-            <a key={i} href={get470Link(item.application_number)} target="_blank" rel="noreferrer"
-              style={{ display:"flex", alignItems:"center", gap:10, padding:"9px 14px", borderBottom:"1px solid rgba(138,99,210,0.1)", textDecoration:"none", transition:"background 0.15s" }}
-              onMouseEnter={e => e.currentTarget.style.background="rgba(138,99,210,0.05)"}
-              onMouseLeave={e => e.currentTarget.style.background="transparent"}>
-              {/* Info section */}
-              <div style={{ flex:1, minWidth:0 }}>
-                <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:3 }}>
-                  <span style={{ fontSize:9, color:"#3b9eff", fontWeight:500 }}>Form 470 · {item.application_number}</span>
-                  {newToday && <span style={{ fontSize:5.5, letterSpacing:2, padding:"2px 6px", background:"rgba(138,99,210,0.15)", border:"1px solid rgba(138,99,210,0.5)", color:"#a07ee0", flexShrink:0 }}>NEW</span>}
-                  <span style={{ fontSize:6, letterSpacing:1.5, padding:"2px 7px", background:"rgba(57,255,20,0.08)", border:"1px solid rgba(57,255,20,0.35)", color:"#39ff14", flexShrink:0 }}>OPEN</span>
-                  <button onClick={e => toggleTag(e, item)} style={{ fontSize:6.5, letterSpacing:1.5, padding:"2px 8px", border:`1px solid ${isTagged ? "rgba(240,180,41,0.7)" : "rgba(138,99,210,0.3)"}`, background: isTagged ? "rgba(240,180,41,0.12)" : "rgba(138,99,210,0.06)", color: isTagged ? "#f0b429" : "rgba(232,228,240,0.4)", cursor:"pointer", fontFamily:"'DM Mono',monospace", transition:"all 0.15s", flexShrink:0 }}>
-                    {isTagged ? "★ TAGGED" : "☆ TAG"}
-                  </button>
-                </div>
-                <div style={{ fontSize:8, color:"rgba(232,228,240,0.8)", marginBottom:3, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{item.billed_entity_name}{item.state ? ` · ${item.state}` : ""}</div>
-                <div style={{ display:"flex", gap:10 }}>
-                  <span style={{ fontSize:6.5, color:"#a07ee0" }}>FY{item.funding_year}</span>
-                  {item.service_category && <span style={{ fontSize:6.5, color:"rgba(232,228,240,0.4)", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{item.service_category}</span>}
-                  {item.date_posted && <span style={{ fontSize:6.5, color:"rgba(232,228,240,0.35)", flexShrink:0 }}>Posted: {new Date(item.date_posted).toLocaleDateString()}</span>}
-                </div>
-              </div>
-              {/* Large countdown block */}
-              <div className={urgent ? "pulse-urgent" : ""} style={{ display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", minWidth:68, padding:"7px 10px", background:cdBg, border:`1px solid ${cdBorder}`, clipPath:"polygon(0 0,100% 0,100% calc(100% - 6px),calc(100% - 6px) 100%,0 100%)", flexShrink:0, position:"relative" }}>
-                <div style={{ position:"absolute", top:0, left:0, right:0, height:1, background:`linear-gradient(90deg,transparent,${cdColor},transparent)`, opacity:0.6 }}/>
-                <div style={{ fontFamily:"'Aldrich',sans-serif", fontSize:22, lineHeight:1, color:cdColor, marginBottom:2 }}>
-                  {days === null ? "—" : days === 0 ? "0" : days}
-                </div>
-                <div style={{ fontSize:6, letterSpacing:2, color:cdColor, opacity:0.7 }}>DAYS LEFT</div>
-                {item.bid_due_date && <div style={{ fontSize:6, color:cdColor, opacity:0.5, marginTop:2 }}>{new Date(item.bid_due_date).toLocaleDateString()}</div>}
-              </div>
-            </a>
-          );
-        })}
-      </div>
-      <div style={{ padding:"9px 14px", borderTop:"1px solid rgba(138,99,210,0.12)", display:"flex", justifyContent:"space-between", alignItems:"center", flexShrink:0 }}>
-        <span style={{ fontSize:7, color:"rgba(232,228,240,0.4)" }}>{filtered.length} TOTAL · PAGE {page+1}/{totalPages||1}</span>
-        <div style={{ display:"flex", gap:5 }}>
-          <button onClick={() => setPage(p => Math.max(0,p-1))} disabled={page===0} style={{ padding:"3px 10px", fontFamily:"'DM Mono',monospace", fontSize:7, letterSpacing:1, border:"1px solid rgba(138,99,210,0.25)", background:"transparent", color: page===0 ? "rgba(232,228,240,0.2)" : "rgba(232,228,240,0.5)", cursor: page===0 ? "not-allowed" : "pointer" }}>← PREV</button>
-          <button onClick={() => setPage(p => Math.min(totalPages-1,p+1))} disabled={page>=totalPages-1} style={{ padding:"3px 10px", fontFamily:"'DM Mono',monospace", fontSize:7, letterSpacing:1, border:"1px solid rgba(138,99,210,0.25)", background:"transparent", color: page>=totalPages-1 ? "rgba(232,228,240,0.2)" : "rgba(232,228,240,0.5)", cursor: page>=totalPages-1 ? "not-allowed" : "pointer" }}>NEXT →</button>
-        </div>
-      </div>
-    </Panel>
-  );
-}
-// ── Tags Panel ────────────────────────────────────────────────────────────────
-const STAGES = ["Bid Submitted","Under Review","Final Review","Wave Ready","Funded","Denied","On Appeal"];
-const STAGE_COLORS = {
-  "Bid Submitted": { color:"#3b9eff", bg:"rgba(59,158,255,0.1)",  border:"rgba(59,158,255,0.4)"  },
-  "Under Review":  { color:"#a07ee0", bg:"rgba(138,99,210,0.1)", border:"rgba(138,99,210,0.4)"  },
-  "Final Review":  { color:"#f0b429", bg:"rgba(240,180,41,0.1)",  border:"rgba(240,180,41,0.4)"  },
-  "Wave Ready":    { color:"#00d4ff", bg:"rgba(0,212,255,0.1)",   border:"rgba(0,212,255,0.4)"   },
-  "Funded":        { color:"#22c97a", bg:"rgba(34,201,122,0.1)",  border:"rgba(34,201,122,0.4)"  },
-  "Denied":        { color:"#f0614a", bg:"rgba(240,97,74,0.1)",   border:"rgba(240,97,74,0.4)"   },
-  "On Appeal":     { color:"#ff9f43", bg:"rgba(255,159,67,0.1)",  border:"rgba(255,159,67,0.4)"  },
-};
-
-function TagsPanel({ token, onTagsUpdated }) {
-  const [tags, setTags]         = useState([]);
-  const [loading, setLoading]   = useState(true);
-  const [popup, setPopup]       = useState(null);
-  const [stages, setStages]     = useState({});
-
-  const load = useCallback(async () => {
-    setLoading(true);
-    try {
-      const res  = await fetch(`${API_URL}/api/tags`, { headers:{ Authorization:`Bearer ${token}` } });
-      const json = await res.json();
-      const data = json.data || [];
-      if (json.status === "success") {
-        setTags(data);
-        if (data.length > 0) {
-          const nums  = data.map(t => t.application_number).join(",");
-          const sRes  = await fetch(`${API_URL}/api/bid-stages?app_numbers=${nums}`, { headers:{ Authorization:`Bearer ${token}` } });
-          const sJson = await sRes.json();
-          if (sJson.status === "success") setStages(sJson.data || {});
-        }
-      }
-    } catch {}
-    setLoading(false);
-  }, [token]);
-
-  useEffect(() => { load(); }, [load]);
-
-  async function removeTag(appNum) {
-    await fetch(`${API_URL}/api/tags/${appNum}`, { method:"DELETE", headers:{ Authorization:`Bearer ${token}` } });
-    setTags(prev => prev.filter(t => t.application_number !== appNum));
-    if (onTagsUpdated) onTagsUpdated();
-  }
-
-  async function patchTag(appNum, fields) {
-    try {
-      await fetch(`${API_URL}/api/tags/${appNum}`, {
-        method: "PATCH",
-        headers: { Authorization:`Bearer ${token}`, "Content-Type":"application/json" },
-        body: JSON.stringify(fields)
-      });
-      setTags(prev => prev.map(t => t.application_number === appNum ? { ...t, ...fields } : t));
-    } catch {}
-  }
-
-  function toggleResponded(tag) {
-    const newVal = !tag.responded;
-    // If turning off, also clear bid_status and financials
-    const fields = newVal
-      ? { responded: true }
-      : { responded: false, bid_status: null, bid_amount: null, cogs: null };
-    patchTag(tag.application_number, fields);
-  }
-
-  function toggleStatus(tag, status) {
-    const newStatus = tag.bid_status === status ? null : status;
-    patchTag(tag.application_number, { bid_status: newStatus });
-  }
-
-  function openPopup(tag) {
-    setPopup({ appNum: tag.application_number, entityName: tag.billed_entity_name, bidAmount: tag.bid_amount || "", cogs: tag.cogs || "" });
-  }
-
-  async function savePopup() {
-    const bid  = parseFloat(popup.bidAmount) || 0;
-    const cogs = parseFloat(popup.cogs) || 0;
-    await patchTag(popup.appNum, { bid_amount: bid, cogs });
-    setPopup(null);
-  }
-
-  const popupBid    = parseFloat(popup?.bidAmount) || 0;
-  const popupCogs   = parseFloat(popup?.cogs) || 0;
-  const popupMargin = popupBid > 0 ? (((popupBid - popupCogs) / popupBid) * 100).toFixed(1) : "—";
-
-  const btnBase = { fontSize:7, letterSpacing:1, padding:"3px 7px", fontFamily:"'DM Mono',monospace", cursor:"pointer", border:"1px solid", transition:"all 0.15s" };
-
-  return (
-    <div style={{ animation:"fade-up 0.4s ease both", position:"relative" }}>
-
-      {/* $ Popup */}
-      {popup && (
-        <div style={{ position:"fixed", inset:0, background:"rgba(5,5,13,0.88)", display:"flex", alignItems:"center", justifyContent:"center", zIndex:200 }}>
-          <div style={{ background:"#0b0a1a", border:"1px solid rgba(240,180,41,0.35)", clipPath:"polygon(0 0,calc(100% - 14px) 0,100% 14px,100% 100%,14px 100%,0 calc(100% - 14px))", padding:"20px 22px 22px", width:300, position:"relative" }}>
-            <div style={{ position:"absolute", top:0, left:"10%", right:"10%", height:1, background:"linear-gradient(90deg,transparent,rgba(240,180,41,0.5),transparent)" }}/>
-            <div style={{ fontFamily:"'Aldrich',sans-serif", fontSize:9, letterSpacing:2, color:"#f0b429", marginBottom:6, textTransform:"uppercase" }}>Bid Financials</div>
-            <div style={{ fontSize:7, letterSpacing:1.5, color:"rgba(232,228,240,0.35)", marginBottom:16, textTransform:"uppercase" }}>{popup.appNum} — {popup.entityName}</div>
-
-            {[{ label:"Total Bid Amount", key:"bidAmount" }, { label:"Cost of Goods", key:"cogs" }].map(({ label, key }) => (
-              <div key={key} style={{ marginBottom:12 }}>
-                <div style={{ fontSize:7, letterSpacing:1.8, color:"rgba(232,228,240,0.4)", textTransform:"uppercase", marginBottom:5 }}>{label}</div>
-                <div style={{ display:"flex", border:"1px solid rgba(138,99,210,0.25)", background:"rgba(255,255,255,0.02)" }}>
-                  <div style={{ padding:"6px 9px", fontSize:9, color:"#a07ee0", borderRight:"1px solid rgba(138,99,210,0.2)" }}>$</div>
-                  <input type="number" value={popup[key]} onChange={e => setPopup(p => ({ ...p, [key]: e.target.value }))}
-                    style={{ flex:1, background:"transparent", border:"none", outline:"none", fontFamily:"'DM Mono',monospace", fontSize:9, color:"#e8e4f0", padding:"6px 9px" }}/>
-                </div>
-              </div>
-            ))}
-
-            <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"10px 12px", background:"rgba(138,99,210,0.06)", border:"1px solid rgba(138,99,210,0.2)", marginBottom:14 }}>
-              <span style={{ fontSize:7, letterSpacing:1.8, color:"rgba(138,99,210,0.6)", textTransform:"uppercase" }}>Calculated Margin</span>
-              <span style={{ fontFamily:"'Aldrich',sans-serif", fontSize:16, color:"#8a63d2" }}>{popupMargin}{popupBid > 0 ? "%" : ""}</span>
-            </div>
-
-            <div style={{ display:"flex", gap:8 }}>
-              <button onClick={savePopup} style={{ flex:1, padding:"7px", fontFamily:"'DM Mono',monospace", fontSize:7.5, letterSpacing:1.5, border:"1px solid rgba(34,201,122,0.4)", background:"rgba(34,201,122,0.08)", color:"#22c97a", cursor:"pointer" }}>SAVE</button>
-              <button onClick={() => setPopup(null)} style={{ padding:"7px 14px", fontFamily:"'DM Mono',monospace", fontSize:7.5, letterSpacing:1.5, border:"1px solid rgba(138,99,210,0.2)", background:"transparent", color:"rgba(232,228,240,0.35)", cursor:"pointer" }}>CANCEL</button>
-            </div>
+    <div className="card" style={{ display:"flex", flexDirection:"column" }}>
+      <div className="card-hdr">
+        <div>
+          <div className="card-title">Form 470 Live Feed</div>
+          <div style={{ fontSize:10, color:"#94a3b8", marginTop:2, display:"flex", alignItems:"center", gap:4 }}>
+            <StatusDot /> Live · USAC Open Data API · TX
           </div>
         </div>
-      )}
-
-      <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:12 }}>
-        <div style={{ fontFamily:"'Aldrich',sans-serif", fontSize:14, color:"#f0b429", letterSpacing:1 }}>★ MY TAGGED 470s</div>
-        <span style={{ fontSize:7.5, color:"rgba(232,228,240,0.4)", letterSpacing:2 }}>{tags.length} TAGGED</span>
+        <div className="card-badge">{data.length} open</div>
+      </div>
+      <div style={{ padding:"8px 16px", borderBottom:"1.5px solid #e2e8f0", background:"#f8fafc", display:"flex", gap:6, alignItems:"center" }}>
+        {[["all","All Open"],["urgent","⚠ Urgent ≤7d"]].map(([key,label]) => (
+          <button key={key} onClick={() => { setFilter(key); setPage(0); }}
+            className={`btn btn-sm ${filter===key ? "btn-active" : ""}`}>{label}</button>
+        ))}
+        <span style={{ marginLeft:"auto", fontSize:10, color:"#94a3b8" }}>Page {page+1} of {Math.max(1,totalPages)}</span>
       </div>
 
-      {/* Stage pipeline strip */}
-      {!loading && tags.length > 0 && (
-        <div style={{ display:"flex", gap:6, marginBottom:14, flexWrap:"wrap" }}>
-          {STAGES.map(stage => {
-            const count = tags.filter(t => stages[t.application_number] === stage).length;
-            const sc    = STAGE_COLORS[stage];
+      {loading ? <Spinner /> : paged.length === 0 ? <Empty title="No open 470s found" /> : (
+        <>
+          {paged.map((item, i) => {
+            const days = item.days_until_due;
+            const tagged = tags.has(String(item.application_number));
+            const dayLabel = days == null ? "—" : days < 0 ? "CLOSED" : days === 0 ? "TODAY" : `${days}`;
             return (
-              <div key={stage} style={{ display:"flex", alignItems:"center", gap:6, padding:"6px 12px", border:`1px solid ${count > 0 ? sc.border : "rgba(255,255,255,0.07)"}`, background: count > 0 ? sc.bg : "rgba(255,255,255,0.02)", borderRadius:2, opacity: count > 0 ? 1 : 0.45, transition:"all 0.2s" }}>
-                <div style={{ width:5, height:5, borderRadius:"50%", background: count > 0 ? sc.color : "rgba(255,255,255,0.2)", flexShrink:0 }}/>
-                <span style={{ fontSize:7, letterSpacing:1.2, color: count > 0 ? sc.color : "rgba(232,228,240,0.3)", textTransform:"uppercase", whiteSpace:"nowrap" }}>{stage}</span>
-                <span style={{ fontFamily:"'Aldrich',sans-serif", fontSize:11, color: count > 0 ? sc.color : "rgba(232,228,240,0.2)", marginLeft:2 }}>{count}</span>
+              <div key={i} className="feed-item">
+                <div style={{ flex:1, minWidth:0 }}>
+                  <div style={{ display:"flex", alignItems:"center", gap:6, marginBottom:3 }}>
+                    <span style={{ fontSize:11, fontWeight:600, color:"#2563eb" }}>{item.application_number}</span>
+                    <span className="badge badge-green">OPEN</span>
+                    {item.days_until_due <= 3 && item.days_until_due >= 0 && <span className="badge badge-red">URGENT</span>}
+                    <button onClick={() => toggleTag(item)} style={{ marginLeft:"auto", padding:"2px 8px", borderRadius:4, border:`1.5px solid ${tagged ? "#86efac" : "#cbd5e1"}`, background: tagged ? "#f0fdf4" : "transparent", fontSize:10, fontWeight:600, color: tagged ? "#15803d" : "#94a3b8", cursor:"pointer" }}>
+                      {tagged ? "★ Tagged" : "☆ Tag"}
+                    </button>
+                  </div>
+                  <div style={{ fontSize:11, fontWeight:500, color:"#334155" }}>{item.billed_entity_name}</div>
+                  <div style={{ fontSize:10, color:"#94a3b8", marginTop:2 }}>
+                    FY{item.funding_year} · {item.service_category} · Posted {item.date_posted ? new Date(item.date_posted).toLocaleDateString() : "—"}
+                  </div>
+                </div>
+                <div className={cdClass(days)}>
+                  <div className="cd-num" style={{ color: cdColor(days) }}>{dayLabel}</div>
+                  <div className="cd-lbl" style={{ color: cdColor(days) }}>DAYS</div>
+                  <div className="cd-dt">{item.bid_due_date ? new Date(item.bid_due_date).toLocaleDateString() : "—"}</div>
+                </div>
               </div>
             );
           })}
-        </div>
+          <div style={{ padding:"10px 16px", borderTop:"1.5px solid #e2e8f0", background:"#f8fafc", display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+            <span style={{ fontSize:10, color:"#94a3b8" }}>{data.length} results · showing {page*PAGE+1}–{Math.min((page+1)*PAGE, data.length)}</span>
+            <div style={{ display:"flex", gap:6 }}>
+              <button className="btn btn-sm" disabled={page===0} onClick={() => setPage(p=>p-1)}>← Prev</button>
+              <button className="btn btn-sm" disabled={page>=totalPages-1} onClick={() => setPage(p=>p+1)}>Next →</button>
+            </div>
+          </div>
+        </>
       )}
+    </div>
+  );
+}
 
-      <div style={{ background:"rgba(10,8,20,0.95)", border:"1px solid rgba(240,180,41,0.3)", position:"relative", clipPath:"polygon(0 0,100% 0,100% calc(100% - 14px),calc(100% - 14px) 100%,0 100%)", overflowX:"auto" }}>
-        <div style={{ position:"absolute", top:0, left:0, width:12, height:12, borderTop:"1.5px solid #f0b429", borderLeft:"1.5px solid #f0b429" }}/>
-        <div style={{ position:"absolute", bottom:13, right:-1, width:20, height:1.5, background:"rgba(240,180,41,0.35)", transform:"rotate(-45deg)", transformOrigin:"right center" }}/>
 
-        {/* Table header */}
-        <div style={{ display:"grid", gridTemplateColumns:"130px 1.8fr 60px 1fr 100px 90px 1fr", gap:0, padding:"8px 16px", borderBottom:"1px solid rgba(240,180,41,0.2)", background:"rgba(240,180,41,0.04)", minWidth:1020 }}>
-          {["APP #","ENTITY","STATE","SERVICE","BID DUE","DAYS LEFT","ACTIONS"].map((h,i) => (
-            <div key={i} style={{ fontSize:6.5, letterSpacing:1.5, color:"rgba(240,180,41,0.6)", fontFamily:"'DM Mono',monospace" }}>{h}</div>
+// ── BidResponseOverview ───────────────────────────────────────────────────────
+function BidResponseOverview({ token }) {
+  const [data, setData] = useState(null);
+  useEffect(() => {
+    if (!token) return;
+    fetch(`${API_URL}/api/tags`, { headers:{ Authorization:`Bearer ${token}` } })
+      .then(r => r.json()).then(d => { if (d.status === "success") setData(d.data || []); })
+      .catch(() => {});
+  }, [token]);
+
+  if (!data) return null;
+  const responded = data.filter(t => t.responded);
+  const won  = data.filter(t => t.bid_status === "won");
+  const lost = data.filter(t => t.bid_status === "lost");
+  const revenue = won.reduce((s, t) => s + (parseFloat(t.bid_amount) || 0), 0);
+  const margins = won.filter(t => t.margin_pct != null).map(t => parseFloat(t.margin_pct));
+  const avgMargin = margins.length ? (margins.reduce((a,b)=>a+b,0)/margins.length).toFixed(1) : null;
+  const winRate = responded.length ? Math.round((won.length/responded.length)*100) : 0;
+
+  return (
+    <div className="card">
+      <div className="card-hdr">
+        <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+          <StatusDot />
+          <div className="card-title">Bid Response Overview</div>
+        </div>
+      </div>
+      <div style={{ padding:16 }}>
+        <div style={{ background:"#f0fdf4", border:"1.5px solid #4ade80", borderRadius:10, padding:14, textAlign:"center", marginBottom:14, boxShadow:"0 0 12px rgba(34,197,94,0.1)" }}>
+          <div style={{ fontSize:10, fontWeight:600, color:"#15803d", letterSpacing:0.5, marginBottom:4 }}>TOTAL REVENUE — BIDS WON</div>
+          <div style={{ fontFamily:"'Aldrich',sans-serif", fontSize:26, color:"#16a34a", lineHeight:1, marginBottom:2 }}>{fmt(revenue)}</div>
+          <div style={{ fontSize:10, color:"#4ade80" }}>{won.length} funded commitments · FY2026</div>
+        </div>
+        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:8, marginBottom:14 }}>
+          {[
+            { label:"Responded", val:responded.length, sub:"total bids", color:"#7c3aed" },
+            { label:"Won",       val:won.length,        sub:`${winRate}% win rate`, color:"#16a34a" },
+            { label:"Lost",      val:lost.length,       sub:`${100-winRate}% loss rate`, color:"#dc2626" },
+          ].map(({ label, val, sub, color }) => (
+            <div key={label} style={{ background:"#f8fafc", border:"1.5px solid #e2e8f0", borderRadius:8, padding:"10px 8px", textAlign:"center" }}>
+              <div style={{ fontSize:10, color:"#94a3b8", fontWeight:500, marginBottom:4 }}>{label}</div>
+              <div style={{ fontFamily:"'Aldrich',sans-serif", fontSize:22, color, lineHeight:1, marginBottom:2 }}>{val}</div>
+              <div style={{ fontSize:9, color:"#94a3b8" }}>{sub}</div>
+            </div>
           ))}
         </div>
-
-        {loading ? (
-          <div style={{ padding:"24px", textAlign:"center", fontSize:9, color:"rgba(240,180,41,0.4)" }}>LOADING...</div>
-        ) : tags.length === 0 ? (
-          <div style={{ padding:"40px", textAlign:"center" }}>
-            <div style={{ fontSize:11, color:"rgba(240,180,41,0.4)", marginBottom:8 }}>NO TAGGED 470s YET</div>
-            <div style={{ fontSize:8, color:"rgba(232,228,240,0.3)" }}>Click ☆ TAG on any 470 in the feed to add it here</div>
-          </div>
-        ) : tags.map((tag, i) => {
-          const days      = tag.bid_due_date ? Math.ceil((new Date(tag.bid_due_date) - new Date()) / (1000*60*60*24)) : null;
-          const dayColor  = days === null ? "rgba(232,228,240,0.3)" : days > 14 ? "#39ff14" : days > 7 ? "#f0b429" : days >= 0 ? "#f0614a" : "rgba(232,228,240,0.3)";
-          const dayBg     = days === null ? "rgba(138,99,210,0.04)" : days > 14 ? "rgba(57,255,20,0.08)" : days > 7 ? "rgba(240,180,41,0.08)" : days >= 0 ? "rgba(240,97,74,0.1)" : "rgba(138,99,210,0.06)";
-          const dayLabel  = days === null ? "—" : days < 0 ? "CLOSED" : days === 0 ? "TODAY!" : `${days}d left`;
-          const responded = !!tag.responded;
-          const isWon     = tag.bid_status === "won";
-          const isLost    = tag.bid_status === "lost";
-          const hasMoney  = tag.bid_amount > 0;
-
-          const stage    = stages[tag.application_number] || null;
-          const stageIdx = stage ? STAGES.indexOf(stage) : -1;
-
-          return (
-            <div key={i} style={{ borderBottom: i < tags.length-1 ? "1px solid rgba(240,180,41,0.08)" : "none", transition:"background 0.15s", minWidth:1020 }}
-              onMouseEnter={e => e.currentTarget.style.background="rgba(240,180,41,0.03)"}
-              onMouseLeave={e => e.currentTarget.style.background="transparent"}>
-
-              {/* Main data row */}
-              <div style={{ display:"grid", gridTemplateColumns:"130px 1.8fr 60px 1fr 100px 90px 1fr", gap:0, padding:"9px 16px 6px", alignItems:"center" }}>
-
-              <a href={`https://legacy.fundsforlearning.com/470/${tag.application_number}`} target="_blank" rel="noreferrer"
-                style={{ fontSize:8.5, color:"#3b9eff", textDecoration:"none", fontWeight:500 }}>{tag.application_number}</a>
-
-              <a href={`https://legacy.fundsforlearning.com/470/${tag.application_number}`} target="_blank" rel="noreferrer"
-                style={{ fontSize:8, color:"rgba(232,228,240,0.8)", textDecoration:"none", paddingRight:8, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}
-                onMouseEnter={e => e.currentTarget.style.color="#3b9eff"}
-                onMouseLeave={e => e.currentTarget.style.color="rgba(232,228,240,0.8)"}>
-                {tag.billed_entity_name || "—"}
-              </a>
-
-              <div style={{ fontSize:8, color:"rgba(232,228,240,0.5)" }}>{tag.state || "—"}</div>
-              <div style={{ fontSize:7.5, color:"rgba(232,228,240,0.4)", paddingRight:8, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{tag.service_category || "—"}</div>
-              <div style={{ fontSize:8, color: tag.bid_due_date ? "#f0b429" : "rgba(232,228,240,0.3)" }}>
-                {tag.bid_due_date ? new Date(tag.bid_due_date).toLocaleDateString() : "—"}
-              </div>
-
-              <div style={{ display:"flex", alignItems:"center" }}>
-                <span className={days !== null && days >= 0 && days <= 7 ? "pulse-urgent" : ""} style={{ fontSize:8, color:dayColor, padding:"2px 8px", background:dayBg, border:`1px solid ${dayColor}40`, borderRadius:1 }}>
-                  {dayLabel}
-                </span>
-              </div>
-
-              {/* Action buttons */}
-              <div style={{ display:"flex", alignItems:"center", gap:4, flexWrap:"nowrap" }}>
-                {/* RESPONDED */}
-                <button onClick={() => toggleResponded(tag)}
-                  style={{ ...btnBase, color: responded ? "#3b9eff" : "rgba(232,228,240,0.3)", borderColor: responded ? "rgba(59,158,255,0.5)" : "rgba(255,255,255,0.1)", background: responded ? "rgba(59,158,255,0.1)" : "transparent" }}>
-                  RESPONDED
-                </button>
-
-                {/* WON */}
-                <button onClick={() => responded && toggleStatus(tag, "won")}
-                  style={{ ...btnBase, color: isWon ? "#22c97a" : "rgba(34,201,122,0.3)", borderColor: isWon ? "rgba(34,201,122,0.6)" : "rgba(34,201,122,0.15)", background: isWon ? "rgba(34,201,122,0.1)" : "transparent", opacity: responded ? 1 : 0.35, cursor: responded ? "pointer" : "not-allowed" }}>
-                  WON
-                </button>
-
-                {/* LOST */}
-                <button onClick={() => responded && toggleStatus(tag, "lost")}
-                  style={{ ...btnBase, color: isLost ? "#f0614a" : "rgba(240,97,74,0.3)", borderColor: isLost ? "rgba(240,97,74,0.6)" : "rgba(240,97,74,0.15)", background: isLost ? "rgba(240,97,74,0.1)" : "transparent", opacity: responded ? 1 : 0.35, cursor: responded ? "pointer" : "not-allowed" }}>
-                  LOST
-                </button>
-
-                {/* $ */}
-                <button onClick={() => responded && openPopup(tag)}
-                  style={{ ...btnBase, fontSize:9, padding:"2px 7px", color: hasMoney ? "#f0b429" : "rgba(240,180,41,0.4)", borderColor: hasMoney ? "rgba(240,180,41,0.6)" : "rgba(240,180,41,0.2)", background: hasMoney ? "rgba(240,180,41,0.1)" : "transparent", opacity: responded ? 1 : 0.35, cursor: responded ? "pointer" : "not-allowed" }}>
-                  $
-                </button>
-
-                {/* REMOVE */}
-                <button onClick={() => removeTag(tag.application_number)}
-                  style={{ ...btnBase, color:"rgba(240,97,74,0.6)", borderColor:"rgba(240,97,74,0.25)", background:"rgba(240,97,74,0.06)" }}
-                  onMouseEnter={e => { e.currentTarget.style.background="rgba(240,97,74,0.15)"; e.currentTarget.style.color="#f0614a"; }}
-                  onMouseLeave={e => { e.currentTarget.style.background="rgba(240,97,74,0.06)"; e.currentTarget.style.color="rgba(240,97,74,0.6)"; }}>
-                  ✕ REMOVE
-                </button>
-              </div>
-              </div>
-
-              {/* Stage pipeline */}
-              <div style={{ padding:"0 16px 9px", display:"flex", alignItems:"center", gap:0 }}>
-                {STAGES.map((s, si) => {
-                  const isCurrent  = si === stageIdx;
-                  const isPast     = stageIdx >= 0 && si < stageIdx && s !== "Denied" && s !== "On Appeal";
-                  const sc         = STAGE_COLORS[s];
-                  const dotColor   = isCurrent ? sc.color : isPast ? "rgba(255,255,255,0.2)" : "rgba(255,255,255,0.08)";
-                  const labelColor = isCurrent ? sc.color : "rgba(232,228,240,0.18)";
-                  const isLast     = si === STAGES.length - 1;
-                  return (
-                    <div key={s} style={{ display:"flex", alignItems:"center", flex: isLast ? "0 0 auto" : 1, minWidth:0 }}>
-                      <div style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:3, flexShrink:0 }}>
-                        <div style={{ width: isCurrent ? 7 : 5, height: isCurrent ? 7 : 5, borderRadius:"50%", background: dotColor, boxShadow: isCurrent ? `0 0 6px ${sc.color}` : "none", transition:"all 0.2s", border: isCurrent ? `1px solid ${sc.color}` : "none" }}/>
-                        <div style={{ fontSize:5.5, letterSpacing:0.8, color:labelColor, whiteSpace:"nowrap", fontWeight: isCurrent ? 500 : 400, textTransform:"uppercase" }}>{s}</div>
-                      </div>
-                      {!isLast && (
-                        <div style={{ flex:1, height:1, background: isPast ? "rgba(255,255,255,0.15)" : "rgba(255,255,255,0.06)", margin:"0 3px", marginBottom:10, minWidth:8 }}/>
-                      )}
-                    </div>
-                  );
-                })}
-                {stageIdx === -1 && (
-                  <span style={{ fontSize:6.5, color:"rgba(232,228,240,0.2)", letterSpacing:1 }}>No stage data found — sync to refresh</span>
-                )}
-              </div>
-
+        {avgMargin && (
+          <>
+            <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:6 }}>
+              <span style={{ fontFamily:"'Aldrich',sans-serif", fontSize:14, color:"#2563eb" }}>{avgMargin}%</span>
+              <span style={{ fontSize:11, color:"#94a3b8" }}>Avg Margin</span>
             </div>
-          );
-        })}
+            <div style={{ height:4, background:"#e2e8f0", borderRadius:99, overflow:"hidden" }}>
+              <div style={{ width:`${Math.min(100,parseFloat(avgMargin))}%`, height:"100%", background:"linear-gradient(90deg,#93b4fd,#2563eb)", borderRadius:99 }}/>
+            </div>
+          </>
+        )}
       </div>
     </div>
   );
 }
 
+// ── TagsPanel ─────────────────────────────────────────────────────────────────
+function TagsPanel({ token, onTagsUpdated }) {
+  const [tags, setTags]       = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [popup, setPopup]     = useState(null);
+  const [stages, setStages]   = useState({});
+
+  const STAGE_LABELS = ["Bid Submitted","Under Review","Final Review","Wave Ready","Funded","Denied","On Appeal"];
+  const STAGE_COLORS = ["#2563eb","#7c3aed","#d97706","#0891b2","#16a34a","#dc2626","#ea580c"];
+
+  async function load() {
+    if (!token) return;
+    setLoading(true);
+    try {
+      const res  = await fetch(`${API_URL}/api/tags`, { headers:{ Authorization:`Bearer ${token}` } });
+      const json = await res.json();
+      if (json.status === "success") {
+        setTags(json.data || []);
+        const nums = (json.data||[]).map(t=>t.application_number).join(",");
+        if (nums) {
+          const sr = await fetch(`${API_URL}/api/bid-stages?app_numbers=${nums}`, { headers:{ Authorization:`Bearer ${token}` } });
+          const sj = await sr.json();
+          if (sj.status === "success") setStages(sj.data || {});
+        }
+      }
+    } catch {} finally { setLoading(false); }
+  }
+
+  useEffect(() => { load(); }, [token]);
+
+  async function removeTag(appNum) {
+    await fetch(`${API_URL}/api/tags/${appNum}`, { method:"DELETE", headers:{ Authorization:`Bearer ${token}` } });
+    setTags(t => t.filter(x => x.application_number !== appNum));
+    onTagsUpdated?.();
+  }
+
+  async function updateTag(appNum, updates) {
+    await fetch(`${API_URL}/api/tags/${appNum}`, { method:"PATCH", headers:{ Authorization:`Bearer ${token}`, "Content-Type":"application/json" }, body: JSON.stringify(updates) });
+    await load();
+  }
+
+  if (loading) return <div style={{ padding:32 }}><Spinner /></div>;
+  if (!tags.length) return (
+    <div style={{ padding:48, textAlign:"center" }}>
+      <div style={{ fontSize:32, marginBottom:12 }}>☆</div>
+      <div style={{ fontSize:14, fontWeight:600, color:"#94a3b8", marginBottom:6 }}>No tagged 470s yet</div>
+      <div style={{ fontSize:12, color:"#cbd5e1" }}>Tag a Form 470 from the live feed to track your bids here</div>
+    </div>
+  );
+
+  return (
+    <div>
+      {tags.map((tag, i) => {
+        const stage = stages[tag.application_number];
+        const days  = tag.bid_due_date ? Math.ceil((new Date(tag.bid_due_date)-new Date())/(1000*60*60*24)) : null;
+        return (
+          <div key={i} style={{ padding:"14px 20px", borderBottom:"1px solid #f1f5f9", background: popup?.appNum === tag.application_number ? "#fafbff" : undefined }}>
+            <div style={{ display:"flex", alignItems:"flex-start", gap:12 }}>
+              <div style={{ flex:1, minWidth:0 }}>
+                <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:4 }}>
+                  <span style={{ fontSize:12, fontWeight:600, color:"#2563eb" }}>{tag.application_number}</span>
+                  {tag.bid_status === "won"  && <span className="badge badge-green">WON</span>}
+                  {tag.bid_status === "lost" && <span className="badge badge-red">LOST</span>}
+                  {tag.responded && !tag.bid_status && <span className="badge badge-blue">RESPONDED</span>}
+                  {days != null && days >= 0 && <span className={`badge ${days<=3?"badge-red":days<=14?"badge-amber":"badge-gray"}`}>{days}d left</span>}
+                </div>
+                <div style={{ fontSize:12, fontWeight:500, color:"#334155", marginBottom:2 }}>{tag.billed_entity_name}</div>
+                <div style={{ fontSize:10, color:"#94a3b8" }}>{tag.service_category} · {tag.state} · FY{tag.funding_year}</div>
+              </div>
+              <div style={{ display:"flex", gap:6, flexShrink:0 }}>
+                <button className="btn btn-sm" style={{ color: tag.responded ? "#15803d" : undefined, borderColor: tag.responded ? "#86efac" : undefined, background: tag.responded ? "#f0fdf4" : undefined }}
+                  onClick={() => updateTag(tag.application_number, { responded: !tag.responded })}>
+                  {tag.responded ? "✓ Responded" : "Responded"}
+                </button>
+                <button className="btn btn-sm" style={{ color:"#16a34a", borderColor:"#86efac" }}
+                  onClick={() => { const u = {responded:true,bid_status:"won"}; if (!tag.bid_amount) setPopup({ appNum:tag.application_number, tag, mode:"$" }); else updateTag(tag.application_number,u); }}>
+                  Won
+                </button>
+                <button className="btn btn-sm" style={{ color:"#dc2626", borderColor:"#fca5a5" }}
+                  onClick={() => updateTag(tag.application_number, { responded:true, bid_status:"lost" })}>
+                  Lost
+                </button>
+                <button className="btn btn-sm" style={{ color:"#2563eb", borderColor:"#93c5fd" }}
+                  onClick={() => setPopup({ appNum:tag.application_number, tag, mode:"$" })}>
+                  $
+                </button>
+                <button className="btn btn-sm" style={{ color:"#dc2626" }}
+                  onClick={() => removeTag(tag.application_number)}>✕</button>
+              </div>
+            </div>
+
+            {/* Stage pipeline */}
+            {stage && (
+              <div style={{ marginTop:10, display:"flex", gap:6, alignItems:"center" }}>
+                {STAGE_LABELS.map((s, idx) => {
+                  const isActive = stage.stage_index === idx;
+                  return (
+                    <div key={idx} style={{ display:"flex", alignItems:"center", gap:4 }}>
+                      <div style={{ width:8, height:8, borderRadius:"50%", background: isActive ? STAGE_COLORS[idx] : "#e2e8f0", boxShadow: isActive ? `0 0 6px ${STAGE_COLORS[idx]}80` : "none", transition:"all 0.2s" }}/>
+                      <span style={{ fontSize:9, color: isActive ? STAGE_COLORS[idx] : "#94a3b8", fontWeight: isActive ? 600 : 400 }}>{s}</span>
+                      {idx < STAGE_LABELS.length-1 && <span style={{ color:"#e2e8f0", fontSize:10 }}>›</span>}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* $ popup */}
+            {popup?.appNum === tag.application_number && (
+              <BidPopup tag={tag} onSave={vals => { updateTag(tag.application_number, vals); setPopup(null); }} onClose={() => setPopup(null)} />
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function BidPopup({ tag, onSave, onClose }) {
+  const [bidAmt, setBidAmt] = useState(tag.bid_amount || "");
+  const [cogs, setCogs]     = useState(tag.cogs || "");
+  const margin = bidAmt && cogs ? (((bidAmt-cogs)/bidAmt)*100).toFixed(1) : null;
+  return (
+    <div style={{ marginTop:12, background:"#f8fafc", border:"1.5px solid #e2e8f0", borderRadius:10, padding:14 }}>
+      <div style={{ fontSize:11, fontWeight:600, color:"#334155", marginBottom:10 }}>Bid Details — {tag.application_number}</div>
+      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:10 }}>
+        <div>
+          <label style={{ fontSize:10, fontWeight:600, color:"#475569", display:"block", marginBottom:4 }}>Bid Amount</label>
+          <input className="inp inp-sm" type="number" value={bidAmt} onChange={e => setBidAmt(e.target.value)} placeholder="0.00" />
+        </div>
+        <div>
+          <label style={{ fontSize:10, fontWeight:600, color:"#475569", display:"block", marginBottom:4 }}>COGS</label>
+          <input className="inp inp-sm" type="number" value={cogs} onChange={e => setCogs(e.target.value)} placeholder="0.00" />
+        </div>
+      </div>
+      {margin && <div style={{ fontSize:11, color:"#2563eb", fontWeight:600, marginBottom:10 }}>Margin: {margin}%</div>}
+      <div style={{ display:"flex", gap:6 }}>
+        <button className="btn btn-primary btn-sm" onClick={() => onSave({ bid_amount:parseFloat(bidAmt)||null, cogs:parseFloat(cogs)||null, bid_status:"won", responded:true })}>Save & Mark Won</button>
+        <button className="btn btn-sm" onClick={() => onSave({ bid_amount:parseFloat(bidAmt)||null, cogs:parseFloat(cogs)||null })}>Save</button>
+        <button className="btn btn-sm" onClick={onClose}>Cancel</button>
+      </div>
+    </div>
+  );
+}
+
+
+// ── Detail471Fields ───────────────────────────────────────────────────────────
+function Detail471Fields({ data: d }) {
+  const fields = [
+    { label:"Application #",         value: d.application_number },
+    { label:"Organization",          value: d.organization_name },
+    { label:"Funding Year",          value: d.funding_year ? `FY${d.funding_year}` : null },
+    { label:"State",                 value: d.org_state },
+    { label:"Category",              value: d.chosen_category_of_service },
+    { label:"471 Status",            value: d.form_471_status_name },
+    { label:"Funding Requested",     value: d.funding_request_amount ? fmt(d.funding_request_amount) : null },
+    { label:"Pre-Discount Eligible", value: d.pre_discount_eligible_amount ? fmt(d.pre_discount_eligible_amount) : null },
+    { label:"C1 Discount",           value: d.c1_discount ? `${Math.round(parseFloat(d.c1_discount)*100)}%` : null },
+    { label:"C2 Discount",           value: d.c2_discount ? `${Math.round(parseFloat(d.c2_discount)*100)}%` : null },
+    { label:"Contact",               value: [d.cnct_first_name, d.cnct_last_name].filter(Boolean).join(" ") || null },
+    { label:"Email",                 value: d.cnct_email },
+    { label:"Phone",                 value: d.cnct_phone },
+    { label:"Certified",             value: d.certified_datetime ? fmtDate(d.certified_datetime) : null },
+  ];
+  return (
+    <>
+      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8, marginBottom:14 }}>
+        {fields.filter(f => f.value).map(f => (
+          <div key={f.label} style={{ background:"#f8fafc", border:"1.5px solid #e2e8f0", padding:"8px 10px", borderRadius:8 }}>
+            <div style={{ fontSize:9, fontWeight:600, color:"#94a3b8", textTransform:"uppercase", letterSpacing:0.5, marginBottom:3 }}>{f.label}</div>
+            <div style={{ fontSize:11, color:"#334155" }}>{f.value}</div>
+          </div>
+        ))}
+      </div>
+      {d.application_number && (
+        <a href={`https://legacy.fundsforlearning.com/471/${d.application_number}`} target="_blank" rel="noreferrer"
+          style={{ display:"flex", alignItems:"center", justifyContent:"center", gap:8, padding:10, border:"1.5px solid #cbd5e1", borderRadius:8, background:"#f8fafc", color:"#2563eb", textDecoration:"none", fontSize:11, fontWeight:500 }}
+          onMouseEnter={e => { e.currentTarget.style.background="#eff6ff"; e.currentTarget.style.borderColor="#93b4fd"; }}
+          onMouseLeave={e => { e.currentTarget.style.background="#f8fafc"; e.currentTarget.style.borderColor="#cbd5e1"; }}>
+          View on FundsForLearning →
+        </a>
+      )}
+      <div style={{ fontSize:9, color:"#94a3b8", textAlign:"center", marginTop:8 }}>
+        Source: {d.source === "local_db" ? "Local DB (FY2026)" : "USAC Live API"}
+      </div>
+    </>
+  );
+}
+
+// ── FRN Status Modal ──────────────────────────────────────────────────────────
+function FRNStatusModal({ token, onClose }) {
+  const [q, setQ]             = useState("");
+  const [results, setResults] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [searched, setSearched] = useState(false);
+  const [detail, setDetail]   = useState(null);
+
+  async function doSearch() {
+    if (!q.trim()) return;
+    setLoading(true); setSearched(true); setDetail(null);
+    try {
+      const params = new URLSearchParams();
+      if (/^\d{10,}$/.test(q.trim())) params.set("frn", q.trim());
+      else if (/^\d{6,9}$/.test(q.trim())) params.set("app", q.trim());
+      else if (/^\d{4,6}$/.test(q.trim())) params.set("ben", q.trim());
+      else params.set("org", q.trim());
+      const res  = await fetch(`${API_URL}/api/frn-status?${params}`, { headers:{ Authorization:`Bearer ${token}` } });
+      const json = await res.json();
+      setResults(json.status === "success" ? json.data || [] : []);
+    } catch { setResults([]); }
+    setLoading(false);
+  }
+
+  return (
+    <div className="modal-backdrop" onClick={e => e.target === e.currentTarget && onClose()}>
+      <div className="modal-box modal-box-sm">
+        <div className="modal-hdr">
+          <div><div className="modal-title">FRN Status Lookup</div><div className="modal-sub">Search by FRN, application #, BEN, or organization name</div></div>
+          <button className="modal-close" onClick={onClose}>✕ Close</button>
+        </div>
+        <div style={{ padding:16, borderBottom:"1.5px solid #e2e8f0", display:"flex", gap:8 }}>
+          <input className="inp" value={q} onChange={e => setQ(e.target.value)} onKeyDown={e => e.key==="Enter" && doSearch()} placeholder="FRN, app number, BEN, or org name..." />
+          <button className="btn btn-primary" onClick={doSearch}>Search</button>
+        </div>
+        <div className="modal-body">
+          {loading && <Spinner />}
+          {!loading && searched && results.length === 0 && <Empty title="No results found" />}
+          {!loading && !searched && <Empty title="Enter a search term above" sub="Search by FRN number, application number, BEN, or organization name" />}
+          {!loading && results.length > 0 && (
+            <>
+              <div className="tbl-hdr" style={{ gridTemplateColumns:"120px 1fr 140px 100px 110px" }}>
+                {["FRN","ORGANIZATION","SERVICE TYPE","STATUS","COMMITTED"].map(h => <div key={h} className="tbl-hdr-cell">{h}</div>)}
+              </div>
+              {results.map((r, i) => {
+                const sc = (r.frn_status||"").toLowerCase().includes("fund") ? "badge-green" : (r.frn_status||"").toLowerCase().includes("deny") ? "badge-red" : "badge-gray";
+                return (
+                  <div key={i} className="tbl-row" style={{ gridTemplateColumns:"120px 1fr 140px 100px 110px" }} onClick={() => setDetail(detail?.frn === r.frn ? null : r)}>
+                    <div className="tbl-cell" style={{ color:"#2563eb", fontWeight:600 }}>{r.frn}</div>
+                    <div className="tbl-cell">{r.organization_name}</div>
+                    <div className="tbl-cell" style={{ fontSize:10 }}>{r.service_type}</div>
+                    <div><span className={`badge ${sc}`} style={{ fontSize:9 }}>{(r.frn_status||"—").split(" ").slice(0,2).join(" ")}</span></div>
+                    <div className="tbl-cell" style={{ color:"#16a34a", fontWeight:600 }}>{r.commitment ? fmt(r.commitment) : "—"}</div>
+                  </div>
+                );
+              })}
+            </>
+          )}
+          {detail && (
+            <div style={{ padding:16, borderTop:"1.5px solid #e2e8f0", background:"#f8fafc" }}>
+              <div style={{ fontSize:12, fontWeight:600, color:"#1e293b", marginBottom:12 }}>FRN Detail — {detail.frn}</div>
+              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8, marginBottom:12 }}>
+                {[["Application #", detail.application_number],["Organization", detail.organization_name],["BEN", detail.ben],["Service Type", detail.service_type],["FRN Status", detail.frn_status],["Committed", fmt(detail.commitment)],["Discount", detail.discount_pct ? `${detail.discount_pct}%` : "—"],["FCDL Date", fmtDate(detail.fcdl_date)]].map(([l,v]) => v && (
+                  <div key={l} style={{ background:"#fff", border:"1.5px solid #e2e8f0", padding:"8px 10px", borderRadius:8 }}>
+                    <div style={{ fontSize:9, fontWeight:600, color:"#94a3b8", marginBottom:3 }}>{l}</div>
+                    <div style={{ fontSize:11, color:"#334155" }}>{v}</div>
+                  </div>
+                ))}
+              </div>
+              {detail.application_number && (
+                <a href={`https://legacy.fundsforlearning.com/471/${detail.application_number}`} target="_blank" rel="noreferrer"
+                  style={{ display:"flex", alignItems:"center", justifyContent:"center", padding:10, border:"1.5px solid #cbd5e1", borderRadius:8, background:"#fff", color:"#2563eb", textDecoration:"none", fontSize:11, fontWeight:500 }}>
+                  View 471 on FundsForLearning →
+                </a>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+
+// ── Entity Search Modal ───────────────────────────────────────────────────────
+function EntitySearchModal({ token, onClose }) {
+  const [searchBy, setSearchBy] = useState("name");
+  const [q, setQ]               = useState("");
+  const [stateF, setStateF]     = useState("TX");
+  const [typeF, setTypeF]       = useState("");
+  const [results, setResults]   = useState([]);
+  const [loading, setLoading]   = useState(false);
+  const [searched, setSearched] = useState(false);
+  const [expanded, setExpanded] = useState(null);
+  const [history, setHistory]   = useState({});
+  const [histLoading, setHistLoading] = useState({});
+  const [detail471, setDetail471] = useState(null);
+
+  const STATES = ["TX","CA","NY","FL","IL","PA","OH","GA","NC","MI","WA","AZ","CO","VA","MA","TN","IN","MO","WI","MN","OR","KY","OK","NV","CT","UT","AR","MS","KS","NM","NE","ID","WV","HI","NH","ME","RI","MT","DE","SD","ND","AK","VT","WY"];
+  const TYPES  = ["","School","Library","School District","Library System","Non-Instructional Facility (Nif)","Consortium"];
+
+  async function doSearch() {
+    if (!q.trim()) return;
+    setLoading(true); setSearched(true); setExpanded(null);
+    try {
+      const params = new URLSearchParams({ limit:100 });
+      if (searchBy === "ben") params.set("ben", q.trim()); else params.set("search", q.trim());
+      if (stateF !== "ALL") params.set("state", stateF);
+      if (typeF) params.set("entity_type", typeF);
+      const res  = await fetch(`${API_URL}/api/entity-search?${params}`, { headers:{ Authorization:`Bearer ${token}` } });
+      const json = await res.json();
+      setResults(json.status === "success" ? json.data || [] : []);
+    } catch { setResults([]); }
+    setLoading(false);
+  }
+
+  async function loadHistory(ben) {
+    if (history[ben] || histLoading[ben]) return;
+    setHistLoading(p => ({...p,[ben]:true}));
+    try {
+      const res  = await fetch(`${API_URL}/api/entity-history?ben=${encodeURIComponent(ben)}`, { headers:{ Authorization:`Bearer ${token}` } });
+      const json = await res.json();
+      if (json.status === "success") setHistory(p => ({...p,[ben]:json}));
+    } catch {} finally { setHistLoading(p => ({...p,[ben]:false})); }
+  }
+
+  async function loadDetail471(row, ben) {
+    setDetail471({ data:null, loading:true, row });
+    try {
+      const params = new URLSearchParams({ ben });
+      if (row.application_number) params.set("application_number", row.application_number);
+      if (row.funding_year) params.set("funding_year", row.funding_year);
+      const res  = await fetch(`${API_URL}/api/471-detail?${params}`, { headers:{ Authorization:`Bearer ${token}` } });
+      const json = await res.json();
+      setDetail471({ data:json.data||null, loading:false, row });
+    } catch { setDetail471({ data:null, loading:false, row }); }
+  }
+
+  const typeColor = t => {
+    if (!t) return "#7c3aed";
+    const tl = t.toLowerCase();
+    if (tl.includes("district")) return "#2563eb";
+    if (tl.includes("school")) return "#7c3aed";
+    if (tl.includes("library")) return "#d97706";
+    return "#64748b";
+  };
+
+  return (
+    <>
+    <div className="modal-backdrop" onClick={e => e.target === e.currentTarget && onClose()}>
+      <div className="modal-box">
+        <div className="modal-hdr">
+          <div><div className="modal-title">Entity Search</div><div className="modal-sub">Live · USAC Open Data · Schools, Libraries & Consortia</div></div>
+          <button className="modal-close" onClick={onClose}>✕ Close</button>
+        </div>
+        <div style={{ padding:"12px 16px", borderBottom:"1.5px solid #e2e8f0", display:"flex", gap:8, flexWrap:"wrap", alignItems:"center", background:"#f8fafc" }}>
+          <div style={{ display:"flex", gap:4 }}>
+            {[["name","Entity Name"],["ben","BEN #"]].map(([key,label]) => (
+              <button key={key} onClick={() => setSearchBy(key)} className={`btn btn-sm ${searchBy===key?"btn-active":""}`}>{label}</button>
+            ))}
+          </div>
+          <select className="inp inp-sm" style={{ width:"auto" }} value={stateF} onChange={e => setStateF(e.target.value)}>
+            <option value="ALL">All States</option>
+            {STATES.map(s => <option key={s} value={s}>{s}</option>)}
+          </select>
+          <select className="inp inp-sm" style={{ width:"auto" }} value={typeF} onChange={e => setTypeF(e.target.value)}>
+            <option value="">All Types</option>
+            {TYPES.filter(Boolean).map(t => <option key={t} value={t}>{t}</option>)}
+          </select>
+          <input className="inp inp-sm" style={{ flex:1, minWidth:200 }} value={q} onChange={e => setQ(e.target.value)} onKeyDown={e => e.key==="Enter" && doSearch()} placeholder={searchBy==="ben" ? "Enter BEN number..." : "Enter entity name..."} />
+          <button className="btn btn-primary btn-sm" onClick={doSearch}>Search →</button>
+        </div>
+        <div className="modal-body">
+          {loading && <Spinner />}
+          {!loading && searched && results.length === 0 && <Empty title="No results found" />}
+          {!loading && !searched && <Empty title="Search for an entity above" sub="Search schools, libraries, and districts by name or BEN number" />}
+          {!loading && results.length > 0 && (
+            <>
+              <div className="tbl-hdr" style={{ gridTemplateColumns:"2fr 1.2fr 90px 80px 60px 100px" }}>
+                {["ENTITY NAME","TYPE","BEN","CITY","STATE","STATUS"].map(h => <div key={h} className="tbl-hdr-cell">{h}</div>)}
+              </div>
+              {results.map((r, i) => {
+                const isExp = expanded === i;
+                return (
+                  <div key={i} style={{ borderBottom:"1px solid #f1f5f9" }}>
+                    <div className="tbl-row" style={{ gridTemplateColumns:"2fr 1.2fr 90px 80px 60px 100px", background: isExp ? "#f8fafc" : undefined }} onClick={() => setExpanded(isExp ? null : i)}>
+                      <div className="tbl-cell" style={{ fontWeight:500 }}>{r.entity_name}</div>
+                      <div><span style={{ fontSize:10, fontWeight:600, color: typeColor(r.entity_type) }}>{r.entity_type||"—"}</span></div>
+                      <div className="tbl-cell" style={{ color:"#2563eb", fontWeight:600 }}>{r.entity_number}</div>
+                      <div className="tbl-cell">{r.city}</div>
+                      <div className="tbl-cell">{r.state}</div>
+                      <div><span className={`badge ${r.status==="Active"?"badge-green":"badge-gray"}`} style={{ fontSize:9 }}>{r.status}</span></div>
+                    </div>
+                    {isExp && (
+                      <div style={{ background:"#f8fafc", borderTop:"1px solid #e2e8f0", padding:"12px 16px" }}>
+                        <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(180px,1fr))", gap:8, marginBottom:12 }}>
+                          {[["Address",`${r.address||""} ${r.city||""}, ${r.state||""} ${r.zip||""}`.trim()],["County",r.county],["Phone",r.phone],["Last Updated",r.last_updated?fmtDate(r.last_updated):null]].map(([l,v]) => v && (
+                            <div key={l} style={{ background:"#fff", border:"1.5px solid #e2e8f0", padding:"8px 10px", borderRadius:8 }}>
+                              <div style={{ fontSize:9, fontWeight:600, color:"#94a3b8", marginBottom:3 }}>{l}</div>
+                              <div style={{ fontSize:11, color:"#334155" }}>{v}</div>
+                            </div>
+                          ))}
+                        </div>
+                        {(() => {
+                          const flags = ["public_school","private_school","charter_school","public_library","main_branch","head_start","pre_k","bie"].filter(f => r.raw?.[f]==="Yes");
+                          return flags.length > 0 && (
+                            <div style={{ display:"flex", flexWrap:"wrap", gap:5, marginBottom:12 }}>
+                              {flags.map(f => <span key={f} className="badge badge-blue" style={{ fontSize:9 }}>{f.replace(/_/g," ").toUpperCase()}</span>)}
+                            </div>
+                          );
+                        })()}
+                        {r.entity_number && (
+                          <button className="btn btn-sm" style={{ borderColor:"#fcd34d", color:"#92400e", background:"#fffbeb" }}
+                            onClick={() => loadHistory(r.entity_number)}>
+                            {histLoading[r.entity_number] ? "Loading..." : history[r.entity_number] ? "▲ Hide E-Rate History" : "▼ View E-Rate History"}
+                          </button>
+                        )}
+                        {history[r.entity_number] && (() => {
+                          const h = history[r.entity_number];
+                          const total = h.data.reduce((s,d)=>s+(d.commitment||0),0);
+                          return (
+                            <div style={{ marginTop:12, border:"1.5px solid #fcd34d", borderRadius:10, overflow:"hidden" }}>
+                              <div style={{ background:"#fffbeb", padding:"10px 14px", borderBottom:"1px solid #fef3c7", display:"flex", gap:16, flexWrap:"wrap" }}>
+                                {h.summary.map(y => (
+                                  <div key={y.year} style={{ textAlign:"center" }}>
+                                    <div style={{ fontFamily:"'Aldrich',sans-serif", fontSize:14, color:"#d97706" }}>FY{y.year}</div>
+                                    <div style={{ fontSize:9, color:"#92400e" }}>{fmt(y.total)} · {y.count} FRN{y.count!==1?"s":""}</div>
+                                  </div>
+                                ))}
+                                <div style={{ marginLeft:"auto", textAlign:"right" }}>
+                                  <div style={{ fontFamily:"'Aldrich',sans-serif", fontSize:14, color:"#16a34a" }}>{fmt(total)}</div>
+                                  <div style={{ fontSize:9, color:"#15803d" }}>Total Committed</div>
+                                </div>
+                              </div>
+                              <div className="tbl-hdr" style={{ gridTemplateColumns:"70px 1.4fr 1fr 110px 70px", background:"#fffbeb" }}>
+                                {["YEAR","SERVICE TYPE","PROVIDER","COMMITTED","DISC %"].map(h => <div key={h} className="tbl-hdr-cell">{h}</div>)}
+                              </div>
+                              {h.data.map((d, di) => (
+                                <div key={di} className="tbl-row" style={{ gridTemplateColumns:"70px 1.4fr 1fr 110px 70px" }} onClick={() => loadDetail471(d, r.entity_number)}>
+                                  <div style={{ fontFamily:"'Aldrich',sans-serif", fontSize:11, color:"#d97706", textDecoration:"underline dotted" }}>FY{d.funding_year}</div>
+                                  <div className="tbl-cell" style={{ fontSize:10 }}>{d.service_type||"—"}</div>
+                                  <div className="tbl-cell" style={{ fontSize:10, color:"#2563eb" }}>{d.spin_name||"—"}</div>
+                                  <div className="tbl-cell" style={{ color:"#16a34a", fontWeight:600 }}>{d.commitment?fmt(d.commitment):"—"}</div>
+                                  <div className="tbl-cell">{d.discount_pct?`${d.discount_pct}%`:"—"}</div>
+                                </div>
+                              ))}
+                            </div>
+                          );
+                        })()}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+              <div style={{ padding:"10px 16px", fontSize:10, color:"#94a3b8", borderTop:"1px solid #f1f5f9" }}>{results.length} results · Click a row to expand · Click a funding year to see 471 details</div>
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+    {detail471 && (
+      <div className="modal-backdrop" style={{ zIndex:300 }} onClick={e => e.target===e.currentTarget && setDetail471(null)}>
+        <div className="modal-box modal-box-sm">
+          <div className="modal-hdr">
+            <div><div className="modal-title">Form 471 Detail</div><div className="modal-sub">{detail471.row?.funding_year ? `FY${detail471.row.funding_year}` : ""}</div></div>
+            <button className="modal-close" onClick={() => setDetail471(null)}>✕</button>
+          </div>
+          <div className="modal-body" style={{ padding:16 }}>
+            {detail471.loading && <Spinner />}
+            {!detail471.loading && !detail471.data && <Empty title="No Form 471 found for this year" />}
+            {!detail471.loading && detail471.data && <Detail471Fields data={detail471.data} />}
+          </div>
+        </div>
+      </div>
+    )}
+    </>
+  );
+}
+
+
+// ── C2 Budget Modal ───────────────────────────────────────────────────────────
+function C2BudgetModal({ token, onClose }) {
+  const [searchBy, setSearchBy] = useState("name");
+  const [q, setQ]               = useState("");
+  const [stateF, setStateF]     = useState("TX");
+  const [cycle, setCycle]       = useState("FY2026-2030");
+  const [results, setResults]   = useState([]);
+  const [loading, setLoading]   = useState(false);
+  const [searched, setSearched] = useState(false);
+  const [expanded, setExpanded] = useState(null);
+
+  const STATES = ["TX","CA","NY","FL","IL","PA","OH","GA","NC","MI","WA","AZ","CO","VA","MA","TN","IN","MO","WI","MN"];
+
+  async function doSearch() {
+    if (!q.trim()) return;
+    setLoading(true); setSearched(true); setExpanded(null);
+    try {
+      const params = new URLSearchParams({ limit:50, cycle });
+      if (searchBy === "ben") params.set("ben", q.trim()); else params.set("search", q.trim());
+      if (stateF !== "ALL") params.set("state", stateF);
+      const res  = await fetch(`${API_URL}/api/c2-budget?${params}`, { headers:{ Authorization:`Bearer ${token}` } });
+      const json = await res.json();
+      setResults(json.status === "success" ? json.data || [] : []);
+    } catch { setResults([]); }
+    setLoading(false);
+  }
+
+  return (
+    <div className="modal-backdrop" onClick={e => e.target===e.currentTarget && onClose()}>
+      <div className="modal-box">
+        <div className="modal-hdr">
+          <div><div className="modal-title">E-Rate C2 Budget Lookup</div><div className="modal-sub">Live · USAC Open Data · {cycle}</div></div>
+          <button className="modal-close" onClick={onClose}>✕ Close</button>
+        </div>
+        <div style={{ padding:"12px 16px", borderBottom:"1.5px solid #e2e8f0", display:"flex", gap:8, flexWrap:"wrap", alignItems:"center", background:"#f8fafc" }}>
+          {[["name","Entity Name"],["ben","BEN"]].map(([key,label]) => (
+            <button key={key} onClick={() => setSearchBy(key)} className={`btn btn-sm ${searchBy===key?"btn-active":""}`}>{label}</button>
+          ))}
+          <div style={{ display:"flex", gap:4 }}>
+            {["FY2026-2030","FY2021-2025"].map(c => (
+              <button key={c} onClick={() => setCycle(c)} className={`btn btn-sm`} style={{ borderColor: cycle===c?"#d97706":undefined, background: cycle===c?"#fffbeb":undefined, color: cycle===c?"#92400e":undefined }}>{c}</button>
+            ))}
+          </div>
+          <select className="inp inp-sm" style={{ width:"auto" }} value={stateF} onChange={e => setStateF(e.target.value)}>
+            <option value="ALL">All States</option>
+            {STATES.map(s => <option key={s} value={s}>{s}</option>)}
+          </select>
+          <input className="inp inp-sm" style={{ flex:1, minWidth:200 }} value={q} onChange={e => setQ(e.target.value)} onKeyDown={e => e.key==="Enter" && doSearch()} placeholder={searchBy==="ben"?"Enter BEN number...":"Enter district or entity name..."} />
+          <button className="btn btn-primary btn-sm" onClick={doSearch}>Search →</button>
+        </div>
+        <div className="modal-body">
+          {loading && <Spinner />}
+          {!loading && searched && results.length === 0 && <Empty title="No results found" />}
+          {!loading && !searched && <Empty title="Search for an entity above" sub="Look up C2 budget allocation by district name or BEN" />}
+          {!loading && results.length > 0 && (
+            <>
+              <div className="tbl-hdr" style={{ gridTemplateColumns:"2fr 80px 80px 120px 120px 120px 120px" }}>
+                {["ENTITY","STATE","BEN","TOTAL BUDGET","FUNDED","PENDING","AVAILABLE"].map(h => <div key={h} className="tbl-hdr-cell">{h}</div>)}
+              </div>
+              {results.map((r, i) => {
+                const avPct = r.total_budget ? Math.round(((r.available||0)/r.total_budget)*100) : 0;
+                const isExp = expanded === i;
+                return (
+                  <div key={i} style={{ borderBottom:"1px solid #f1f5f9" }}>
+                    <div className="tbl-row" style={{ gridTemplateColumns:"2fr 80px 80px 120px 120px 120px 120px", background:isExp?"#f8fafc":undefined }} onClick={() => setExpanded(isExp?null:i)}>
+                      <div className="tbl-cell" style={{ fontWeight:500 }}>{r.entity_name}</div>
+                      <div className="tbl-cell">{r.state}</div>
+                      <div className="tbl-cell" style={{ color:"#2563eb", fontWeight:600 }}>{r.ben}</div>
+                      <div className="tbl-cell">{r.total_budget ? fmt(r.total_budget) : "—"}</div>
+                      <div className="tbl-cell" style={{ color:"#16a34a" }}>{r.funded ? fmt(r.funded) : "$0"}</div>
+                      <div className="tbl-cell" style={{ color:"#d97706" }}>{r.pending ? fmt(r.pending) : "$0"}</div>
+                      <div>
+                        <div style={{ fontSize:11, fontWeight:600, color: avPct>50?"#16a34a":avPct>20?"#d97706":"#dc2626" }}>{r.available ? fmt(r.available) : "$0"}</div>
+                        <div style={{ height:2, background:"#e2e8f0", borderRadius:99, marginTop:3, overflow:"hidden", width:80 }}>
+                          <div style={{ width:`${avPct}%`, height:"100%", background:"#2563eb", borderRadius:99 }}/>
+                        </div>
+                      </div>
+                    </div>
+                    {isExp && (
+                      <div style={{ padding:"12px 16px", background:"#f8fafc", borderTop:"1px solid #e2e8f0" }}>
+                        <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(160px,1fr))", gap:8 }}>
+                          {[["City",r.city],["Applicant Type",r.applicant_type],["Budget Cycle",r.budget_cycle],["Budget Version",r.budget_version],["Students",r.students],["Consulting Firm",r.consulting_firm?r.consulting_firm.split("(")[0].trim():null]].map(([l,v]) => v && (
+                            <div key={l} style={{ background:"#fff", border:"1.5px solid #e2e8f0", padding:"8px 10px", borderRadius:8 }}>
+                              <div style={{ fontSize:9, fontWeight:600, color:"#94a3b8", marginBottom:3 }}>{l}</div>
+                              <div style={{ fontSize:11, color:"#334155" }}>{v}</div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+
+// ── C2 Prospects Modal ────────────────────────────────────────────────────────
+function C2ProspectsModal({ token, onClose }) {
+  const [results, setResults]   = useState([]);
+  const [loading, setLoading]   = useState(false);
+  const [loaded, setLoaded]     = useState(false);
+  const [error, setError]       = useState("");
+  const [meta, setMeta]         = useState(null);
+  const [filterType, setFilterType] = useState("ALL");
+  const { sortField, sortAsc, toggle, apply } = useSort("available", false);
+
+  async function load() {
+    setLoading(true); setError("");
+    try {
+      const res  = await fetch(`${API_URL}/api/c2-prospects?limit=500`, { headers:{ Authorization:`Bearer ${token}` } });
+      const json = await res.json();
+      if (json.status === "success") {
+        setResults(json.data || []);
+        setMeta({ total_checked: json.total_c2_checked, already_filed: json.already_filed, prospects: json.count });
+        setLoaded(true);
+      } else { setError(json.message || "Failed"); }
+    } catch { setError("Connection error"); }
+    setLoading(false);
+  }
+
+  const filtered = results.filter(r => filterType==="ALL" || (r.applicant_type||"").toLowerCase().includes(filterType.toLowerCase()));
+  const sorted   = apply(filtered);
+  const totalAvail = filtered.reduce((s,r) => s+(r.available||0), 0);
+
+  const SH = ({ field, label }) => <SortHdr label={label} field={field} sortField={sortField} sortAsc={sortAsc} onSort={toggle} />;
+
+  return (
+    <div className="modal-backdrop" onClick={e => e.target===e.currentTarget && onClose()}>
+      <div className="modal-box" style={{ width:"min(1100px,96vw)" }}>
+        <div className="modal-hdr">
+          <div><div className="modal-title">C2 Prospect Finder</div><div className="modal-sub">TX Schools & Districts · FY2026-2030 C2 Budget · No FY2026 Form 470 Filed</div></div>
+          <button className="modal-close" onClick={onClose}>✕ Close</button>
+        </div>
+        <div style={{ padding:"10px 16px", borderBottom:"1.5px solid #e2e8f0", background:"#f8fafc", display:"flex", gap:10, alignItems:"center", flexWrap:"wrap" }}>
+          {!loaded && !loading && <button className="btn btn-primary" onClick={load}>Run Search →</button>}
+          {loading && <span style={{ fontSize:12, color:"#64748b", fontWeight:500 }}>Querying USAC + local DB... (may take 20–40s)</span>}
+          {loaded && (
+            <>
+              <div style={{ display:"flex", gap:4 }}>
+                {["ALL","School","District"].map(t => (
+                  <button key={t} onClick={() => setFilterType(t)} className={`btn btn-sm ${filterType===t?"btn-active":""}`}>{t}</button>
+                ))}
+              </div>
+              <div style={{ marginLeft:"auto", display:"flex", gap:20 }}>
+                <div><div style={{ fontFamily:"'Aldrich',sans-serif", fontSize:18, color:"#2563eb", lineHeight:1 }}>{sorted.length}</div><div style={{ fontSize:10, color:"#94a3b8" }}>Prospects</div></div>
+                <div><div style={{ fontFamily:"'Aldrich',sans-serif", fontSize:18, color:"#16a34a", lineHeight:1 }}>${(totalAvail/1000000).toFixed(1)}M</div><div style={{ fontSize:10, color:"#94a3b8" }}>Total Available</div></div>
+                {meta && <div><div style={{ fontFamily:"'Aldrich',sans-serif", fontSize:18, color:"#94a3b8", lineHeight:1 }}>{meta.already_filed}</div><div style={{ fontSize:10, color:"#94a3b8" }}>Already Filed</div></div>}
+              </div>
+            </>
+          )}
+          {error && <span style={{ fontSize:11, color:"#dc2626" }}>⚠ {error}</span>}
+        </div>
+        <div className="modal-body">
+          {!loaded && !loading && <Empty title="Ready to search" sub="Click Run Search to query USAC live for TX schools with available C2 budget that haven't filed a FY2026 Form 470" />}
+          {loading && <Spinner />}
+          {loaded && sorted.length === 0 && <Empty title="No prospects found" />}
+          {loaded && sorted.length > 0 && (
+            <>
+              <div className="tbl-hdr" style={{ gridTemplateColumns:"2fr 110px 90px 110px 120px 120px 140px 140px" }}>
+                <SH field="entity_name" label="ENTITY" />
+                <SH field="city" label="CITY" />
+                <div className="tbl-hdr-cell">BEN</div>
+                <SH field="applicant_type" label="TYPE" />
+                <SH field="total_budget" label="BUDGET" />
+                <SH field="funded" label="FUNDED" />
+                <SH field="available" label="AVAILABLE" />
+                <SH field="days_since_470" label="LAST 470" />
+              </div>
+              {sorted.map((r, i) => {
+                const isDistrict = (r.applicant_type||"").toLowerCase().includes("district");
+                const avPct = r.total_budget ? Math.round(((r.available||0)/r.total_budget)*100) : 0;
+                return (
+                  <div key={i} className="tbl-row" style={{ gridTemplateColumns:"2fr 110px 90px 110px 120px 120px 140px 140px" }}>
+                    <div>
+                      <div className="tbl-cell" style={{ fontWeight:500 }}>{r.entity_name}</div>
+                      {r.consulting_firm && <div style={{ fontSize:9, color:"#d97706", marginTop:2 }}>Consultant: {r.consulting_firm.split("(")[0].trim()}</div>}
+                    </div>
+                    <div className="tbl-cell">{r.city}</div>
+                    <div className="tbl-cell" style={{ color:"#2563eb", fontWeight:600 }}>{r.ben}</div>
+                    <div><span className={`badge ${isDistrict?"badge-blue":"badge-purple"}`} style={{ fontSize:9 }}>{r.applicant_type}</span></div>
+                    <div className="tbl-cell">{r.total_budget?fmt(r.total_budget):"—"}</div>
+                    <div className="tbl-cell" style={{ color:"#d97706" }}>{r.funded?fmt(r.funded):"$0"}</div>
+                    <div>
+                      <div style={{ fontFamily:"'Aldrich',sans-serif", fontSize:13, color:"#16a34a", lineHeight:1, marginBottom:3 }}>{fmt(r.available)}</div>
+                      <div style={{ height:2, background:"#e2e8f0", borderRadius:99, overflow:"hidden", width:80 }}>
+                        <div style={{ width:`${avPct}%`, height:"100%", background:"#16a34a", borderRadius:99 }}/>
+                      </div>
+                    </div>
+                    <div>
+                      {r.days_since_470 == null
+                        ? <div><div style={{ fontSize:10, color:"#dc2626", fontWeight:600 }}>Never filed</div><div style={{ fontSize:9, color:"#fca5a5" }}>No history</div></div>
+                        : <div><div style={{ fontSize:10, fontWeight:600, color:r.days_since_470>365?"#dc2626":r.days_since_470>180?"#d97706":"#16a34a" }}>{r.days_since_470}d ago</div><div style={{ fontSize:9, color:"#94a3b8" }}>FY{r.last_470_year}</div></div>
+                      }
+                    </div>
+                  </div>
+                );
+              })}
+              <div style={{ padding:"10px 16px", fontSize:10, color:"#94a3b8", borderTop:"1px solid #f1f5f9" }}>
+                {sorted.length} prospects · TX · Red = never/1yr+ · Amber = 6-12mo · Green = recent · Consultant shown if on file with USAC
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+
 // ── Competitive Intel Modal ───────────────────────────────────────────────────
 function CompetitiveIntelModal({ token, onClose }) {
-  const [data, setData]           = useState(null);
-  const [loading, setLoading]     = useState(true);
-  const [view, setView]           = useState("providers");
-  const [mfrMetric, setMfrMetric]     = useState("count");
+  const [data, setData]         = useState(null);
+  const [loading, setLoading]   = useState(true);
+  const [view, setView]         = useState("providers");
+  const [mfrMetric, setMfrMetric] = useState("count");
   const [providerPopup, setProviderPopup] = useState(null);
-  const [partQuery, setPartQuery]     = useState("");
+  const [partQuery, setPartQuery]   = useState("");
   const [partResults, setPartResults] = useState([]);
   const [partLoading, setPartLoading] = useState(false);
   const [partSearched, setPartSearched] = useState(false);
-  const [partSortAsc, setPartSortAsc]   = useState(false);
+  const pSort = useSort("unit_price", false);
   const [providerQuery, setProviderQuery] = useState("");
   const [providerResults, setProviderResults] = useState(null);
   const [providerLoading, setProviderLoading] = useState(false);
-  const [providerSortField, setProviderSortField] = useState("commitment");
-  const [providerSortAsc, setProviderSortAsc]     = useState(false);
-  const [areaQuery, setAreaQuery]                 = useState("");
-  const [areaSvcType, setAreaSvcType]             = useState("c2");
-  const [areaKeyword, setAreaKeyword]             = useState("");
-  const [areaResults, setAreaResults]             = useState(null);
-  const [areaLoading, setAreaLoading]             = useState(false);
-  const [areaView, setAreaView]                   = useState("providers"); // providers | detail
+  const provSort = useSort("commitment", false);
+  const [areaQuery, setAreaQuery]     = useState("");
+  const [areaSvcType, setAreaSvcType] = useState("c2");
+  const [areaResults, setAreaResults] = useState(null);
+  const [areaLoading, setAreaLoading] = useState(false);
+  const [areaView, setAreaView]       = useState("providers");
 
   useEffect(() => {
+    if (!token) return;
     fetch(`${API_URL}/api/competitive-intel`, { headers:{ Authorization:`Bearer ${token}` } })
-      .then(r => r.json())
-      .then(d => { if (d.status === "success") setData(d.data); setLoading(false); })
-      .catch(() => setLoading(false));
+      .then(r => r.json()).then(d => { if (d.status === "success") setData(d.data); })
+      .catch(() => {}).finally(() => setLoading(false));
   }, [token]);
 
   async function doPartSearch() {
     if (!partQuery.trim() || partQuery.trim().length < 2) return;
-    setPartLoading(true);
-    setPartSearched(true);
+    setPartLoading(true); setPartSearched(true);
     try {
-      const res  = await fetch(`${API_URL}/api/part-lookup?q=${encodeURIComponent(partQuery.trim())}&limit=100`, { headers:{ Authorization:`Bearer ${token}` } });
+      const res  = await fetch(`${API_URL}/api/part-lookup?q=${encodeURIComponent(partQuery.trim())}`, { headers:{ Authorization:`Bearer ${token}` } });
       const json = await res.json();
-      setPartResults(json.data || []);
+      setPartResults(json.status === "success" ? json.data || [] : []);
     } catch { setPartResults([]); }
     setPartLoading(false);
-  }
-
-  async function openProviderPopup(providerName) {
-    setProviderPopup({ name: providerName, applicants: [], loading: true });
-    try {
-      const res  = await fetch(`${API_URL}/api/provider-applicants?spin_name=${encodeURIComponent(providerName)}`, { headers:{ Authorization:`Bearer ${token}` } });
-      const json = await res.json();
-      setProviderPopup({ name: providerName, applicants: json.data || [], loading: false });
-    } catch {
-      setProviderPopup({ name: providerName, applicants: [], loading: false });
-    }
-  }
-
-  const MFR_COLORS = {
-    "Cisco":      "#3b9eff", "Meraki":     "#3b9eff",
-    "Juniper":    "#22c97a", "Aruba":      "#a07ee0",
-    "HPE":        "#a07ee0", "Ubiquiti":   "#f0b429",
-    "Extreme":    "#f0614a", "Fortinet":   "#ff9f43",
-    "Palo Alto":  "#f0614a", "Sophos":     "#00d4ff",
-    "Dell":       "#3b9eff", "Ruckus":     "#22c97a",
-    "Netgear":    "#f0b429", "Cambium":    "#a07ee0",
-    "Zyxel":      "#00d4ff",
-  };
-
-  function BarChart({ items, colorFn, maxCount, onClick }) {
-    const max = maxCount || Math.max(...items.map(d => d.count), 1);
-    return (
-      <div style={{ display:"flex", flexDirection:"column", gap:5 }}>
-        {items.map((item, i) => {
-          const pct   = Math.round((item.count / max) * 100);
-          const color = colorFn ? colorFn(item.name, i) : "#a07ee0";
-          return (
-            <div key={i} onClick={() => onClick && onClick(item)}
-              style={{ display:"flex", alignItems:"center", gap:8, cursor: onClick ? "pointer" : "default", borderRadius:2, padding:"1px 0", transition:"background 0.1s" }}
-              onMouseEnter={e => { if (onClick) e.currentTarget.style.background="rgba(255,255,255,0.03)"; }}
-              onMouseLeave={e => { if (onClick) e.currentTarget.style.background="transparent"; }}>
-              <div style={{ width:160, fontSize:7, color:"rgba(232,228,240,0.6)", textAlign:"right", flexShrink:0, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }} title={item.name}>
-                {onClick && <span style={{ color:"rgba(138,99,210,0.5)", marginRight:4 }}>↗</span>}
-                {item.name}
-              </div>
-              <div style={{ flex:1, height:14, background:"rgba(255,255,255,0.04)", borderRadius:2, overflow:"hidden" }}>
-                <div style={{ width:`${pct}%`, height:"100%", background: color, borderRadius:2, opacity:0.85, transition:"width 0.4s ease", minWidth: item.count > 0 ? 4 : 0 }}/>
-              </div>
-              <div style={{ width:36, fontSize:7, color:"rgba(232,228,240,0.45)", textAlign:"right", flexShrink:0 }}>{item.count}</div>
-            </div>
-          );
-        })}
-      </div>
-    );
-  }
-
-  function MfrBarChart({ items, metric, colorFn }) {
-    const vals = items.map(d => metric === "amount" ? d.amount : d.count);
-    const max  = Math.max(...vals, 1);
-    return (
-      <div style={{ display:"flex", flexDirection:"column", gap:5 }}>
-        {items.map((item, i) => {
-          const val   = metric === "amount" ? item.amount : item.count;
-          const pct   = Math.round((val / max) * 100);
-          const color = colorFn ? colorFn(item.name) : "#a07ee0";
-          const label = metric === "amount" ? (val > 0 ? `$${(val/1000).toFixed(0)}k` : "—") : val;
-          return (
-            <div key={i} style={{ display:"flex", alignItems:"center", gap:8 }}>
-              <div style={{ width:100, fontSize:7, color:"rgba(232,228,240,0.6)", textAlign:"right", flexShrink:0 }}>{item.name}</div>
-              <div style={{ flex:1, height:14, background:"rgba(255,255,255,0.04)", borderRadius:2, overflow:"hidden" }}>
-                <div style={{ width:`${pct}%`, height:"100%", background: color, borderRadius:2, opacity:0.85, transition:"width 0.4s ease", minWidth: val > 0 ? 4 : 0 }}/>
-              </div>
-              <div style={{ width:48, fontSize:7, color:"rgba(232,228,240,0.45)", textAlign:"right", flexShrink:0 }}>{label}</div>
-            </div>
-          );
-        })}
-      </div>
-    );
-  }
-
-  function GaugeRow({ items, metric, colorFn }) {
-    const vals = items.map(d => metric === "amount" ? d.amount : d.count);
-    const max  = Math.max(...vals, 1);
-    return (
-      <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill, minmax(130px, 1fr))", gap:10 }}>
-        {items.map((item, i) => {
-          const val   = metric === "amount" ? item.amount : item.count;
-          const color = colorFn ? colorFn(item.name) : "#a07ee0";
-          const pct   = val > 0 ? Math.round((val / max) * 100) : 0;
-          const r = 28, circ = 2 * Math.PI * r;
-          const dash = (pct / 100) * circ;
-          const label = metric === "amount" ? (val > 0 ? `$${(val/1000).toFixed(0)}k` : "0") : val;
-          return (
-            <div key={i} style={{ background:"rgba(255,255,255,0.02)", border:`1px solid ${val > 0 ? color + "30" : "rgba(255,255,255,0.06)"}`, borderRadius:8, padding:"12px 10px", display:"flex", flexDirection:"column", alignItems:"center", gap:6, opacity: val > 0 ? 1 : 0.4 }}>
-              <svg width="72" height="72" viewBox="0 0 72 72">
-                <circle cx="36" cy="36" r={r} fill="none" stroke="rgba(255,255,255,0.06)" strokeWidth="5"/>
-                <circle cx="36" cy="36" r={r} fill="none" stroke={val > 0 ? color : "rgba(255,255,255,0.1)"} strokeWidth="5"
-                  strokeDasharray={`${dash} ${circ}`} strokeLinecap="round"
-                  transform="rotate(-90 36 36)" style={{ transition:"stroke-dasharray 0.5s ease" }}/>
-                <text x="36" y="36" textAnchor="middle" dominantBaseline="central"
-                  style={{ fontFamily:"Aldrich,sans-serif", fontSize: metric === "amount" ? 9 : 13, fill: val > 0 ? color : "rgba(232,228,240,0.2)" }}>{label}</text>
-              </svg>
-              <div style={{ fontSize:7, letterSpacing:1, color: val > 0 ? "rgba(232,228,240,0.7)" : "rgba(232,228,240,0.25)", textAlign:"center", textTransform:"uppercase" }}>{item.name}</div>
-            </div>
-          );
-        })}
-      </div>
-    );
   }
 
   async function doProviderSearch() {
@@ -684,18 +1091,11 @@ function CompetitiveIntelModal({ token, onClose }) {
     setProviderLoading(false);
   }
 
-  function toggleProviderSort(field) {
-    if (providerSortField === field) setProviderSortAsc(p => !p);
-    else { setProviderSortField(field); setProviderSortAsc(false); }
-  }
-
   async function doAreaSearch() {
     if (!areaQuery.trim() || areaQuery.trim().length < 2) return;
-    setAreaLoading(true);
-    setAreaResults(null);
+    setAreaLoading(true); setAreaResults(null);
     try {
-      const params = new URLSearchParams({ area: areaQuery.trim(), service_type: areaSvcType, limit: 200 });
-      if (areaKeyword.trim()) params.set("service_keyword", areaKeyword.trim());
+      const params = new URLSearchParams({ area: areaQuery.trim(), service_type: areaSvcType, limit:200 });
       const res  = await fetch(`${API_URL}/api/service-area-search?${params}`, { headers:{ Authorization:`Bearer ${token}` } });
       const json = await res.json();
       setAreaResults(json.status === "success" ? json : null);
@@ -703,405 +1103,277 @@ function CompetitiveIntelModal({ token, onClose }) {
     setAreaLoading(false);
   }
 
-  const providerColors = ["#a07ee0","#8a63d2","#7a53c2","#6a43b2","#5a33a2","#4a2392","#3b9eff","#2b8eef","#1b7edf","#0b6ecf",
-    "#22c97a","#18b96a","#0ea95a","#f0b429","#e0a419","#d09409","#f0614a","#e0513a","#d0412a","#ff9f43","#ef8f33","#00d4ff","#00c4ef","#a07ee0","#8a63d2"];
+  const TABS = [
+    ["providers","Top 25 Providers"],
+    ["manufacturers","Manufacturer Breakdown"],
+    ["services","Service Types"],
+    ["products","Top Products"],
+    ["partlookup","Part Lookup"],
+    ["providersearch","Provider Search"],
+    ["areaservice","Service Area"],
+  ];
+
+  const maxProv = data?.top_providers?.[0]?.total || 1;
+  const maxMfr  = data?.manufacturers?.[0]?.[mfrMetric==="count"?"count":"total"] || 1;
 
   return (
-    <div style={{ position:"fixed", inset:0, background:"rgba(5,5,13,0.92)", display:"flex", alignItems:"center", justifyContent:"center", zIndex:300 }}
-      onClick={e => e.target === e.currentTarget && onClose()}>
-      <div style={{ background:"#07061a", border:"1px solid rgba(138,99,210,0.4)", clipPath:"polygon(0 0,calc(100% - 20px) 0,100% 20px,100% 100%,20px 100%,0 calc(100% - 20px))", width:"min(1100px, 96vw)", maxHeight:"90vh", display:"flex", flexDirection:"column", position:"relative" }}>
-        <div style={{ position:"absolute", top:0, left:"10%", right:"10%", height:1, background:"linear-gradient(90deg,transparent,rgba(138,99,210,0.7),transparent)" }}/>
-
-        {/* Header */}
-        <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"16px 22px", borderBottom:"1px solid rgba(138,99,210,0.15)", flexShrink:0 }}>
-          <div style={{ display:"flex", alignItems:"center", gap:12 }}>
-            <div style={{ width:6, height:6, borderRadius:"50%", background:"#a07ee0", boxShadow:"0 0 8px rgba(138,99,210,0.9)" }}/>
-            <span style={{ fontFamily:"'Aldrich',sans-serif", fontSize:11, letterSpacing:2.5, color:"#a07ee0" }}>COMPETITIVE INTELLIGENCE</span>
-            <span style={{ fontSize:7, letterSpacing:1.5, color:"rgba(232,228,240,0.25)" }}>· FY2026 COMMITMENTS · FY2025 LINE ITEMS · TX · {data ? `${data.total.toLocaleString()} commitments · ${(data.lineItemTotal||0).toLocaleString()} line items` : ""}</span>
+    <div className="modal-backdrop" onClick={e => e.target===e.currentTarget && onClose()}>
+      <div className="modal-box" style={{ width:"min(1100px,96vw)" }}>
+        <div className="modal-hdr">
+          <div>
+            <div className="modal-title">Competitive Intelligence</div>
+            <div className="modal-sub">FY2026 TX Commitments · FY2025 Line Items · {data ? `${data.total?.toLocaleString()} commitments` : ""}</div>
           </div>
-          <button onClick={onClose} style={{ background:"transparent", border:"1px solid rgba(232,228,240,0.15)", color:"rgba(232,228,240,0.4)", cursor:"pointer", fontFamily:"'DM Mono',monospace", fontSize:8, padding:"4px 10px", letterSpacing:1 }}>✕ CLOSE</button>
+          <button className="modal-close" onClick={onClose}>✕ Close</button>
         </div>
-
-        {/* Tab strip */}
-        <div style={{ display:"flex", gap:4, padding:"10px 22px", borderBottom:"1px solid rgba(138,99,210,0.1)", flexShrink:0 }}>
-          {[["providers","TOP 25 PROVIDERS"],["manufacturers","MANUFACTURER BREAKDOWN"],["services","SERVICE TYPES"],["products","TOP PRODUCTS"],["partlookup","PART LOOKUP"],["providersearch","PROVIDER SEARCH"],["areaservice","SERVICE AREA"]].map(([key,label]) => (
-            <div key={key} style={{ display:"flex", alignItems:"center", gap:0 }}>
-              <button onClick={() => setView(key)}
-                style={{ padding:"5px 14px", fontFamily:"'DM Mono',monospace", fontSize:7.5, letterSpacing:1.5, border:`1px solid ${view===key ? "rgba(138,99,210,0.6)" : "rgba(138,99,210,0.15)"}`, borderRight: view===key ? "none" : undefined, background: view===key ? "rgba(138,99,210,0.12)" : "transparent", color: view===key ? "#a07ee0" : "rgba(232,228,240,0.35)", cursor:"pointer", transition:"all 0.15s", borderRadius:"4px 0 0 4px" }}>
-                {label}
-              </button>
-              {view === key && (
-                <button onClick={onClose}
-                  style={{ padding:"5px 8px", fontFamily:"'DM Mono',monospace", fontSize:8, border:"1px solid rgba(138,99,210,0.6)", borderLeft:"none", background:"rgba(138,99,210,0.12)", color:"rgba(232,228,240,0.5)", cursor:"pointer", borderRadius:"0 4px 4px 0", lineHeight:1 }}>
-                  ✕
-                </button>
-              )}
+        <div className="tab-strip">
+          {TABS.map(([key,label]) => (
+            <div key={key} style={{ display:"flex" }}>
+              <button className={`tab-btn ${view===key?"active":""}`} onClick={() => setView(key)}>{label}</button>
+              {view===key && <button className="tab-close" onClick={onClose} title="Close">✕</button>}
             </div>
           ))}
-
         </div>
 
-        {/* Body */}
-        <div style={{ flex:1, overflowY:"auto", padding:"20px 22px" }}>
-          {loading && <div style={{ textAlign:"center", padding:"60px", fontSize:9, color:"rgba(138,99,210,0.4)", letterSpacing:2 }}>LOADING INTELLIGENCE DATA...</div>}
-
-          {!loading && data && view === "providers" && (
+        <div className="modal-body" style={{ padding:20 }}>
+          {loading && <Spinner />}
+          {!loading && data && (
             <>
-              <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:14 }}>
-                <div style={{ fontSize:7, letterSpacing:2, color:"rgba(138,99,210,0.5)", textTransform:"uppercase" }}>Top 25 Service Providers by Commitment Count · FY2026 TX</div>
-                <span style={{ fontSize:7, color:"rgba(232,228,240,0.3)", letterSpacing:1 }}>↗ click a provider to see their applicants</span>
-              </div>
-              <BarChart items={data.topProviders} colorFn={(name, i) => providerColors[i % providerColors.length]} onClick={item => openProviderPopup(item.name)} />
-            </>
-          )}
-
-          {!loading && data && view === "manufacturers" && (
-            <>
-              {data.manufacturers.every(m => m.count === 0) ? (
-                <div style={{ padding:"48px 20px", textAlign:"center" }}>
-                  <div style={{ fontSize:9, color:"rgba(138,99,210,0.3)", letterSpacing:2, marginBottom:8 }}>NO LINE ITEM DATA YET</div>
-                  <div style={{ fontSize:7.5, color:"rgba(232,228,240,0.2)" }}>Hit ↺ SYNC on the dashboard to pull FRN line items, then check back.</div>
-                </div>
-              ) : (
+              {/* TOP 25 PROVIDERS */}
+              {view === "providers" && (
                 <>
-                  <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:14 }}>
-                    <div style={{ fontSize:7, letterSpacing:2, color:"rgba(138,99,210,0.5)", textTransform:"uppercase" }}>Manufacturer Presence · {(data.lineItemTotal||0).toLocaleString()} TX FRN Line Items · FY2025</div>
-                    <div style={{ display:"flex", gap:4 }}>
-                      {[["count","Line Items"],["amount","Dollar Value"]].map(([key,label]) => (
-                        <button key={key} onClick={() => setMfrMetric(key)}
-                          style={{ padding:"3px 10px", fontFamily:"'DM Mono',monospace", fontSize:7, letterSpacing:1, border:`1px solid ${mfrMetric===key ? "rgba(138,99,210,0.6)" : "rgba(138,99,210,0.2)"}`, background: mfrMetric===key ? "rgba(138,99,210,0.12)" : "transparent", color: mfrMetric===key ? "#a07ee0" : "rgba(232,228,240,0.3)", cursor:"pointer" }}>
-                          {label}
-                        </button>
-                      ))}
+                  {data.top_providers?.map((p, i) => (
+                    <div key={i} style={{ display:"flex", alignItems:"center", gap:12, padding:"8px 0", borderBottom:"1px solid #f1f5f9", cursor:"pointer" }}
+                      onClick={() => setProviderPopup(providerPopup?.name===p.name ? null : p)}>
+                      <div style={{ width:24, textAlign:"right", fontFamily:"'Aldrich',sans-serif", fontSize:11, color:"#94a3b8" }}>#{i+1}</div>
+                      <div style={{ flex:1 }}>
+                        <div style={{ display:"flex", justifyContent:"space-between", marginBottom:4 }}>
+                          <span style={{ fontSize:12, fontWeight:500, color:"#1e293b" }}>{p.name}</span>
+                          <span style={{ fontSize:11, fontWeight:600, color:"#2563eb" }}>{fmt(p.total)}</span>
+                        </div>
+                        <div style={{ height:6, background:"#f1f5f9", borderRadius:99, overflow:"hidden" }}>
+                          <div style={{ width:`${Math.round((p.total/maxProv)*100)}%`, height:"100%", background:"linear-gradient(90deg,#93b4fd,#2563eb)", borderRadius:99 }}/>
+                        </div>
+                        <div style={{ fontSize:10, color:"#94a3b8", marginTop:3 }}>{p.count} FRNs · {p.orgs} organizations</div>
+                      </div>
                     </div>
-                  </div>
-                  <GaugeRow items={data.manufacturers} metric={mfrMetric} colorFn={name => MFR_COLORS[name] || "#a07ee0"} />
-                  <div style={{ marginTop:20 }}>
-                    <div style={{ fontSize:7, letterSpacing:2, color:"rgba(138,99,210,0.5)", marginBottom:12, textTransform:"uppercase" }}>{mfrMetric === "amount" ? "Dollar Value" : "Line Item Count"} by Manufacturer</div>
-                    <MfrBarChart items={data.manufacturers} metric={mfrMetric} colorFn={name => MFR_COLORS[name] || "#a07ee0"} />
-                  </div>
+                  ))}
+                  {providerPopup && (
+                    <div style={{ marginTop:16, background:"#f8fafc", border:"1.5px solid #e2e8f0", borderRadius:10, padding:16 }}>
+                      <div style={{ fontSize:12, fontWeight:600, color:"#1e293b", marginBottom:12 }}>{providerPopup.name} — Applicants</div>
+                      <ProviderApplicants token={token} spinName={providerPopup.name} />
+                    </div>
+                  )}
                 </>
               )}
-            </>
-          )}
 
-          {!loading && data && view === "services" && (
-            <>
-              <div style={{ fontSize:7, letterSpacing:2, color:"rgba(138,99,210,0.5)", marginBottom:14, textTransform:"uppercase" }}>Top Service Types by Commitment Count · FY2026 TX</div>
-              <BarChart items={data.serviceTypes} colorFn={(name, i) => ["#3b9eff","#a07ee0","#22c97a","#f0b429","#f0614a","#ff9f43","#00d4ff","#8a63d2"][i % 8]} />
-            </>
-          )}
-
-          {!loading && data && view === "products" && (
-            <>
-              {(!data.topProducts || data.topProducts.length === 0) ? (
-                <div style={{ padding:"48px 20px", textAlign:"center" }}>
-                  <div style={{ fontSize:9, color:"rgba(138,99,210,0.3)", letterSpacing:2, marginBottom:8 }}>NO LINE ITEM DATA YET</div>
-                  <div style={{ fontSize:7.5, color:"rgba(232,228,240,0.2)" }}>Hit ↺ SYNC on the dashboard to pull FRN line items, then check back.</div>
-                </div>
-              ) : (
+              {/* MANUFACTURERS */}
+              {view === "manufacturers" && (
                 <>
-                  <div style={{ fontSize:7, letterSpacing:2, color:"rgba(138,99,210,0.5)", marginBottom:14, textTransform:"uppercase" }}>Top 10 Product Types · FY2025 TX FRN Line Items · {(data.lineItemTotal||0).toLocaleString()} records</div>
-                  <BarChart items={data.topProducts} colorFn={(name, i) => ["#a07ee0","#3b9eff","#22c97a","#f0b429","#f0614a","#ff9f43","#00d4ff","#8a63d2","#a07ee0","#3b9eff"][i % 10]} />
-                </>
-              )}
-            </>
-          )}
-
-          {view === "partlookup" && (
-            <>
-              {/* Search bar */}
-              <div style={{ display:"flex", gap:8, alignItems:"center", marginBottom:16 }}>
-                <input value={partQuery} onChange={e => setPartQuery(e.target.value)} onKeyDown={e => e.key === "Enter" && doPartSearch()}
-                  placeholder="Enter part number, model, or product name..."
-                  style={{ flex:1, background:"rgba(255,255,255,0.03)", border:"1px solid rgba(138,99,210,0.25)", outline:"none", fontFamily:"'DM Mono',monospace", fontSize:9, color:"#e8e4f0", padding:"8px 12px" }}/>
-                <button onClick={doPartSearch}
-                  style={{ padding:"8px 20px", fontFamily:"'DM Mono',monospace", fontSize:8, letterSpacing:2, border:"1px solid rgba(138,99,210,0.5)", background:"rgba(138,99,210,0.1)", color:"#a07ee0", cursor:"pointer", whiteSpace:"nowrap" }}>
-                  SEARCH →
-                </button>
-              </div>
-
-              {!partSearched && (
-                <div style={{ padding:"40px 20px", textAlign:"center" }}>
-                  <div style={{ fontSize:9, color:"rgba(138,99,210,0.3)", letterSpacing:2, marginBottom:8 }}>SEARCH FY2025 TX LINE ITEMS</div>
-                  <div style={{ fontSize:7.5, color:"rgba(232,228,240,0.2)" }}>Enter a full or partial model number, part name, or manufacturer — results sorted by total cost, highest first</div>
-                </div>
-              )}
-              {partSearched && partLoading && (
-                <div style={{ padding:"40px", textAlign:"center", fontSize:9, color:"rgba(138,99,210,0.4)", letterSpacing:2 }}>SEARCHING...</div>
-              )}
-              {partSearched && !partLoading && partResults.length === 0 && (
-                <div style={{ padding:"40px", textAlign:"center", fontSize:9, color:"rgba(232,228,240,0.25)", letterSpacing:2 }}>NO RESULTS FOUND</div>
-              )}
-              {partSearched && !partLoading && partResults.length > 0 && (
-                <>
-                  {/* Results header */}
-                  <div style={{ display:"grid", gridTemplateColumns:"1.6fr 1.2fr 1fr 130px 80px 110px", gap:0, padding:"7px 12px", borderBottom:"1px solid rgba(138,99,210,0.2)", background:"rgba(138,99,210,0.05)" }}>
-                    {["MODEL (471)","APPLICANT","SERVICE PROVIDER","QTY","TOTAL COST"].map((h,i) => (
-                      <div key={i} style={{ fontSize:6.5, letterSpacing:1.5, color:"rgba(138,99,210,0.55)", fontFamily:"'DM Mono',monospace" }}>{h}</div>
+                  <div style={{ display:"flex", gap:4, marginBottom:16 }}>
+                    {[["count","Count"],["total","Dollar Volume"]].map(([key,label]) => (
+                      <button key={key} onClick={() => setMfrMetric(key)} className={`btn btn-sm ${mfrMetric===key?"btn-active":""}`}>{label}</button>
                     ))}
-                    <div onClick={() => setPartSortAsc(p => !p)}
-                      style={{ fontSize:6.5, letterSpacing:1.5, color:"#a07ee0", fontFamily:"'DM Mono',monospace", cursor:"pointer", display:"flex", alignItems:"center", gap:4, userSelect:"none" }}
-                      title="Toggle sort order">
-                      UNIT PRICE <span style={{ fontSize:9 }}>{partSortAsc ? "↑" : "↓"}</span>
-                    </div>
                   </div>
-                  {[...partResults].sort((a,b) => {
-                      const av = a.unit_price || 0;
-                      const bv = b.unit_price || 0;
-                      return partSortAsc ? av - bv : bv - av;
-                    }).map((r, i) => (
-                    <div key={i} style={{ display:"grid", gridTemplateColumns:"1.6fr 1.2fr 1fr 130px 80px 110px", gap:0, padding:"9px 12px", borderBottom:"1px solid rgba(138,99,210,0.07)", alignItems:"center", transition:"background 0.12s" }}
-                      onMouseEnter={e => e.currentTarget.style.background="rgba(138,99,210,0.04)"}
-                      onMouseLeave={e => e.currentTarget.style.background="transparent"}>
-                      <div>
-                        <div title={r.model_of_equipment || ""} style={{ fontSize:8, color:"#a07ee0", fontWeight:500, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
-                          {r.model_of_equipment ? (r.model_of_equipment.length > 40 ? r.model_of_equipment.slice(0, 40) + "…" : r.model_of_equipment) : "—"}
+                  {data.manufacturers?.map((m, i) => (
+                    <div key={i} style={{ display:"flex", alignItems:"center", gap:12, padding:"8px 0", borderBottom:"1px solid #f1f5f9" }}>
+                      <div style={{ flex:1 }}>
+                        <div style={{ display:"flex", justifyContent:"space-between", marginBottom:4 }}>
+                          <span style={{ fontSize:12, fontWeight:500 }}>{m.name}</span>
+                          <span style={{ fontSize:11, fontWeight:600, color:"#2563eb" }}>{mfrMetric==="count" ? m.count : fmt(m.total)}</span>
                         </div>
-                        {r.manufacturer && <div style={{ fontSize:6.5, color:"rgba(232,228,240,0.35)", marginTop:2 }}>{r.manufacturer}</div>}
-                      </div>
-                      <div style={{ fontSize:7.5, color:"rgba(232,228,240,0.75)", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", paddingRight:8 }}>{r.organization_name || "—"}</div>
-                      <div style={{ fontSize:7.5, color:"rgba(59,158,255,0.8)", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", paddingRight:8 }}>{r.spin_name || "—"}</div>
-                      <div style={{ fontSize:8, color:"rgba(232,228,240,0.5)" }}>{r.quantity ? r.quantity.toLocaleString() : "—"}</div>
-                      <div style={{ fontSize:8, color:"rgba(232,228,240,0.45)" }}>{r.total_cost ? `$${Math.round(r.total_cost).toLocaleString()}` : "—"}</div>
-                      <div>
-                        {r.unit_price ? (
-                          <>
-                            <div style={{ fontSize:9, color:"#a07ee0", fontWeight:500 }}>${Number(r.unit_price).toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})}</div>
-                            <div style={{ fontSize:6, color:"rgba(138,99,210,0.4)", marginTop:1, letterSpacing:1 }}>PER UNIT</div>
-                          </>
-                        ) : (
-                          <div style={{ fontSize:8, color:"rgba(232,228,240,0.2)" }}>—</div>
-                        )}
+                        <div style={{ height:6, background:"#f1f5f9", borderRadius:99, overflow:"hidden" }}>
+                          <div style={{ width:`${Math.round(((mfrMetric==="count"?m.count:m.total)/maxMfr)*100)}%`, height:"100%", background:"linear-gradient(90deg,#a78bfa,#7c3aed)", borderRadius:99 }}/>
+                        </div>
                       </div>
                     </div>
                   ))}
-                  <div style={{ padding:"8px 12px", fontSize:7, color:"rgba(232,228,240,0.2)", letterSpacing:1.5, borderTop:"1px solid rgba(138,99,210,0.08)" }}>
-                    {partResults.length} RESULT{partResults.length !== 1 ? "S" : ""} · FY2025 TX · Click UNIT PRICE header to toggle sort direction
-                  </div>
                 </>
               )}
-            </>
-          )}
-          {view === "providersearch" && (
-            <>
-              {/* Search bar */}
-              <div style={{ display:"flex", gap:8, alignItems:"center", marginBottom:16 }}>
-                <input value={providerQuery} onChange={e => setProviderQuery(e.target.value)} onKeyDown={e => e.key === "Enter" && doProviderSearch()}
-                  placeholder="Enter service provider name (e.g. AT&T, Spectrum, Lumen)..."
-                  style={{ flex:1, background:"rgba(255,255,255,0.03)", border:"1px solid rgba(138,99,210,0.25)", outline:"none", fontFamily:"'DM Mono',monospace", fontSize:9, color:"#e8e4f0", padding:"8px 12px" }}/>
-                <button onClick={doProviderSearch}
-                  style={{ padding:"8px 20px", fontFamily:"'DM Mono',monospace", fontSize:8, letterSpacing:2, border:"1px solid rgba(138,99,210,0.5)", background:"rgba(138,99,210,0.1)", color:"#a07ee0", cursor:"pointer", whiteSpace:"nowrap" }}>
-                  SEARCH →
-                </button>
-              </div>
 
-              {providerLoading && <div style={{ textAlign:"center", padding:"40px", fontSize:9, color:"rgba(138,99,210,0.4)", letterSpacing:2 }}>SEARCHING...</div>}
-
-              {!providerLoading && !providerResults && (
-                <div style={{ padding:"40px 20px", textAlign:"center" }}>
-                  <div style={{ fontSize:9, color:"rgba(138,99,210,0.3)", letterSpacing:2, marginBottom:8 }}>SEARCH PROVIDER COMMITMENTS</div>
-                  <div style={{ fontSize:7.5, color:"rgba(232,228,240,0.2)" }}>Search by provider name to see all FY2026 TX commitments — what they won, who they won it from, and amounts</div>
-                </div>
-              )}
-
-              {!providerLoading && providerResults && providerResults.data.length === 0 && (
-                <div style={{ padding:"40px", textAlign:"center", fontSize:9, color:"rgba(232,228,240,0.25)", letterSpacing:2 }}>NO RESULTS FOUND</div>
-              )}
-
-              {!providerLoading && providerResults && providerResults.data.length > 0 && (() => {
-                const sorted = [...providerResults.data].sort((a,b) => {
-                  const av = a[providerSortField] || 0;
-                  const bv = b[providerSortField] || 0;
-                  if (typeof av === "string") return providerSortAsc ? av.localeCompare(bv) : bv.localeCompare(av);
-                  return providerSortAsc ? av - bv : bv - av;
-                });
-                const SHdr = ({ field, label }) => (
-                  <div onClick={() => toggleProviderSort(field)} style={{ fontSize:6.5, letterSpacing:1.5, color: providerSortField===field ? "#a07ee0" : "rgba(138,99,210,0.45)", cursor:"pointer", display:"flex", alignItems:"center", gap:3, userSelect:"none", fontFamily:"'DM Mono',monospace" }}>
-                    {label} {providerSortField===field ? (providerSortAsc ? "↑" : "↓") : <span style={{ opacity:0.3 }}>↕</span>}
-                  </div>
-                );
-                return (
-                  <>
-                    {/* Summary strip */}
-                    <div style={{ display:"flex", gap:16, marginBottom:14, padding:"10px 14px", background:"rgba(138,99,210,0.06)", border:"1px solid rgba(138,99,210,0.15)", borderRadius:6 }}>
-                      <div>
-                        <div style={{ fontFamily:"'Aldrich',sans-serif", fontSize:16, color:"#a07ee0", lineHeight:1 }}>{providerResults.count}</div>
-                        <div style={{ fontSize:6.5, color:"rgba(138,99,210,0.5)", letterSpacing:1.5, marginTop:3 }}>COMMITMENTS</div>
-                      </div>
-                      <div>
-                        <div style={{ fontFamily:"'Aldrich',sans-serif", fontSize:16, color:"#22c97a", lineHeight:1 }}>${Math.round(providerResults.total_committed/1000)}k</div>
-                        <div style={{ fontSize:6.5, color:"rgba(34,201,122,0.5)", letterSpacing:1.5, marginTop:3 }}>TOTAL COMMITTED</div>
-                      </div>
-                      <div>
-                        <div style={{ fontFamily:"'Aldrich',sans-serif", fontSize:16, color:"#3b9eff", lineHeight:1 }}>{providerResults.unique_orgs}</div>
-                        <div style={{ fontSize:6.5, color:"rgba(59,158,255,0.5)", letterSpacing:1.5, marginTop:3 }}>ORGANIZATIONS</div>
-                      </div>
-                      {providerResults.unique_providers > 1 && (
-                        <div>
-                          <div style={{ fontFamily:"'Aldrich',sans-serif", fontSize:16, color:"rgba(232,228,240,0.5)", lineHeight:1 }}>{providerResults.unique_providers}</div>
-                          <div style={{ fontSize:6.5, color:"rgba(232,228,240,0.3)", letterSpacing:1.5, marginTop:3 }}>PROVIDER NAMES</div>
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Table header */}
-                    <div style={{ display:"grid", gridTemplateColumns:"1.4fr 1.2fr 1fr 90px 110px 110px 90px", padding:"7px 12px", borderBottom:"1px solid rgba(138,99,210,0.2)", background:"rgba(138,99,210,0.05)" }}>
-                      <SHdr field="spin_name"    label="PROVIDER" />
-                      <SHdr field="organization" label="APPLICANT" />
-                      <SHdr field="service_type" label="SERVICE TYPE" />
-                      <SHdr field="funding_year" label="FY" />
-                      <SHdr field="commitment"   label="COMMITTED" />
-                      <SHdr field="frn_status"   label="STATUS" />
-                      <SHdr field="discount_pct" label="DISC %" />
-                    </div>
-
-                    {sorted.map((r, i) => {
-                      const sc = (r.frn_status||"").toLowerCase().includes("commit") || (r.frn_status||"").toLowerCase().includes("fund") ? "#22c97a" : (r.frn_status||"").toLowerCase().includes("deny") ? "#f0614a" : "#a07ee0";
-                      return (
-                        <div key={i}
-                          style={{ display:"grid", gridTemplateColumns:"1.4fr 1.2fr 1fr 90px 110px 110px 90px", padding:"8px 12px", borderBottom:"1px solid rgba(138,99,210,0.07)", alignItems:"center", transition:"background 0.12s", cursor:"pointer" }}
-                          onMouseEnter={e => e.currentTarget.style.background="rgba(138,99,210,0.05)"}
-                          onMouseLeave={e => e.currentTarget.style.background="transparent"}
-                          onClick={() => r.application_number && window.open(`https://legacy.fundsforlearning.com/471/${r.application_number}`, "_blank")}>
-                          <div style={{ fontSize:7.5, color:"#a07ee0", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", paddingRight:8 }}>{r.spin_name || "—"}</div>
-                          <div style={{ fontSize:7.5, color:"rgba(232,228,240,0.8)", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", paddingRight:8 }}>{r.organization || "—"}</div>
-                          <div style={{ fontSize:7, color:"rgba(232,228,240,0.5)", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", paddingRight:8 }}>{r.service_type || "—"}</div>
-                          <div style={{ fontSize:8, color:"#f0b429" }}>FY{r.funding_year}</div>
-                          <div style={{ fontSize:8, color:"#22c97a", fontWeight:500 }}>{r.commitment ? `$${Math.round(r.commitment).toLocaleString()}` : "—"}</div>
-                          <div><span style={{ fontSize:6.5, padding:"2px 6px", border:`1px solid ${sc}40`, background:`${sc}10`, color:sc, borderRadius:2 }}>{(r.frn_status||"—").split(" ").slice(0,2).join(" ")}</span></div>
-                          <div style={{ fontSize:8, color:"rgba(232,228,240,0.5)" }}>{r.discount_pct ? `${r.discount_pct}%` : "—"}</div>
-                        </div>
-                      );
-                    })}
-                    <div style={{ padding:"8px 12px", fontSize:7, color:"rgba(232,228,240,0.2)", letterSpacing:1.5, borderTop:"1px solid rgba(138,99,210,0.08)" }}>
-                      {sorted.length} RECORDS · FY2026 TX · Click a row to view 471 on FundsForLearning
-                    </div>
-                  </>
-                );
-              })()}
-            </>
-          )}
-          {view === "areaservice" && (
-            <>
-              {/* Search controls */}
-              <div style={{ display:"flex", gap:8, alignItems:"center", marginBottom:16, flexWrap:"wrap" }}>
-                {/* Service type toggle */}
-                <div style={{ display:"flex", gap:4 }}>
-                  {[["c2","Category 2"],["internal","Internal Connections"],["all","All Services"]].map(([key,label]) => (
-                    <button key={key} onClick={() => setAreaSvcType(key)}
-                      style={{ padding:"5px 12px", fontFamily:"'DM Mono',monospace", fontSize:7, letterSpacing:1.5, border:`1px solid ${areaSvcType===key ? "rgba(0,212,255,0.6)" : "rgba(0,212,255,0.15)"}`, background: areaSvcType===key ? "rgba(0,212,255,0.1)" : "transparent", color: areaSvcType===key ? "#00d4ff" : "rgba(232,228,240,0.35)", cursor:"pointer" }}>
-                      {label}
-                    </button>
-                  ))}
-                </div>
-                <input value={areaQuery} onChange={e => setAreaQuery(e.target.value)} onKeyDown={e => e.key === "Enter" && doAreaSearch()}
-                  placeholder="Enter city, district name, or county (e.g. Houston, Garland ISD, Travis County)..."
-                  style={{ flex:1, minWidth:220, background:"rgba(255,255,255,0.03)", border:"1px solid rgba(0,212,255,0.25)", outline:"none", fontFamily:"'DM Mono',monospace", fontSize:9, color:"#e8e4f0", padding:"8px 12px" }}/>
-                <input value={areaKeyword} onChange={e => setAreaKeyword(e.target.value)} onKeyDown={e => e.key === "Enter" && doAreaSearch()}
-                  placeholder="Service keyword (e.g. cabling, fiber, wifi)..."
-                  style={{ width:200, background:"rgba(255,255,255,0.03)", border:"1px solid rgba(0,212,255,0.25)", outline:"none", fontFamily:"'DM Mono',monospace", fontSize:9, color:"#e8e4f0", padding:"8px 12px" }}/>
-                <button onClick={doAreaSearch}
-                  style={{ padding:"8px 18px", fontFamily:"'DM Mono',monospace", fontSize:8, letterSpacing:2, border:"1px solid rgba(0,212,255,0.5)", background:"rgba(0,212,255,0.08)", color:"#00d4ff", cursor:"pointer", whiteSpace:"nowrap" }}>
-                  SEARCH →
-                </button>
-              </div>
-
-              {areaLoading && <div style={{ textAlign:"center", padding:"40px", fontSize:9, color:"rgba(0,212,255,0.4)", letterSpacing:2 }}>SEARCHING...</div>}
-
-              {!areaLoading && !areaResults && (
-                <div style={{ padding:"40px 20px", textAlign:"center" }}>
-                  <div style={{ fontSize:9, color:"rgba(0,212,255,0.3)", letterSpacing:2, marginBottom:8 }}>FIND PROVIDERS BY SERVICE AREA</div>
-                  <div style={{ fontSize:7.5, color:"rgba(232,228,240,0.2)", maxWidth:500, margin:"0 auto" }}>Enter a city, school district name, or county to see which providers have won C2 or cabling commitments in that area — sorted by total dollars won</div>
-                </div>
-              )}
-
-              {!areaLoading && areaResults && areaResults.count === 0 && (
-                <div style={{ padding:"40px", textAlign:"center", fontSize:9, color:"rgba(232,228,240,0.25)", letterSpacing:2 }}>NO RESULTS FOUND · Try a broader search term</div>
-              )}
-
-              {!areaLoading && areaResults && areaResults.count > 0 && (
+              {/* SERVICE TYPES */}
+              {view === "services" && (
                 <>
-                  {/* Summary + sub-tab */}
-                  <div style={{ display:"flex", alignItems:"center", gap:16, marginBottom:14 }}>
-                    <div style={{ display:"flex", gap:4 }}>
-                      {[["providers","PROVIDERS"],["detail","ALL RECORDS"]].map(([key,label]) => (
-                        <button key={key} onClick={() => setAreaView(key)}
-                          style={{ padding:"4px 12px", fontFamily:"'DM Mono',monospace", fontSize:7, letterSpacing:1.5, border:`1px solid ${areaView===key ? "rgba(0,212,255,0.6)" : "rgba(0,212,255,0.15)"}`, background: areaView===key ? "rgba(0,212,255,0.1)" : "transparent", color: areaView===key ? "#00d4ff" : "rgba(232,228,240,0.35)", cursor:"pointer" }}>
-                          {label}
-                        </button>
-                      ))}
-                    </div>
-                    <div style={{ display:"flex", gap:16, marginLeft:"auto" }}>
-                      <div style={{ textAlign:"right" }}>
-                        <div style={{ fontFamily:"'Aldrich',sans-serif", fontSize:14, color:"#00d4ff", lineHeight:1 }}>{areaResults.providerSummary.length}</div>
-                        <div style={{ fontSize:6.5, color:"rgba(0,212,255,0.5)", letterSpacing:1.5 }}>PROVIDERS</div>
-                      </div>
-                      <div style={{ textAlign:"right" }}>
-                        <div style={{ fontFamily:"'Aldrich',sans-serif", fontSize:14, color:"#22c97a", lineHeight:1 }}>${Math.round(areaResults.total_committed/1000)}k</div>
-                        <div style={{ fontSize:6.5, color:"rgba(34,201,122,0.5)", letterSpacing:1.5 }}>TOTAL COMMITTED</div>
-                      </div>
-                      <div style={{ textAlign:"right" }}>
-                        <div style={{ fontFamily:"'Aldrich',sans-serif", fontSize:14, color:"rgba(232,228,240,0.5)", lineHeight:1 }}>{areaResults.count}</div>
-                        <div style={{ fontSize:6.5, color:"rgba(232,228,240,0.3)", letterSpacing:1.5 }}>RECORDS</div>
+                  {data.service_types?.map((s, i) => (
+                    <div key={i} style={{ display:"flex", alignItems:"center", gap:12, padding:"8px 0", borderBottom:"1px solid #f1f5f9" }}>
+                      <div style={{ flex:1 }}>
+                        <div style={{ display:"flex", justifyContent:"space-between", marginBottom:4 }}>
+                          <span style={{ fontSize:12, fontWeight:500 }}>{s.name}</span>
+                          <span style={{ fontSize:11, fontWeight:600, color:"#16a34a" }}>{fmt(s.total)}</span>
+                        </div>
+                        <div style={{ height:6, background:"#f1f5f9", borderRadius:99, overflow:"hidden" }}>
+                          <div style={{ width:`${Math.round((s.total/(data.service_types[0]?.total||1))*100)}%`, height:"100%", background:"linear-gradient(90deg,#6ee7b7,#16a34a)", borderRadius:99 }}/>
+                        </div>
+                        <div style={{ fontSize:10, color:"#94a3b8", marginTop:3 }}>{s.count} FRNs</div>
                       </div>
                     </div>
-                  </div>
+                  ))}
+                </>
+              )}
 
-                  {/* Providers view */}
-                  {areaView === "providers" && (
+              {/* TOP PRODUCTS */}
+              {view === "products" && (
+                <>
+                  {data.top_products?.map((p, i) => (
+                    <div key={i} style={{ padding:"8px 0", borderBottom:"1px solid #f1f5f9" }}>
+                      <div style={{ display:"flex", justifyContent:"space-between", marginBottom:2 }}>
+                        <span style={{ fontSize:11, fontWeight:500 }} title={p.name}>{p.name?.length>60?p.name.slice(0,60)+"…":p.name}</span>
+                        <span style={{ fontSize:11, fontWeight:600, color:"#2563eb", flexShrink:0, marginLeft:8 }}>{p.count} records</span>
+                      </div>
+                    </div>
+                  ))}
+                </>
+              )}
+
+              {/* PART LOOKUP */}
+              {view === "partlookup" && (
+                <>
+                  <div style={{ display:"flex", gap:8, marginBottom:16 }}>
+                    <input className="inp" value={partQuery} onChange={e => setPartQuery(e.target.value)} onKeyDown={e => e.key==="Enter" && doPartSearch()} placeholder="Search model number, product name, or manufacturer..." />
+                    <button className="btn btn-primary" onClick={doPartSearch}>Search →</button>
+                  </div>
+                  {partLoading && <Spinner />}
+                  {!partLoading && partSearched && partResults.length === 0 && <Empty title="No parts found" />}
+                  {!partLoading && !partSearched && <Empty title="Search for a part above" sub="Search FY2025 TX line items by model number, product name, or manufacturer" />}
+                  {!partLoading && partResults.length > 0 && (
                     <>
-                      <div style={{ display:"grid", gridTemplateColumns:"2fr 80px 120px 80px", padding:"7px 12px", borderBottom:"1px solid rgba(0,212,255,0.2)", background:"rgba(0,212,255,0.04)" }}>
-                        {["PROVIDER","AWARDS","TOTAL COMMITTED","ORGS SERVED"].map((h,i) => (
-                          <div key={i} style={{ fontSize:6.5, letterSpacing:1.5, color:"rgba(0,212,255,0.55)", fontFamily:"'DM Mono',monospace" }}>{h}</div>
+                      <div className="tbl-hdr" style={{ gridTemplateColumns:"2fr 1.2fr 1fr 90px 90px 90px" }}>
+                        <div className="tbl-hdr-cell">PRODUCT</div>
+                        <div className="tbl-hdr-cell">MANUFACTURER</div>
+                        <div className="tbl-hdr-cell">ORGANIZATION</div>
+                        <SortHdr label="UNIT PRICE" field="unit_price" sortField={pSort.sortField} sortAsc={pSort.sortAsc} onSort={pSort.toggle} />
+                        <div className="tbl-hdr-cell">QTY</div>
+                        <div className="tbl-hdr-cell">TOTAL</div>
+                      </div>
+                      {pSort.apply(partResults).map((r, i) => (
+                        <div key={i} className="tbl-row" style={{ gridTemplateColumns:"2fr 1.2fr 1fr 90px 90px 90px" }}>
+                          <div className="tbl-cell" style={{ fontWeight:500 }} title={r.product_name}>{(r.model||r.product_name||"—").slice(0,40)}{(r.model||r.product_name||"").length>40?"…":""}</div>
+                          <div className="tbl-cell" style={{ fontSize:10 }}>{r.manufacturer||"—"}</div>
+                          <div className="tbl-cell" style={{ fontSize:10 }}>{r.organization||"—"}</div>
+                          <div className="tbl-cell" style={{ fontWeight:600, color:"#2563eb" }}>{r.unit_price?fmt(r.unit_price):"—"}</div>
+                          <div className="tbl-cell">{r.quantity||"—"}</div>
+                          <div className="tbl-cell" style={{ color:"#16a34a" }}>{r.total_cost?fmt(r.total_cost):"—"}</div>
+                        </div>
+                      ))}
+                    </>
+                  )}
+                </>
+              )}
+
+              {/* PROVIDER SEARCH */}
+              {view === "providersearch" && (
+                <>
+                  <div style={{ display:"flex", gap:8, marginBottom:16 }}>
+                    <input className="inp" value={providerQuery} onChange={e => setProviderQuery(e.target.value)} onKeyDown={e => e.key==="Enter" && doProviderSearch()} placeholder="Enter service provider name (e.g. AT&T, Spectrum, Lumen)..." />
+                    <button className="btn btn-primary" onClick={doProviderSearch}>Search →</button>
+                  </div>
+                  {providerLoading && <Spinner />}
+                  {!providerLoading && !providerResults && <Empty title="Search for a provider" sub="See all FY2026 TX commitments for any service provider" />}
+                  {!providerLoading && providerResults && providerResults.data.length === 0 && <Empty title="No results found" />}
+                  {!providerLoading && providerResults && providerResults.data.length > 0 && (
+                    <>
+                      <div style={{ display:"flex", gap:20, marginBottom:16, padding:"12px 0", borderBottom:"1.5px solid #e2e8f0" }}>
+                        {[["count","Commitments","#2563eb"],["total_committed","Total Committed","#16a34a"],["unique_orgs","Organizations","#94a3b8"]].map(([key,label,color]) => (
+                          <div key={key}><div style={{ fontFamily:"'Aldrich',sans-serif", fontSize:18, color, lineHeight:1 }}>{key==="total_committed"?fmt(providerResults[key]):providerResults[key]}</div><div style={{ fontSize:10, color:"#94a3b8", marginTop:2 }}>{label}</div></div>
                         ))}
                       </div>
-                      {areaResults.providerSummary.map((p, i) => {
-                        const pct = Math.round((p.total / areaResults.total_committed) * 100);
+                      <div className="tbl-hdr" style={{ gridTemplateColumns:"1.4fr 1.2fr 1fr 90px 120px 130px 80px" }}>
+                        <SortHdr label="PROVIDER" field="spin_name" sortField={provSort.sortField} sortAsc={provSort.sortAsc} onSort={provSort.toggle} />
+                        <SortHdr label="APPLICANT" field="organization" sortField={provSort.sortField} sortAsc={provSort.sortAsc} onSort={provSort.toggle} />
+                        <SortHdr label="SERVICE TYPE" field="service_type" sortField={provSort.sortField} sortAsc={provSort.sortAsc} onSort={provSort.toggle} />
+                        <div className="tbl-hdr-cell">FY</div>
+                        <SortHdr label="COMMITTED" field="commitment" sortField={provSort.sortField} sortAsc={provSort.sortAsc} onSort={provSort.toggle} />
+                        <SortHdr label="STATUS" field="frn_status" sortField={provSort.sortField} sortAsc={provSort.sortAsc} onSort={provSort.toggle} />
+                        <SortHdr label="DISC %" field="discount_pct" sortField={provSort.sortField} sortAsc={provSort.sortAsc} onSort={provSort.toggle} />
+                      </div>
+                      {provSort.apply(providerResults.data).map((r, i) => {
+                        const sc = (r.frn_status||"").toLowerCase().includes("fund") ? "badge-green" : (r.frn_status||"").toLowerCase().includes("deny") ? "badge-red" : "badge-gray";
                         return (
-                          <div key={i} style={{ display:"grid", gridTemplateColumns:"2fr 80px 120px 80px", padding:"10px 12px", borderBottom:"1px solid rgba(0,212,255,0.06)", alignItems:"center", transition:"background 0.12s" }}
-                            onMouseEnter={e => e.currentTarget.style.background="rgba(0,212,255,0.04)"}
-                            onMouseLeave={e => e.currentTarget.style.background="transparent"}>
-                            <div>
-                              <div style={{ fontSize:8.5, color:"#00d4ff", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", paddingRight:10 }}>{p.spin_name || "—"}</div>
-                              <div style={{ height:2, background:"rgba(0,212,255,0.1)", borderRadius:99, marginTop:4, overflow:"hidden" }}>
-                                <div style={{ width:`${pct}%`, height:"100%", background:"rgba(0,212,255,0.5)", borderRadius:99 }}/>
-                              </div>
-                            </div>
-                            <div style={{ fontSize:8, color:"rgba(232,228,240,0.6)" }}>{p.count}</div>
-                            <div style={{ fontSize:8, color:"#22c97a", fontWeight:500 }}>${p.total.toLocaleString()}<span style={{ fontSize:6.5, color:"rgba(34,201,122,0.5)", marginLeft:4 }}>{pct}%</span></div>
-                            <div style={{ fontSize:8, color:"rgba(232,228,240,0.45)" }}>{p.orgs}</div>
+                          <div key={i} className="tbl-row" style={{ gridTemplateColumns:"1.4fr 1.2fr 1fr 90px 120px 130px 80px" }} onClick={() => r.application_number && window.open(`https://legacy.fundsforlearning.com/471/${r.application_number}`,"_blank")}>
+                            <div className="tbl-cell" style={{ color:"#2563eb", fontWeight:500 }}>{r.spin_name}</div>
+                            <div className="tbl-cell">{r.organization}</div>
+                            <div className="tbl-cell" style={{ fontSize:10 }}>{r.service_type}</div>
+                            <div className="tbl-cell" style={{ color:"#d97706" }}>FY{r.funding_year}</div>
+                            <div className="tbl-cell" style={{ color:"#16a34a", fontWeight:600 }}>{r.commitment?fmt(r.commitment):"—"}</div>
+                            <div><span className={`badge ${sc}`} style={{ fontSize:9 }}>{(r.frn_status||"—").split(" ").slice(0,2).join(" ")}</span></div>
+                            <div className="tbl-cell">{r.discount_pct?`${r.discount_pct}%`:"—"}</div>
                           </div>
                         );
                       })}
+                      <div style={{ padding:"10px 0", fontSize:10, color:"#94a3b8", borderTop:"1px solid #f1f5f9" }}>Click a row to view 471 on FundsForLearning</div>
                     </>
                   )}
+                </>
+              )}
 
-                  {/* Detail view */}
-                  {areaView === "detail" && (
-                    <>
-                      <div style={{ display:"grid", gridTemplateColumns:"1.2fr 1.2fr 1fr 70px 110px 80px", padding:"7px 12px", borderBottom:"1px solid rgba(0,212,255,0.2)", background:"rgba(0,212,255,0.04)" }}>
-                        {["PROVIDER","APPLICANT","SERVICE TYPE","FY","COMMITTED","DISC %"].map((h,i) => (
-                          <div key={i} style={{ fontSize:6.5, letterSpacing:1.5, color:"rgba(0,212,255,0.55)", fontFamily:"'DM Mono',monospace" }}>{h}</div>
-                        ))}
-                      </div>
-                      {areaResults.data.map((r, i) => (
-                        <div key={i}
-                          style={{ display:"grid", gridTemplateColumns:"1.2fr 1.2fr 1fr 70px 110px 80px", padding:"8px 12px", borderBottom:"1px solid rgba(0,212,255,0.06)", alignItems:"center", cursor:"pointer", transition:"background 0.12s" }}
-                          onMouseEnter={e => e.currentTarget.style.background="rgba(0,212,255,0.04)"}
-                          onMouseLeave={e => e.currentTarget.style.background="transparent"}
-                          onClick={() => r.application_number && window.open(`https://legacy.fundsforlearning.com/471/${r.application_number}`, "_blank")}>
-                          <div style={{ fontSize:7.5, color:"#00d4ff", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", paddingRight:8 }}>{r.spin_name || "—"}</div>
-                          <div style={{ fontSize:7.5, color:"rgba(232,228,240,0.8)", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", paddingRight:8 }}>{r.organization || "—"}</div>
-                          <div style={{ fontSize:7, color:"rgba(232,228,240,0.5)", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", paddingRight:8 }}>{r.service_type || "—"}</div>
-                          <div style={{ fontSize:8, color:"#f0b429" }}>FY{r.funding_year}</div>
-                          <div style={{ fontSize:8, color:"#22c97a", fontWeight:500 }}>{r.commitment ? `$${Math.round(r.commitment).toLocaleString()}` : "—"}</div>
-                          <div style={{ fontSize:8, color:"rgba(232,228,240,0.5)" }}>{r.discount_pct ? `${r.discount_pct}%` : "—"}</div>
-                        </div>
+              {/* SERVICE AREA */}
+              {view === "areaservice" && (
+                <>
+                  <div style={{ display:"flex", gap:8, marginBottom:16, flexWrap:"wrap" }}>
+                    <div style={{ display:"flex", gap:4 }}>
+                      {[["c2","Category 2"],["internal","Internal Connections"],["all","All Services"]].map(([key,label]) => (
+                        <button key={key} onClick={() => setAreaSvcType(key)} className={`btn btn-sm ${areaSvcType===key?"btn-active":""}`}>{label}</button>
                       ))}
-                      <div style={{ padding:"8px 12px", fontSize:7, color:"rgba(232,228,240,0.2)", letterSpacing:1.5, borderTop:"1px solid rgba(0,212,255,0.08)" }}>
-                        {areaResults.count} RECORDS · Click a row to view 471 on FundsForLearning
+                    </div>
+                    <input className="inp" style={{ flex:1, minWidth:220 }} value={areaQuery} onChange={e => setAreaQuery(e.target.value)} onKeyDown={e => e.key==="Enter" && doAreaSearch()} placeholder="Enter city, district name, or county (e.g. Houston, Garland ISD)..." />
+                    <button className="btn btn-primary" onClick={doAreaSearch}>Search →</button>
+                  </div>
+                  {areaLoading && <Spinner />}
+                  {!areaLoading && !areaResults && <Empty title="Find providers by service area" sub="Search by city, school district name, or county to see which providers have won commitments in that area" />}
+                  {!areaLoading && areaResults && areaResults.count === 0 && <Empty title="No results found" sub="Try a broader search term" />}
+                  {!areaLoading && areaResults && areaResults.count > 0 && (
+                    <>
+                      <div style={{ display:"flex", gap:12, marginBottom:14, alignItems:"center" }}>
+                        <div style={{ display:"flex", gap:4 }}>
+                          {[["providers","Providers"],["detail","All Records"]].map(([key,label]) => (
+                            <button key={key} onClick={() => setAreaView(key)} className={`btn btn-sm ${areaView===key?"btn-active":""}`}>{label}</button>
+                          ))}
+                        </div>
+                        <div style={{ marginLeft:"auto", display:"flex", gap:16 }}>
+                          {[["providerSummary.length","Providers","#2563eb"],["total_committed","Committed","#16a34a"],["count","Records","#94a3b8"]].map(([key,label,color]) => {
+                            const val = key==="providerSummary.length" ? areaResults.providerSummary.length : key==="total_committed" ? fmt(areaResults.total_committed) : areaResults.count;
+                            return <div key={key}><div style={{ fontFamily:"'Aldrich',sans-serif", fontSize:16, color, lineHeight:1 }}>{val}</div><div style={{ fontSize:10, color:"#94a3b8", marginTop:2 }}>{label}</div></div>;
+                          })}
+                        </div>
                       </div>
+                      {areaView === "providers" && (
+                        <>
+                          <div className="tbl-hdr" style={{ gridTemplateColumns:"2fr 80px 140px 80px" }}>
+                            {["PROVIDER","AWARDS","TOTAL COMMITTED","ORGS SERVED"].map(h => <div key={h} className="tbl-hdr-cell">{h}</div>)}
+                          </div>
+                          {areaResults.providerSummary.map((p, i) => {
+                            const pct = Math.round((p.total/areaResults.total_committed)*100);
+                            return (
+                              <div key={i} className="tbl-row" style={{ gridTemplateColumns:"2fr 80px 140px 80px" }}>
+                                <div>
+                                  <div style={{ fontSize:11, fontWeight:500, color:"#2563eb", marginBottom:3 }}>{p.spin_name}</div>
+                                  <div className="prov-bar"><div className="prov-bar-fill" style={{ width:`${pct}%` }}/></div>
+                                </div>
+                                <div className="tbl-cell">{p.count}</div>
+                                <div><div style={{ fontSize:11, fontWeight:600, color:"#16a34a" }}>{fmt(p.total)}</div><div style={{ fontSize:9, color:"#94a3b8" }}>{pct}% share</div></div>
+                                <div className="tbl-cell">{p.orgs}</div>
+                              </div>
+                            );
+                          })}
+                        </>
+                      )}
+                      {areaView === "detail" && (
+                        <>
+                          <div className="tbl-hdr" style={{ gridTemplateColumns:"1.2fr 1.2fr 1fr 70px 110px 80px" }}>
+                            {["PROVIDER","APPLICANT","SERVICE TYPE","FY","COMMITTED","DISC %"].map(h => <div key={h} className="tbl-hdr-cell">{h}</div>)}
+                          </div>
+                          {areaResults.data.map((r, i) => (
+                            <div key={i} className="tbl-row" style={{ gridTemplateColumns:"1.2fr 1.2fr 1fr 70px 110px 80px" }} onClick={() => r.application_number && window.open(`https://legacy.fundsforlearning.com/471/${r.application_number}`,"_blank")}>
+                              <div className="tbl-cell" style={{ color:"#2563eb", fontWeight:500 }}>{r.spin_name}</div>
+                              <div className="tbl-cell">{r.organization}</div>
+                              <div className="tbl-cell" style={{ fontSize:10 }}>{r.service_type}</div>
+                              <div className="tbl-cell" style={{ color:"#d97706" }}>FY{r.funding_year}</div>
+                              <div className="tbl-cell" style={{ color:"#16a34a", fontWeight:600 }}>{r.commitment?fmt(r.commitment):"—"}</div>
+                              <div className="tbl-cell">{r.discount_pct?`${r.discount_pct}%`:"—"}</div>
+                            </div>
+                          ))}
+                        </>
+                      )}
                     </>
                   )}
                 </>
@@ -1110,1099 +1382,45 @@ function CompetitiveIntelModal({ token, onClose }) {
           )}
         </div>
       </div>
-
-      {/* Provider applicants popup */}
-      {providerPopup && (
-        <div style={{ position:"fixed", inset:0, display:"flex", alignItems:"center", justifyContent:"center", zIndex:400 }}
-          onClick={e => e.target === e.currentTarget && setProviderPopup(null)}>
-          <div style={{ background:"#0a0920", border:"1px solid rgba(59,158,255,0.4)", clipPath:"polygon(0 0,calc(100% - 14px) 0,100% 14px,100% 100%,14px 100%,0 calc(100% - 14px))", width:"min(600px, 92vw)", maxHeight:"70vh", display:"flex", flexDirection:"column", position:"relative" }}>
-            <div style={{ position:"absolute", top:0, left:"10%", right:"10%", height:1, background:"linear-gradient(90deg,transparent,rgba(59,158,255,0.5),transparent)" }}/>
-
-            {/* Popup header */}
-            <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"14px 18px", borderBottom:"1px solid rgba(59,158,255,0.12)", flexShrink:0 }}>
-              <div>
-                <div style={{ fontFamily:"'Aldrich',sans-serif", fontSize:9, letterSpacing:2, color:"#3b9eff", marginBottom:3 }}>APPLICANTS</div>
-                <div style={{ fontSize:8, color:"rgba(232,228,240,0.6)", maxWidth:380, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{providerPopup.name}</div>
-              </div>
-              <button onClick={() => setProviderPopup(null)} style={{ background:"transparent", border:"1px solid rgba(232,228,240,0.12)", color:"rgba(232,228,240,0.4)", cursor:"pointer", fontFamily:"'DM Mono',monospace", fontSize:8, padding:"3px 8px" }}>✕</button>
-            </div>
-
-            {/* Popup body */}
-            <div style={{ flex:1, overflowY:"auto" }}>
-              {providerPopup.loading && (
-                <div style={{ padding:"32px", textAlign:"center", fontSize:8, color:"rgba(59,158,255,0.4)", letterSpacing:2 }}>LOADING...</div>
-              )}
-              {!providerPopup.loading && providerPopup.applicants.length === 0 && (
-                <div style={{ padding:"32px", textAlign:"center", fontSize:8, color:"rgba(232,228,240,0.25)" }}>No applicants found</div>
-              )}
-              {!providerPopup.loading && providerPopup.applicants.length > 0 && (
-                <>
-                  <div style={{ display:"grid", gridTemplateColumns:"1fr 80px 100px", padding:"7px 18px", borderBottom:"1px solid rgba(59,158,255,0.12)", background:"rgba(59,158,255,0.04)" }}>
-                    {["ORGANIZATION","AWARDS","COMMITTED"].map((h,i) => (
-                      <div key={i} style={{ fontSize:6.5, letterSpacing:1.5, color:"rgba(59,158,255,0.5)" }}>{h}</div>
-                    ))}
-                  </div>
-                  {providerPopup.applicants.map((a, i) => (
-                    <div key={i} style={{ display:"grid", gridTemplateColumns:"1fr 80px 100px", padding:"8px 18px", borderBottom:"1px solid rgba(59,158,255,0.06)", alignItems:"center", transition:"background 0.12s" }}
-                      onMouseEnter={e => e.currentTarget.style.background="rgba(59,158,255,0.04)"}
-                      onMouseLeave={e => e.currentTarget.style.background="transparent"}>
-                      <div style={{ fontSize:8, color:"rgba(232,228,240,0.8)", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", paddingRight:8 }}>{a.name}</div>
-                      <div style={{ fontSize:8, color:"rgba(232,228,240,0.45)" }}>{a.count}</div>
-                      <div style={{ fontSize:8, color:"#22c97a" }}>${a.total.toLocaleString()}</div>
-                    </div>
-                  ))}
-                  <div style={{ padding:"8px 18px", fontSize:6.5, color:"rgba(232,228,240,0.2)", letterSpacing:1, borderTop:"1px solid rgba(59,158,255,0.06)" }}>
-                    {providerPopup.applicants.length} ORGANIZATIONS · FY2026 TX COMMITMENTS
-                  </div>
-                </>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
 
-
-
-function Detail471Fields({ data: d }) {
-  const fields = [
-    { label:"Application #",         value: d.application_number },
-    { label:"Organization",          value: d.organization_name },
-    { label:"Funding Year",          value: d.funding_year ? `FY${d.funding_year}` : null },
-    { label:"State",                 value: d.org_state },
-    { label:"Category",              value: d.chosen_category_of_service },
-    { label:"471 Status",            value: d.form_471_status_name },
-    { label:"Funding Requested",     value: d.funding_request_amount ? `$${Number(d.funding_request_amount).toLocaleString()}` : null },
-    { label:"Pre-Discount Eligible", value: d.pre_discount_eligible_amount ? `$${Number(d.pre_discount_eligible_amount).toLocaleString()}` : null },
-    { label:"C1 Discount",           value: d.c1_discount ? `${Math.round(parseFloat(d.c1_discount)*100)}%` : null },
-    { label:"C2 Discount",           value: d.c2_discount ? `${Math.round(parseFloat(d.c2_discount)*100)}%` : null },
-    { label:"Contact",               value: [d.cnct_first_name, d.cnct_last_name].filter(Boolean).join(" ") || null },
-    { label:"Contact Email",         value: d.cnct_email },
-    { label:"Contact Phone",         value: d.cnct_phone },
-    { label:"Certified",             value: d.certified_datetime ? new Date(d.certified_datetime).toLocaleDateString() : null },
-  ];
+function ProviderApplicants({ token, spinName }) {
+  const [data, setData]     = useState(null);
+  const [loading, setLoading] = useState(true);
+  useEffect(() => {
+    fetch(`${API_URL}/api/provider-applicants?spin_name=${encodeURIComponent(spinName)}`, { headers:{ Authorization:`Bearer ${token}` } })
+      .then(r => r.json()).then(d => { if (d.status==="success") setData(d.data); })
+      .catch(()=>{}).finally(()=>setLoading(false));
+  }, [token, spinName]);
+  if (loading) return <Spinner />;
+  if (!data?.length) return <Empty title="No applicants found" />;
   return (
     <>
-      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8, marginBottom:14 }}>
-        {fields.filter(f => f.value).map(f => (
-          <div key={f.label} style={{ background:"rgba(138,99,210,0.04)", border:"1px solid rgba(138,99,210,0.12)", padding:"8px 10px", borderRadius:4 }}>
-            <div style={{ fontSize:6, letterSpacing:1.5, color:"rgba(138,99,210,0.45)", textTransform:"uppercase", marginBottom:3 }}>{f.label}</div>
-            <div style={{ fontSize:8, color:"rgba(232,228,240,0.8)" }}>{f.value}</div>
-          </div>
-        ))}
-      </div>
-      {d.application_number && (
-        <a href={`https://legacy.fundsforlearning.com/471/${d.application_number}`} target="_blank" rel="noreferrer"
-          style={{ display:"flex", alignItems:"center", justifyContent:"center", gap:8, padding:"8px", border:"1px solid rgba(138,99,210,0.35)", background:"rgba(138,99,210,0.07)", color:"#a07ee0", textDecoration:"none", fontFamily:"'DM Mono',monospace", fontSize:8, letterSpacing:1.5 }}
-          onMouseEnter={e => { e.currentTarget.style.background="rgba(138,99,210,0.15)"; }}
-          onMouseLeave={e => { e.currentTarget.style.background="rgba(138,99,210,0.07)"; }}>
-          View on FundsForLearning →
-        </a>
-      )}
-      <div style={{ fontSize:6.5, color:"rgba(232,228,240,0.2)", textAlign:"center", marginTop:8, letterSpacing:1 }}>
-        SOURCE: {d.source === "local_db" ? "LOCAL DB (FY2026)" : "USAC LIVE API"}
-      </div>
+      {data.map((a, i) => (
+        <div key={i} style={{ display:"flex", alignItems:"center", padding:"7px 0", borderBottom:"1px solid #f1f5f9" }}>
+          <div style={{ flex:1, fontSize:11, fontWeight:500 }}>{a.name}</div>
+          <div style={{ fontSize:11, fontWeight:600, color:"#16a34a", marginLeft:12 }}>{fmt(a.total)}</div>
+          <div style={{ fontSize:10, color:"#94a3b8", marginLeft:12 }}>{a.count} FRN{a.count!==1?"s":""}</div>
+        </div>
+      ))}
     </>
   );
 }
 
-// ── C2 Prospects Modal ─────────────────────────────────────────────────────────
-function C2ProspectsModal({ token, onClose }) {
-  const [results, setResults]   = useState([]);
-  const [loading, setLoading]   = useState(false);
-  const [loaded, setLoaded]     = useState(false);
-  const [error, setError]       = useState("");
-  const [meta, setMeta]         = useState(null);
-  const [sortField, setSortField] = useState("available");
-  const [sortAsc, setSortAsc]   = useState(false);
-  const [filterType, setFilterType] = useState("ALL");
 
-  async function load() {
-    setLoading(true);
-    setError("");
-    try {
-      const res  = await fetch(`${API_URL}/api/c2-prospects?limit=500`, { headers:{ Authorization:`Bearer ${token}` } });
-      const json = await res.json();
-      if (json.status === "success") {
-        setResults(json.data || []);
-        setMeta({ total_checked: json.total_c2_checked, already_filed: json.already_filed, prospects: json.count });
-        setLoaded(true);
-      } else { setError(json.message || "Failed"); }
-    } catch { setError("Connection error — check backend"); }
-    setLoading(false);
-  }
-
-  function toggleSort(field) {
-    if (sortField === field) setSortAsc(p => !p);
-    else { setSortField(field); setSortAsc(false); }
-  }
-
-  const filtered = results.filter(r => filterType === "ALL" || (r.applicant_type||"").toLowerCase().includes(filterType.toLowerCase()));
-
-  const sorted = [...filtered].sort((a,b) => {
-    const av = a[sortField] || 0;
-    const bv = b[sortField] || 0;
-    if (typeof av === "string") return sortAsc ? av.localeCompare(bv) : bv.localeCompare(av);
-    return sortAsc ? av - bv : bv - av;
-  });
-
-  const SortHdr = ({ field, label }) => (
-    <div onClick={() => toggleSort(field)} style={{ fontSize:6.5, letterSpacing:1.5, color: sortField===field ? "#22c97a" : "rgba(34,201,122,0.45)", fontFamily:"'DM Mono',monospace", cursor:"pointer", display:"flex", alignItems:"center", gap:3, userSelect:"none" }}>
-      {label} {sortField===field ? (sortAsc ? "↑" : "↓") : <span style={{ opacity:0.3 }}>↕</span>}
-    </div>
-  );
-
-  const totalAvailable = filtered.reduce((s,r) => s + (r.available||0), 0);
-
-  return (
-    <div style={{ position:"fixed", inset:0, background:"rgba(5,5,13,0.92)", display:"flex", alignItems:"center", justifyContent:"center", zIndex:300 }}
-      onClick={e => e.target === e.currentTarget && onClose()}>
-      <div style={{ background:"#07061a", border:"1px solid rgba(34,201,122,0.35)", clipPath:"polygon(0 0,calc(100% - 18px) 0,100% 18px,100% 100%,18px 100%,0 calc(100% - 18px))", width:"min(1100px, 96vw)", maxHeight:"90vh", display:"flex", flexDirection:"column", position:"relative" }}>
-        <div style={{ position:"absolute", top:0, left:"10%", right:"10%", height:1, background:"linear-gradient(90deg,transparent,rgba(34,201,122,0.6),transparent)" }}/>
-
-        {/* Header */}
-        <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"16px 22px", borderBottom:"1px solid rgba(34,201,122,0.12)", flexShrink:0 }}>
-          <div style={{ display:"flex", alignItems:"center", gap:12 }}>
-            <div style={{ width:6, height:6, borderRadius:"50%", background:"#22c97a", boxShadow:"0 0 8px rgba(34,201,122,0.9)" }}/>
-            <span style={{ fontFamily:"'Aldrich',sans-serif", fontSize:11, letterSpacing:2.5, color:"#22c97a" }}>C2 PROSPECT FINDER</span>
-            <span style={{ fontSize:7, letterSpacing:1.5, color:"rgba(232,228,240,0.25)" }}>· TX Schools & Districts · Available C2 Budget · No FY2026 Form 470 Filed</span>
-          </div>
-          <button onClick={onClose} style={{ background:"transparent", border:"1px solid rgba(232,228,240,0.15)", color:"rgba(232,228,240,0.4)", cursor:"pointer", fontFamily:"'DM Mono',monospace", fontSize:8, padding:"4px 10px", letterSpacing:1 }}>✕ CLOSE</button>
-        </div>
-
-        {/* Action bar */}
-        <div style={{ padding:"12px 22px", borderBottom:"1px solid rgba(34,201,122,0.08)", display:"flex", alignItems:"center", gap:12, flexShrink:0, flexWrap:"wrap" }}>
-          {!loaded && !loading && (
-            <button onClick={load}
-              style={{ padding:"8px 22px", fontFamily:"'DM Mono',monospace", fontSize:8, letterSpacing:2, border:"1px solid rgba(34,201,122,0.5)", background:"rgba(34,201,122,0.1)", color:"#22c97a", cursor:"pointer" }}>
-              RUN SEARCH →
-            </button>
-          )}
-          {loading && <div style={{ fontSize:8, color:"rgba(34,201,122,0.5)", letterSpacing:2 }}>QUERYING USAC + LOCAL DB...</div>}
-          {loaded && (
-            <>
-              {/* Type filter */}
-              <div style={{ display:"flex", gap:4 }}>
-                {["ALL","School","District"].map(t => (
-                  <button key={t} onClick={() => setFilterType(t)}
-                    style={{ padding:"4px 12px", fontFamily:"'DM Mono',monospace", fontSize:7, letterSpacing:1.5, border:`1px solid ${filterType===t ? "rgba(34,201,122,0.6)" : "rgba(34,201,122,0.15)"}`, background: filterType===t ? "rgba(34,201,122,0.1)" : "transparent", color: filterType===t ? "#22c97a" : "rgba(232,228,240,0.35)", cursor:"pointer" }}>
-                    {t}
-                  </button>
-                ))}
-              </div>
-              {/* Stats */}
-              <div style={{ display:"flex", gap:16, marginLeft:"auto" }}>
-                <div style={{ textAlign:"right" }}>
-                  <div style={{ fontFamily:"'Aldrich',sans-serif", fontSize:14, color:"#22c97a", lineHeight:1 }}>{sorted.length.toLocaleString()}</div>
-                  <div style={{ fontSize:6.5, color:"rgba(34,201,122,0.5)", letterSpacing:1.5 }}>PROSPECTS</div>
-                </div>
-                <div style={{ textAlign:"right" }}>
-                  <div style={{ fontFamily:"'Aldrich',sans-serif", fontSize:14, color:"#22c97a", lineHeight:1 }}>${(totalAvailable/1000000).toFixed(1)}M</div>
-                  <div style={{ fontSize:6.5, color:"rgba(34,201,122,0.5)", letterSpacing:1.5 }}>TOTAL AVAILABLE</div>
-                </div>
-                {meta && (
-                  <div style={{ textAlign:"right" }}>
-                    <div style={{ fontFamily:"'Aldrich',sans-serif", fontSize:14, color:"rgba(232,228,240,0.4)", lineHeight:1 }}>{meta.already_filed.toLocaleString()}</div>
-                    <div style={{ fontSize:6.5, color:"rgba(232,228,240,0.25)", letterSpacing:1.5 }}>ALREADY FILED</div>
-                  </div>
-                )}
-              </div>
-            </>
-          )}
-          {error && <div style={{ fontSize:8, color:"#f0614a" }}>⚠ {error}</div>}
-        </div>
-
-        {/* Results */}
-        <div style={{ flex:1, overflowY:"auto" }}>
-          {!loaded && !loading && (
-            <div style={{ padding:"60px 22px", textAlign:"center" }}>
-              <div style={{ fontSize:9, color:"rgba(34,201,122,0.3)", letterSpacing:2, marginBottom:10 }}>READY TO FIND PROSPECTS</div>
-              <div style={{ fontSize:7.5, color:"rgba(232,228,240,0.2)", maxWidth:500, margin:"0 auto" }}>
-                Queries USAC C2 budget data live for all TX schools and districts with available funding, then cross-references your local database to exclude anyone who already filed a Form 470 in FY2026.
-              </div>
-            </div>
-          )}
-          {loaded && sorted.length === 0 && (
-            <div style={{ padding:"48px", textAlign:"center", fontSize:9, color:"rgba(232,228,240,0.25)", letterSpacing:2 }}>NO PROSPECTS FOUND</div>
-          )}
-          {loaded && sorted.length > 0 && (
-            <>
-              {/* Table header */}
-              <div style={{ display:"grid", gridTemplateColumns:"2fr 110px 90px 110px 120px 120px 140px 130px", padding:"8px 22px", borderBottom:"1px solid rgba(34,201,122,0.15)", background:"rgba(34,201,122,0.04)", position:"sticky", top:0, minWidth:1000 }}>
-                <SortHdr field="entity_name" label="ENTITY" />
-                <SortHdr field="city" label="CITY" />
-                <div style={{ fontSize:6.5, letterSpacing:1.5, color:"rgba(34,201,122,0.45)", fontFamily:"'DM Mono',monospace" }}>BEN</div>
-                <SortHdr field="applicant_type" label="TYPE" />
-                <SortHdr field="total_budget" label="BUDGET" />
-                <SortHdr field="funded" label="FUNDED" />
-                <SortHdr field="available" label="AVAILABLE" />
-                <SortHdr field="days_since_470" label="LAST 470" />
-              </div>
-
-              {sorted.map((r, i) => {
-                const usedPct = r.total_budget ? Math.round(((r.funded||0) / r.total_budget) * 100) : 0;
-                const availPct = 100 - usedPct;
-                const isDistrict = (r.applicant_type||"").toLowerCase().includes("district");
-                return (
-                  <div key={i} style={{ display:"grid", gridTemplateColumns:"2fr 110px 90px 110px 120px 120px 140px 130px", padding:"9px 22px", borderBottom:"1px solid rgba(34,201,122,0.06)", alignItems:"center", transition:"background 0.12s", minWidth:1000 }}
-                    onMouseEnter={e => e.currentTarget.style.background="rgba(34,201,122,0.03)"}
-                    onMouseLeave={e => e.currentTarget.style.background="transparent"}>
-                    <div>
-                      <div style={{ fontSize:8.5, color:"rgba(232,228,240,0.85)", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", paddingRight:10 }}>{r.entity_name || "—"}</div>
-                      {r.consulting_firm && <div style={{ fontSize:6.5, color:"rgba(240,180,41,0.5)", marginTop:2, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>Consultant: {r.consulting_firm.split("(")[0].trim()}</div>}
-                    </div>
-                    <div style={{ fontSize:7.5, color:"rgba(232,228,240,0.5)" }}>{r.city || "—"}</div>
-                    <div style={{ fontSize:8, color:"#3b9eff" }}>{r.ben || "—"}</div>
-                    <div>
-                      <span style={{ fontSize:7, padding:"2px 7px", border:`1px solid ${isDistrict ? "rgba(59,158,255,0.35)" : "rgba(138,99,210,0.35)"}`, background: isDistrict ? "rgba(59,158,255,0.06)" : "rgba(138,99,210,0.06)", color: isDistrict ? "#3b9eff" : "#a07ee0" }}>
-                        {r.applicant_type || "—"}
-                      </span>
-                    </div>
-                    <div style={{ fontSize:8, color:"rgba(232,228,240,0.5)" }}>{r.total_budget ? `$${Math.round(r.total_budget).toLocaleString()}` : "—"}</div>
-                    <div style={{ fontSize:8, color:"#f0b429" }}>{r.funded ? `$${Math.round(r.funded).toLocaleString()}` : "$0"}</div>
-                    <div>
-                      <div style={{ fontFamily:"'Aldrich',sans-serif", fontSize:12, color:"#22c97a", lineHeight:1, marginBottom:4 }}>${Math.round(r.available).toLocaleString()}</div>
-                      <div style={{ height:3, background:"rgba(255,255,255,0.06)", borderRadius:99, overflow:"hidden" }}>
-                        <div style={{ width:`${availPct}%`, height:"100%", background:"linear-gradient(90deg,#0e5e34,#22c97a)", borderRadius:99 }}/>
-                      </div>
-                    </div>
-                    <div>
-                      {r.days_since_470 === null ? (
-                        <div>
-                          <div style={{ fontSize:7.5, color:"#f0614a", fontWeight:500 }}>Never filed</div>
-                          <div style={{ fontSize:6, color:"rgba(240,97,74,0.5)", marginTop:1, letterSpacing:1 }}>NO HISTORY</div>
-                        </div>
-                      ) : (
-                        <div>
-                          <div style={{ fontSize:7.5, color: r.days_since_470 > 365 ? "#f0614a" : r.days_since_470 > 180 ? "#f0b429" : "#22c97a", fontWeight:500 }}>{r.days_since_470}d ago</div>
-                          <div style={{ fontSize:6, color:"rgba(232,228,240,0.3)", marginTop:1 }}>FY{r.last_470_year} · {r.last_470_date ? new Date(r.last_470_date).toLocaleDateString() : ""}</div>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
-              <div style={{ padding:"10px 22px", fontSize:7, color:"rgba(232,228,240,0.2)", letterSpacing:1.5, borderTop:"1px solid rgba(34,201,122,0.08)" }}>
-                {sorted.length} PROSPECTS · TX · FY2026 · Red = never filed or >1yr ago · Amber = 6-12mo · Green = recent · Consultant shown if on file
-              </div>
-            </>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-
-// ── Entity Search Modal ────────────────────────────────────────────────────────
-const ENTITY_STATES = ["TX","CA","NY","FL","IL","PA","OH","GA","NC","MI","WA","AZ","CO","VA","MA","TN","IN","MO","WI","MN","OR","KY","OK","NV","CT","UT","AR","MS","KS","NM","NE","ID","WV","HI","NH","ME","RI","MT","DE","SD","ND","AK","VT","WY"];
-const ENTITY_TYPES  = ["","School","Library","School District","Library System","Non-Instructional Facility (Nif)","Consortium"];
-
-function EntitySearchModal({ token, onClose }) {
-  const [searchBy, setSearchBy]     = useState("name");
-  const [query, setQuery]           = useState("");
-  const [stateFilter, setStateFilter] = useState("TX");
-  const [typeFilter, setTypeFilter] = useState("");
-  const [results, setResults]       = useState([]);
-  const [loading, setLoading]       = useState(false);
-  const [searched, setSearched]     = useState(false);
-  const [error, setError]           = useState("");
-  const [expanded, setExpanded]     = useState(null);
-  const [history, setHistory]       = useState({}); // keyed by entity_number
-  const [historyLoading, setHistoryLoading] = useState({});
-  const [detail471, setDetail471]   = useState(null); // { data, loading, row }
-
-  async function loadHistory(ben) {
-    if (history[ben] || historyLoading[ben]) return;
-    setHistoryLoading(prev => ({ ...prev, [ben]: true }));
-    try {
-      const res  = await fetch(`${API_URL}/api/entity-history?ben=${encodeURIComponent(ben)}`, { headers:{ Authorization:`Bearer ${token}` } });
-      const json = await res.json();
-      if (json.status === "success") setHistory(prev => ({ ...prev, [ben]: json }));
-    } catch {}
-    setHistoryLoading(prev => ({ ...prev, [ben]: false }));
-  }
-
-  async function loadDetail471(row, ben) {
-    setDetail471({ data: null, loading: true, row });
-    try {
-      const params = new URLSearchParams({ ben });
-      if (row.application_number) params.set("application_number", row.application_number);
-      if (row.funding_year) params.set("funding_year", row.funding_year);
-      const res  = await fetch(`${API_URL}/api/471-detail?${params}`, { headers:{ Authorization:`Bearer ${token}` } });
-      const json = await res.json();
-      setDetail471({ data: json.data || null, loading: false, row });
-    } catch {
-      setDetail471({ data: null, loading: false, row });
-    }
-  }
-
-  async function doSearch() {
-    if (!query.trim()) return;
-    setLoading(true);
-    setSearched(true);
-    setError("");
-    setExpanded(null);
-    try {
-      const params = new URLSearchParams({ limit: 100 });
-      if (searchBy === "ben") params.set("ben", query.trim());
-      else                    params.set("search", query.trim());
-      if (stateFilter !== "ALL") params.set("state", stateFilter);
-      if (typeFilter)            params.set("entity_type", typeFilter);
-      const res  = await fetch(`${API_URL}/api/entity-search?${params}`, { headers:{ Authorization:`Bearer ${token}` } });
-      const json = await res.json();
-      if (json.status === "success") setResults(json.data || []);
-      else { setError(json.message || "Search failed"); setResults([]); }
-    } catch { setError("Connection error — check backend"); setResults([]); }
-    setLoading(false);
-  }
-
-  function handleKey(e) { if (e.key === "Enter") doSearch(); }
-
-  const statusColor = s => s === "Active" ? "#22c97a" : "rgba(232,228,240,0.3)";
-
-  const typeColor = t => {
-    if (!t) return "#a07ee0";
-    const tl = t.toLowerCase();
-    if (tl.includes("school district")) return "#3b9eff";
-    if (tl.includes("school"))          return "#a07ee0";
-    if (tl.includes("library system"))  return "#f0b429";
-    if (tl.includes("library"))         return "#f0b429";
-    if (tl.includes("nif"))             return "rgba(232,228,240,0.35)";
-    if (tl.includes("consortium"))      return "#00d4ff";
-    return "#a07ee0";
-  };
-
-  return (
-    <>
-    <div style={{ position:"fixed", inset:0, background:"rgba(5,5,13,0.9)", display:"flex", alignItems:"center", justifyContent:"center", zIndex:300 }}
-      onClick={e => e.target === e.currentTarget && onClose()}>
-      <div style={{ background:"#07061a", border:"1px solid rgba(59,158,255,0.35)", clipPath:"polygon(0 0,calc(100% - 18px) 0,100% 18px,100% 100%,18px 100%,0 calc(100% - 18px))", width:"min(1000px, 96vw)", maxHeight:"88vh", display:"flex", flexDirection:"column", position:"relative" }}>
-        <div style={{ position:"absolute", top:0, left:"10%", right:"10%", height:1, background:"linear-gradient(90deg,transparent,rgba(59,158,255,0.6),transparent)" }}/>
-
-        {/* Header */}
-        <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"16px 22px", borderBottom:"1px solid rgba(59,158,255,0.12)", flexShrink:0 }}>
-          <div style={{ display:"flex", alignItems:"center", gap:12 }}>
-            <div style={{ width:6, height:6, borderRadius:"50%", background:"#3b9eff", boxShadow:"0 0 8px rgba(59,158,255,0.9)" }}/>
-            <span style={{ fontFamily:"'Aldrich',sans-serif", fontSize:11, letterSpacing:2.5, color:"#3b9eff" }}>ENTITY SEARCH</span>
-            <span style={{ fontSize:7, letterSpacing:1.5, color:"rgba(232,228,240,0.25)" }}>· LIVE · USAC OPEN DATA · Schools, Libraries & Consortia</span>
-          </div>
-          <button onClick={onClose} style={{ background:"transparent", border:"1px solid rgba(232,228,240,0.15)", color:"rgba(232,228,240,0.4)", cursor:"pointer", fontFamily:"'DM Mono',monospace", fontSize:8, padding:"4px 10px", letterSpacing:1 }}>✕ CLOSE</button>
-        </div>
-
-        {/* Search bar */}
-        <div style={{ padding:"14px 22px", borderBottom:"1px solid rgba(59,158,255,0.08)", display:"flex", gap:8, alignItems:"center", flexWrap:"wrap", flexShrink:0 }}>
-          {/* Search by toggles */}
-          <div style={{ display:"flex", gap:4 }}>
-            {[["name","Entity Name"],["ben","BEN #"]].map(([key,label]) => (
-              <button key={key} onClick={() => setSearchBy(key)}
-                style={{ padding:"4px 12px", fontFamily:"'DM Mono',monospace", fontSize:7, letterSpacing:1.5, border:`1px solid ${searchBy===key ? "rgba(59,158,255,0.6)" : "rgba(59,158,255,0.15)"}`, background: searchBy===key ? "rgba(59,158,255,0.1)" : "transparent", color: searchBy===key ? "#3b9eff" : "rgba(232,228,240,0.35)", cursor:"pointer", transition:"all 0.15s" }}>
-                {label}
-              </button>
-            ))}
-          </div>
-          {/* State */}
-          <select value={stateFilter} onChange={e => setStateFilter(e.target.value)}
-            style={{ background:"rgba(255,255,255,0.03)", border:"1px solid rgba(59,158,255,0.2)", color:"#e8e4f0", fontFamily:"'DM Mono',monospace", fontSize:8, padding:"6px 8px", outline:"none" }}>
-            <option value="ALL">ALL STATES</option>
-            {ENTITY_STATES.map(s => <option key={s} value={s} style={{ background:"#0a0814" }}>{s}</option>)}
-          </select>
-          {/* Entity type */}
-          <select value={typeFilter} onChange={e => setTypeFilter(e.target.value)}
-            style={{ background:"rgba(255,255,255,0.03)", border:"1px solid rgba(59,158,255,0.2)", color:"#e8e4f0", fontFamily:"'DM Mono',monospace", fontSize:8, padding:"6px 8px", outline:"none" }}>
-            <option value="">ALL TYPES</option>
-            {ENTITY_TYPES.filter(t => t).map(t => <option key={t} value={t} style={{ background:"#0a0814" }}>{t}</option>)}
-          </select>
-          {/* Input */}
-          <input value={query} onChange={e => setQuery(e.target.value)} onKeyDown={handleKey}
-            placeholder={searchBy === "ben" ? "Enter BEN entity number..." : "Enter school, district, or library name..."}
-            style={{ flex:1, minWidth:220, background:"rgba(255,255,255,0.03)", border:"1px solid rgba(59,158,255,0.25)", outline:"none", fontFamily:"'DM Mono',monospace", fontSize:9, color:"#e8e4f0", padding:"7px 12px" }}/>
-          <button onClick={doSearch}
-            style={{ padding:"7px 18px", fontFamily:"'DM Mono',monospace", fontSize:8, letterSpacing:2, border:"1px solid rgba(59,158,255,0.5)", background:"rgba(59,158,255,0.1)", color:"#3b9eff", cursor:"pointer", whiteSpace:"nowrap" }}>
-            SEARCH →
-          </button>
-        </div>
-
-        {/* Results */}
-        <div style={{ flex:1, overflowY:"auto" }}>
-          {!searched && (
-            <div style={{ padding:"48px 22px", textAlign:"center" }}>
-              <div style={{ fontSize:9, color:"rgba(59,158,255,0.3)", letterSpacing:2, marginBottom:8 }}>SEARCH FOR AN ENTITY ABOVE</div>
-              <div style={{ fontSize:7.5, color:"rgba(232,228,240,0.2)" }}>Search schools, libraries, districts, and consortia by name or BEN · Filter by state and entity type · Click a row to expand full details</div>
-            </div>
-          )}
-          {searched && loading && <div style={{ padding:"48px", textAlign:"center", fontSize:9, color:"rgba(59,158,255,0.4)", letterSpacing:2 }}>FETCHING FROM USAC...</div>}
-          {searched && !loading && error && <div style={{ padding:"24px 22px", fontSize:8, color:"#f0614a" }}>⚠ {error}</div>}
-          {searched && !loading && !error && results.length === 0 && (
-            <div style={{ padding:"48px", textAlign:"center", fontSize:9, color:"rgba(232,228,240,0.25)", letterSpacing:2 }}>NO RESULTS FOUND</div>
-          )}
-          {searched && !loading && results.length > 0 && (
-            <>
-              {/* Table header */}
-              <div style={{ display:"grid", gridTemplateColumns:"2fr 1.2fr 90px 80px 60px 100px", padding:"8px 22px", borderBottom:"1px solid rgba(59,158,255,0.15)", background:"rgba(59,158,255,0.04)", position:"sticky", top:0 }}>
-                {["ENTITY NAME","TYPE","BEN","CITY","STATE","STATUS"].map((h,i) => (
-                  <div key={i} style={{ fontSize:6.5, letterSpacing:1.5, color:"rgba(59,158,255,0.55)", fontFamily:"'DM Mono',monospace" }}>{h}</div>
-                ))}
-              </div>
-
-              {results.map((r, i) => {
-                const isExpanded = expanded === i;
-                const tc = typeColor(r.entity_type);
-                return (
-                  <div key={i} style={{ borderBottom:"1px solid rgba(59,158,255,0.07)" }}>
-                    <div onClick={() => setExpanded(isExpanded ? null : i)}
-                      style={{ display:"grid", gridTemplateColumns:"2fr 1.2fr 90px 80px 60px 100px", padding:"10px 22px", alignItems:"center", cursor:"pointer", transition:"background 0.15s", background: isExpanded ? "rgba(59,158,255,0.06)" : "transparent" }}
-                      onMouseEnter={e => { if (!isExpanded) e.currentTarget.style.background="rgba(59,158,255,0.03)"; }}
-                      onMouseLeave={e => { if (!isExpanded) e.currentTarget.style.background="transparent"; }}>
-                      <div style={{ fontSize:8.5, color:"rgba(232,228,240,0.85)", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", paddingRight:10 }}>{r.entity_name || "—"}</div>
-                      <div style={{ fontSize:7, color: tc, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", paddingRight:8 }}>{r.entity_type || "—"}</div>
-                      <div style={{ fontSize:8, color:"#3b9eff" }}>{r.entity_number || "—"}</div>
-                      <div style={{ fontSize:7.5, color:"rgba(232,228,240,0.5)", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{r.city || "—"}</div>
-                      <div style={{ fontSize:7.5, color:"rgba(232,228,240,0.5)" }}>{r.state || "—"}</div>
-                      <div>
-                        <span style={{ fontSize:7, padding:"2px 8px", border:`1px solid ${statusColor(r.status)}40`, background:`${statusColor(r.status)}10`, color:statusColor(r.status), letterSpacing:1 }}>
-                          {r.status || "—"}
-                        </span>
-                      </div>
-                    </div>
-
-                    {/* Expanded detail */}
-                    {isExpanded && (
-                      <div style={{ background:"rgba(59,158,255,0.03)", borderTop:"1px solid rgba(59,158,255,0.08)" }}>
-                        {/* Entity details */}
-                        <div style={{ padding:"14px 22px 12px" }}>
-                          <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill, minmax(200px, 1fr))", gap:10, marginBottom:12 }}>
-                            {[
-                              { label:"Full Address", value:`${r.address || ""} ${r.city || ""}, ${r.state || ""} ${r.zip || ""}`.trim() },
-                              { label:"County", value:r.county },
-                              { label:"Phone", value:r.phone },
-                              { label:"BEN", value:r.entity_number },
-                              { label:"Entity Type", value:r.entity_type },
-                              { label:"Last Updated", value:r.last_updated ? new Date(r.last_updated).toLocaleDateString() : null },
-                            ].map(({ label, value }) => value && (
-                              <div key={label} style={{ background:"rgba(255,255,255,0.02)", border:"1px solid rgba(59,158,255,0.1)", padding:"8px 10px", borderRadius:4 }}>
-                                <div style={{ fontSize:6, letterSpacing:1.5, color:"rgba(59,158,255,0.4)", textTransform:"uppercase", marginBottom:3 }}>{label}</div>
-                                <div style={{ fontSize:8, color:"rgba(232,228,240,0.75)" }}>{value}</div>
-                              </div>
-                            ))}
-                          </div>
-                          {/* Active flags */}
-                          {(() => {
-                            const flags = ["public_school","private_school","charter_school","tribal_school","public_library","private_library","main_branch","head_start","pre_k","bie","public_school_district","charter_school_district","non_profit_purchasing_group"];
-                            const active = flags.filter(f => r.raw[f] === "Yes");
-                            if (!active.length) return null;
-                            return (
-                              <div style={{ display:"flex", flexWrap:"wrap", gap:5, marginBottom:12 }}>
-                                {active.map(f => (
-                                  <span key={f} style={{ fontSize:6.5, letterSpacing:1, padding:"2px 8px", border:"1px solid rgba(59,158,255,0.25)", background:"rgba(59,158,255,0.06)", color:"#3b9eff", borderRadius:2 }}>
-                                    {f.replace(/_/g," ").toUpperCase()}
-                                  </span>
-                                ))}
-                              </div>
-                            );
-                          })()}
-                          {/* E-Rate History button */}
-                          {r.entity_number && (
-                            <button onClick={() => loadHistory(r.entity_number)}
-                              style={{ padding:"6px 16px", fontFamily:"'DM Mono',monospace", fontSize:7.5, letterSpacing:1.5, border:"1px solid rgba(240,180,41,0.4)", background:"rgba(240,180,41,0.08)", color:"#f0b429", cursor:"pointer", transition:"all 0.15s" }}>
-                              {historyLoading[r.entity_number] ? "LOADING..." : history[r.entity_number] ? "↑ HIDE E-RATE HISTORY" : "↓ VIEW E-RATE HISTORY"}
-                            </button>
-                          )}
-                        </div>
-
-                        {/* E-Rate history panel */}
-                        {history[r.entity_number] && (() => {
-                          const h = history[r.entity_number];
-                          const totalCommitted = h.data.reduce((sum, d) => sum + (d.commitment||0), 0);
-                          return (
-                            <div style={{ borderTop:"1px solid rgba(240,180,41,0.12)", padding:"14px 22px 16px" }}>
-                              {/* Year summary strip */}
-                              <div style={{ display:"flex", gap:6, flexWrap:"wrap", marginBottom:14 }}>
-                                {h.summary.map(y => (
-                                  <div key={y.year} style={{ background:"rgba(240,180,41,0.06)", border:"1px solid rgba(240,180,41,0.2)", borderRadius:4, padding:"6px 10px", textAlign:"center" }}>
-                                    <div style={{ fontFamily:"'Aldrich',sans-serif", fontSize:11, color:"#f0b429", lineHeight:1 }}>FY{y.year}</div>
-                                    <div style={{ fontSize:6.5, color:"rgba(240,180,41,0.6)", marginTop:3 }}>${(y.total/1000).toFixed(0)}k · {y.count} FRN{y.count!==1?"s":""}</div>
-                                  </div>
-                                ))}
-                                <div style={{ background:"rgba(34,201,122,0.06)", border:"1px solid rgba(34,201,122,0.2)", borderRadius:4, padding:"6px 10px", textAlign:"center", marginLeft:"auto" }}>
-                                  <div style={{ fontFamily:"'Aldrich',sans-serif", fontSize:11, color:"#22c97a", lineHeight:1 }}>${Math.round(totalCommitted/1000)}k</div>
-                                  <div style={{ fontSize:6.5, color:"rgba(34,201,122,0.6)", marginTop:3 }}>TOTAL COMMITTED</div>
-                                </div>
-                              </div>
-
-                              {/* Commitment rows */}
-                              {h.data.length === 0 ? (
-                                <div style={{ fontSize:8, color:"rgba(232,228,240,0.25)", textAlign:"center", padding:"12px" }}>No commitment history found</div>
-                              ) : (
-                                <>
-                                  <div style={{ display:"grid", gridTemplateColumns:"70px 1.4fr 1fr 110px 70px", gap:0, padding:"6px 10px", borderBottom:"1px solid rgba(240,180,41,0.15)", background:"rgba(240,180,41,0.04)" }}>
-                                    {["YEAR","SERVICE TYPE","PROVIDER","COMMITTED","DISC %"].map((h,i) => (
-                                      <div key={i} style={{ fontSize:6.5, letterSpacing:1.5, color:"rgba(240,180,41,0.5)", fontFamily:"'DM Mono',monospace" }}>{h}</div>
-                                    ))}
-                                  </div>
-                                  {h.data.map((d, di) => (
-                                      <div key={di}
-                                        onClick={() => loadDetail471(d, r.entity_number)}
-                                        style={{ display:"grid", gridTemplateColumns:"70px 1.4fr 1fr 110px 70px", gap:0, padding:"8px 10px", borderBottom:"1px solid rgba(240,180,41,0.06)", alignItems:"center", cursor:"pointer", transition:"background 0.12s" }}
-                                        onMouseEnter={e => e.currentTarget.style.background="rgba(240,180,41,0.06)"}
-                                        onMouseLeave={e => e.currentTarget.style.background="transparent"}>
-                                        <div style={{ fontSize:8, color:"#f0b429", textDecoration:"underline dotted", cursor:"pointer" }}>FY{d.funding_year}</div>
-                                        <div style={{ fontSize:7.5, color:"rgba(232,228,240,0.7)", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", paddingRight:8 }}>{d.service_type || "—"}</div>
-                                        <div style={{ fontSize:7.5, color:"rgba(59,158,255,0.8)", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", paddingRight:8 }}>{d.spin_name || "—"}</div>
-                                        <div style={{ fontSize:8, color:"#22c97a" }}>{d.commitment ? `$${Math.round(d.commitment).toLocaleString()}` : "—"}</div>
-                                        <div style={{ fontSize:8, color:"rgba(232,228,240,0.5)" }}>{d.discount_pct ? `${d.discount_pct}%` : "—"}</div>
-                                      </div>
-                                  ))}
-                                </>
-                              )}
-                            </div>
-                          );
-                        })()}
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-              <div style={{ padding:"10px 22px", fontSize:7, color:"rgba(232,228,240,0.2)", letterSpacing:1.5, borderTop:"1px solid rgba(59,158,255,0.08)" }}>
-                {results.length} RESULT{results.length !== 1 ? "S" : ""} · LIVE DATA FROM USAC · Click a row to expand · Click a funding year to see 471 details
-              </div>
-            </>
-          )}
-        </div>
-      </div>
-    </div>
-
-    {/* 471 detail popup */}
-    {detail471 && (
-      <div style={{ position:"fixed", inset:0, background:"rgba(5,5,13,0.88)", display:"flex", alignItems:"center", justifyContent:"center", zIndex:400 }}
-        onClick={e => e.target === e.currentTarget && setDetail471(null)}>
-        <div style={{ background:"#0a0920", border:"1px solid rgba(138,99,210,0.4)", clipPath:"polygon(0 0,calc(100% - 14px) 0,100% 14px,100% 100%,14px 100%,0 calc(100% - 14px))", width:"min(580px, 92vw)", maxHeight:"70vh", display:"flex", flexDirection:"column", position:"relative" }}>
-          <div style={{ position:"absolute", top:0, left:"10%", right:"10%", height:1, background:"linear-gradient(90deg,transparent,rgba(138,99,210,0.5),transparent)" }}/>
-          <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"13px 18px", borderBottom:"1px solid rgba(138,99,210,0.15)", flexShrink:0 }}>
-            <div style={{ display:"flex", alignItems:"center", gap:8 }}>
-              <span style={{ fontFamily:"'Aldrich',sans-serif", fontSize:9, letterSpacing:2, color:"#a07ee0" }}>FORM 471 DETAIL</span>
-              {detail471.row && <span style={{ fontSize:7, color:"rgba(232,228,240,0.3)" }}>· FY{detail471.row.funding_year}</span>}
-            </div>
-            <button onClick={() => setDetail471(null)} style={{ background:"transparent", border:"none", color:"rgba(232,228,240,0.35)", cursor:"pointer", fontFamily:"'DM Mono',monospace", fontSize:9, padding:"2px 6px" }}>✕</button>
-          </div>
-          <div style={{ flex:1, overflowY:"auto", padding:"16px 18px" }}>
-            {detail471.loading && <div style={{ textAlign:"center", padding:"32px", fontSize:9, color:"rgba(138,99,210,0.4)", letterSpacing:2 }}>FETCHING 471 DATA...</div>}
-            {!detail471.loading && !detail471.data && <div style={{ textAlign:"center", padding:"32px", fontSize:8, color:"rgba(232,228,240,0.25)" }}>No Form 471 found for this funding year</div>}
-            {!detail471.loading && detail471.data && (
-              <Detail471Fields data={detail471.data} />
-            )}
-          </div>
-        </div>
-      </div>
-    )}
-  </>
-  );
-}
-
-
-// ── C2 Budget Modal ────────────────────────────────────────────────────────────
-const C2_STATES = ["TX","CA","NY","FL","IL","PA","OH","GA","NC","MI","WA","AZ","CO","VA","MA","TN","IN","MO","WI","MN","OR","KY","OK","NV","CT","UT","AR","MS","KS","NM","NE","ID","WV","HI","NH","ME","RI","MT","DE","SD","ND","AK","VT","WY"];
-
-function C2BudgetModal({ token, onClose }) {
-  const [searchBy, setSearchBy]   = useState("name");
-  const [query, setQuery]         = useState("");
-  const [stateFilter, setStateFilter] = useState("TX");
-  const [results, setResults]     = useState([]);
-  const [loading, setLoading]     = useState(false);
-  const [searched, setSearched]   = useState(false);
-  const [error, setError]         = useState("");
-  const [rawFields, setRawFields] = useState([]);
-  const [expanded, setExpanded]   = useState(null);
-  const [cycle, setCycle]         = useState("FY2026-2030");
-
-  const searchByOptions = [
-    { key:"name", label:"Entity / District Name", placeholder:"Enter district or entity name..." },
-    { key:"ben",  label:"BEN",                    placeholder:"Enter BEN entity number..." },
-  ];
-
-  async function doSearch() {
-    if (!query.trim()) return;
-    setLoading(true);
-    setSearched(true);
-    setError("");
-    setExpanded(null);
-    try {
-      const params = new URLSearchParams({ limit: 50 });
-      if (searchBy === "ben")  params.set("ben", query.trim());
-      else                     params.set("search", query.trim());
-      if (stateFilter !== "ALL") params.set("state", stateFilter);
-      if (cycle) params.set("cycle", cycle);
-      const res  = await fetch(`${API_URL}/api/c2-budget?${params}`, { headers:{ Authorization:`Bearer ${token}` } });
-      const json = await res.json();
-      if (json.status === "success") {
-        setResults(json.data || []);
-        if (json.fields) setRawFields(json.fields);
-      } else {
-        setError(json.message || "Search failed");
-        setResults([]);
-      }
-    } catch { setError("Connection error — check backend"); setResults([]); }
-    setLoading(false);
-  }
-
-  function handleKey(e) { if (e.key === "Enter") doSearch(); }
-
-  function fmt(val) {
-    if (val === null || val === undefined || val === 0) return "—";
-    return `$${Number(val).toLocaleString(undefined, { minimumFractionDigits:2, maximumFractionDigits:2 })}`;
-  }
-
-  function BudgetBar({ total, committed, disbursed }) {
-    if (!total) return null;
-    const fundedPct   = Math.min(100, Math.round(((committed||0) / total) * 100));
-    const pendingPct  = Math.min(100 - fundedPct, Math.round(((disbursed||0) / total) * 100));
-    const availPct    = 100 - fundedPct - pendingPct;
-    return (
-      <div style={{ marginTop:6 }}>
-        <div style={{ height:6, background:"rgba(255,255,255,0.06)", borderRadius:99, overflow:"hidden", display:"flex" }}>
-          <div style={{ width:`${fundedPct}%`, height:"100%", background:"#22c97a" }}/>
-          <div style={{ width:`${pendingPct}%`, height:"100%", background:"rgba(240,180,41,0.7)" }}/>
-          <div style={{ width:`${availPct}%`, height:"100%", background:"rgba(138,99,210,0.25)", borderRadius:"0 99px 99px 0" }}/>
-        </div>
-        <div style={{ display:"flex", gap:12, marginTop:5 }}>
-          <div style={{ display:"flex", alignItems:"center", gap:4 }}>
-            <div style={{ width:6, height:6, borderRadius:"50%", background:"#22c97a", flexShrink:0 }}/>
-            <span style={{ fontSize:6.5, color:"rgba(232,228,240,0.4)" }}>Funded</span>
-          </div>
-          <div style={{ display:"flex", alignItems:"center", gap:4 }}>
-            <div style={{ width:6, height:6, borderRadius:"50%", background:"rgba(240,180,41,0.7)", flexShrink:0 }}/>
-            <span style={{ fontSize:6.5, color:"rgba(232,228,240,0.4)" }}>Pending</span>
-          </div>
-          <div style={{ display:"flex", alignItems:"center", gap:4 }}>
-            <div style={{ width:6, height:6, borderRadius:"50%", background:"rgba(138,99,210,0.4)", flexShrink:0 }}/>
-            <span style={{ fontSize:6.5, color:"rgba(232,228,240,0.4)" }}>Available</span>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div style={{ position:"fixed", inset:0, background:"rgba(5,5,13,0.9)", display:"flex", alignItems:"center", justifyContent:"center", zIndex:300 }}
-      onClick={e => e.target === e.currentTarget && onClose()}>
-      <div style={{ background:"#07061a", border:"1px solid rgba(240,180,41,0.35)", clipPath:"polygon(0 0,calc(100% - 18px) 0,100% 18px,100% 100%,18px 100%,0 calc(100% - 18px))", width:"min(920px, 96vw)", maxHeight:"88vh", display:"flex", flexDirection:"column", position:"relative" }}>
-        <div style={{ position:"absolute", top:0, left:"10%", right:"10%", height:1, background:"linear-gradient(90deg,transparent,rgba(240,180,41,0.5),transparent)" }}/>
-
-        {/* Header */}
-        <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"16px 22px", borderBottom:"1px solid rgba(240,180,41,0.12)", flexShrink:0 }}>
-          <div style={{ display:"flex", alignItems:"center", gap:12 }}>
-            <div style={{ width:6, height:6, borderRadius:"50%", background:"#f0b429", boxShadow:"0 0 8px rgba(240,180,41,0.9)" }}/>
-            <span style={{ fontFamily:"'Aldrich',sans-serif", fontSize:11, letterSpacing:2.5, color:"#f0b429" }}>C2 BUDGET LOOKUP</span>
-            <span style={{ fontSize:7, letterSpacing:1.5, color:"rgba(232,228,240,0.25)" }}>· LIVE · USAC OPEN DATA · {cycle}</span>
-          </div>
-          <button onClick={onClose} style={{ background:"transparent", border:"1px solid rgba(232,228,240,0.15)", color:"rgba(232,228,240,0.4)", cursor:"pointer", fontFamily:"'DM Mono',monospace", fontSize:8, padding:"4px 10px", letterSpacing:1 }}>✕ CLOSE</button>
-        </div>
-
-        {/* Search bar */}
-        <div style={{ padding:"14px 22px", borderBottom:"1px solid rgba(240,180,41,0.08)", display:"flex", gap:8, alignItems:"center", flexWrap:"wrap", flexShrink:0 }}>
-          {/* Search by toggle */}
-          <div style={{ display:"flex", gap:4 }}>
-            {searchByOptions.map(o => (
-              <button key={o.key} onClick={() => setSearchBy(o.key)}
-                style={{ padding:"4px 12px", fontFamily:"'DM Mono',monospace", fontSize:7, letterSpacing:1.5, border:`1px solid ${searchBy===o.key ? "rgba(240,180,41,0.6)" : "rgba(240,180,41,0.15)"}`, background: searchBy===o.key ? "rgba(240,180,41,0.1)" : "transparent", color: searchBy===o.key ? "#f0b429" : "rgba(232,228,240,0.35)", cursor:"pointer", transition:"all 0.15s" }}>
-                {o.label}
-              </button>
-            ))}
-          </div>
-          {/* Budget cycle toggle */}
-          <div style={{ display:"flex", gap:4 }}>
-            {["FY2026-2030","FY2021-2025"].map(c => (
-              <button key={c} onClick={() => setCycle(c)}
-                style={{ padding:"4px 10px", fontFamily:"'DM Mono',monospace", fontSize:7, letterSpacing:1, border:`1px solid ${cycle===c ? "rgba(240,180,41,0.6)" : "rgba(240,180,41,0.15)"}`, background: cycle===c ? "rgba(240,180,41,0.1)" : "transparent", color: cycle===c ? "#f0b429" : "rgba(232,228,240,0.35)", cursor:"pointer" }}>
-                {c}
-              </button>
-            ))}
-          </div>
-          {/* State dropdown */}
-          <select value={stateFilter} onChange={e => setStateFilter(e.target.value)}
-            style={{ background:"rgba(255,255,255,0.03)", border:"1px solid rgba(240,180,41,0.2)", color:"#e8e4f0", fontFamily:"'DM Mono',monospace", fontSize:8, padding:"6px 8px", outline:"none" }}>
-            <option value="ALL">ALL STATES</option>
-            {C2_STATES.map(s => <option key={s} value={s} style={{ background:"#0a0814" }}>{s}</option>)}
-          </select>
-          {/* Query input */}
-          <input value={query} onChange={e => setQuery(e.target.value)} onKeyDown={handleKey}
-            placeholder={searchByOptions.find(o => o.key === searchBy)?.placeholder}
-            style={{ flex:1, minWidth:220, background:"rgba(255,255,255,0.03)", border:"1px solid rgba(240,180,41,0.25)", outline:"none", fontFamily:"'DM Mono',monospace", fontSize:9, color:"#e8e4f0", padding:"7px 12px" }}/>
-          <button onClick={doSearch}
-            style={{ padding:"7px 18px", fontFamily:"'DM Mono',monospace", fontSize:8, letterSpacing:2, border:"1px solid rgba(240,180,41,0.5)", background:"rgba(240,180,41,0.1)", color:"#f0b429", cursor:"pointer", whiteSpace:"nowrap" }}>
-            SEARCH →
-          </button>
-        </div>
-
-        {/* Results */}
-        <div style={{ flex:1, overflowY:"auto" }}>
-          {!searched && (
-            <div style={{ padding:"48px 22px", textAlign:"center" }}>
-              <div style={{ fontSize:9, color:"rgba(240,180,41,0.3)", letterSpacing:2, marginBottom:8 }}>SEARCH FOR AN ENTITY ABOVE</div>
-              <div style={{ fontSize:7.5, color:"rgba(232,228,240,0.2)" }}>Returns live C2 budget data directly from USAC · Shows total budget, committed, disbursed, and remaining amounts</div>
-            </div>
-          )}
-          {searched && loading && <div style={{ padding:"48px", textAlign:"center", fontSize:9, color:"rgba(240,180,41,0.4)", letterSpacing:2 }}>FETCHING FROM USAC...</div>}
-          {searched && !loading && error && <div style={{ padding:"24px 22px", fontSize:8, color:"#f0614a" }}>⚠ {error}</div>}
-          {searched && !loading && !error && results.length === 0 && (
-            <div style={{ padding:"48px", textAlign:"center", fontSize:9, color:"rgba(232,228,240,0.25)", letterSpacing:2 }}>NO RESULTS FOUND</div>
-          )}
-          {searched && !loading && results.length > 0 && (
-            <>
-              {/* Table header */}
-              <div style={{ display:"grid", gridTemplateColumns:"1fr 60px 80px 130px 130px 130px 120px", padding:"8px 22px", borderBottom:"1px solid rgba(240,180,41,0.15)", background:"rgba(240,180,41,0.04)", position:"sticky", top:0 }}>
-                {["ENTITY","STATE","BEN","TOTAL BUDGET","FUNDED","PENDING","AVAILABLE"].map((h,i) => (
-                  <div key={i} style={{ fontSize:6.5, letterSpacing:1.5, color:"rgba(240,180,41,0.55)", fontFamily:"'DM Mono',monospace" }}>{h}</div>
-                ))}
-              </div>
-
-              {results.map((r, i) => {
-                const remainingPct = r.total_budget ? Math.round(((r.available||0) / r.total_budget) * 100) : null;
-                const isExpanded   = expanded === i;
-                const rawKeys      = rawFields.filter(k => !["billed_entity_name","billed_entity_number","state","entity_type"].includes(k));
-                return (
-                  <div key={i} style={{ borderBottom:"1px solid rgba(240,180,41,0.07)" }}>
-                    {/* Main row */}
-                    <div onClick={() => setExpanded(isExpanded ? null : i)}
-                      style={{ display:"grid", gridTemplateColumns:"1fr 60px 80px 130px 130px 130px 120px", padding:"10px 22px", alignItems:"center", cursor:"pointer", transition:"background 0.15s", background: isExpanded ? "rgba(240,180,41,0.05)" : "transparent" }}
-                      onMouseEnter={e => { if (!isExpanded) e.currentTarget.style.background="rgba(240,180,41,0.03)"; }}
-                      onMouseLeave={e => { if (!isExpanded) e.currentTarget.style.background="transparent"; }}>
-                      <div>
-                        <div style={{ fontSize:8, color:"rgba(232,228,240,0.85)", fontWeight:500 }}>{r.entity_name || "—"}</div>
-                        {r.entity_type && <div style={{ fontSize:6.5, color:"rgba(232,228,240,0.3)", marginTop:2 }}>{r.entity_type}</div>}
-                      </div>
-                      <div style={{ fontSize:8, color:"rgba(232,228,240,0.45)" }}>{r.state || "—"}</div>
-                      <div style={{ fontSize:8, color:"#3b9eff" }}>{r.ben || "—"}</div>
-                      <div style={{ fontSize:8, color:"rgba(232,228,240,0.6)" }}>{fmt(r.total_budget)}</div>
-                      <div style={{ fontSize:8, color:"#22c97a" }}>{fmt(r.funded)}</div>
-                      <div style={{ fontSize:8, color:"#f0b429" }}>{fmt(r.pending)}</div>
-                      <div>
-                        <div style={{ fontSize:8, color: remainingPct > 50 ? "#22c97a" : remainingPct > 20 ? "#f0b429" : "#f0614a", fontWeight:500 }}>{fmt(r.available)}</div>
-                        {remainingPct !== null && <div style={{ fontSize:6.5, color:"rgba(232,228,240,0.3)", marginTop:1 }}>{remainingPct}% left</div>}
-                      </div>
-                    </div>
-
-                    {/* Expanded detail */}
-                    {isExpanded && (
-                      <div style={{ padding:"12px 22px 16px", background:"rgba(240,180,41,0.03)", borderTop:"1px solid rgba(240,180,41,0.08)" }}>
-                        <BudgetBar total={r.total_budget} committed={r.funded} disbursed={r.pending} />
-                        {rawKeys.length > 0 && (
-                          <div style={{ marginTop:14, display:"grid", gridTemplateColumns:"repeat(auto-fill, minmax(200px, 1fr))", gap:8 }}>
-                            {rawKeys.map(k => (
-                              <div key={k} style={{ background:"rgba(255,255,255,0.02)", border:"1px solid rgba(255,255,255,0.05)", padding:"7px 10px", borderRadius:4 }}>
-                                <div style={{ fontSize:6, letterSpacing:1.5, color:"rgba(232,228,240,0.25)", textTransform:"uppercase", marginBottom:3 }}>{k.replace(/_/g," ")}</div>
-                                <div style={{ fontSize:8, color:"rgba(232,228,240,0.7)" }}>{r.raw[k] !== null && r.raw[k] !== undefined ? String(r.raw[k]) : "—"}</div>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-              <div style={{ padding:"10px 22px", fontSize:7, color:"rgba(232,228,240,0.2)", letterSpacing:1.5, borderTop:"1px solid rgba(240,180,41,0.08)" }}>
-                {results.length} RESULT{results.length !== 1 ? "S" : ""} · LIVE DATA FROM USAC · Click a row to expand all fields
-              </div>
-            </>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-
-// ── FRN Status Modal ──────────────────────────────────────────────────────────
-function FRNStatusModal({ token, onClose }) {
-  const [query, setQuery]         = useState("");
-  const [searchBy, setSearchBy]   = useState("frn");
-  const [results, setResults]     = useState([]);
-  const [loading, setLoading]     = useState(false);
-  const [searched, setSearched]   = useState(false);
-  const [selected, setSelected]   = useState(null);   // selected commitment row
-  const [form471, setForm471]     = useState(null);    // matched 471 record
-  const [detail471Loading, setDetail471Loading] = useState(false);
-
-  const searchByOptions = [
-    { key:"frn",          label:"FRN #",   placeholder:"Enter FRN number..." },
-    { key:"application",  label:"App #",    placeholder:"Enter application number..." },
-    { key:"organization", label:"Org Name", placeholder:"Enter organization name..." },
-    { key:"ben",          label:"BEN",      placeholder:"Enter BEN entity number..." },
-  ];
-
-  async function doSearch() {
-    if (!query.trim()) return;
-    setLoading(true);
-    setSearched(true);
-    setSelected(null);
-    setForm471(null);
-    try {
-      const params = new URLSearchParams({ search: query.trim(), search_by: searchBy, limit: 50 });
-      const res  = await fetch(`${API_URL}/api/frn-status?${params}`, { headers:{ Authorization:`Bearer ${token}` } });
-      const json = await res.json();
-      setResults(json.data || []);
-    } catch { setResults([]); }
-    setLoading(false);
-  }
-
-  async function selectRow(r) {
-    setSelected(r);
-    setForm471(null);
-    if (!r.application_number) return;
-    setDetail471Loading(true);
-    try {
-      const params = new URLSearchParams({ search: r.application_number, limit: 1 });
-      const res  = await fetch(`${API_URL}/api/471s?${params}`, { headers:{ Authorization:`Bearer ${token}` } });
-      const json = await res.json();
-      setForm471((json.data || [])[0] || null);
-    } catch {}
-    setDetail471Loading(false);
-  }
-
-  function handleKey(e) { if (e.key === "Enter") doSearch(); }
-
-  const statusColor = (s) => {
-    if (!s) return "rgba(232,228,240,0.35)";
-    const sl = s.toLowerCase();
-    if (sl.includes("commit") || sl.includes("fund")) return "#22c97a";
-    if (sl.includes("deny")   || sl.includes("reject")) return "#f0614a";
-    if (sl.includes("review") || sl.includes("pend"))   return "#f0b429";
-    return "#a07ee0";
-  };
-
-  const field = (label, value, color) => (
-    <div style={{ marginBottom:10 }}>
-      <div style={{ fontSize:6.5, letterSpacing:1.8, color:"rgba(232,228,240,0.3)", textTransform:"uppercase", marginBottom:3 }}>{label}</div>
-      <div style={{ fontSize:8.5, color: color || "rgba(232,228,240,0.8)", wordBreak:"break-word" }}>{value || "—"}</div>
-    </div>
-  );
-
-  return (
-    <div style={{ position:"fixed", inset:0, background:"rgba(5,5,13,0.9)", display:"flex", alignItems:"center", justifyContent:"center", zIndex:300 }}
-      onClick={e => e.target === e.currentTarget && onClose()}>
-      <div style={{ background:"#08071a", border:"1px solid rgba(59,158,255,0.35)", clipPath:"polygon(0 0,calc(100% - 18px) 0,100% 18px,100% 100%,18px 100%,0 calc(100% - 18px))", width:"min(1100px, 96vw)", maxHeight:"88vh", display:"flex", flexDirection:"column", position:"relative" }}>
-        <div style={{ position:"absolute", top:0, left:"10%", right:"10%", height:1, background:"linear-gradient(90deg,transparent,rgba(59,158,255,0.6),transparent)" }}/>
-
-        {/* Header */}
-        <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"16px 20px", borderBottom:"1px solid rgba(59,158,255,0.15)", flexShrink:0 }}>
-          <div style={{ display:"flex", alignItems:"center", gap:10 }}>
-            <div style={{ width:6, height:6, borderRadius:"50%", background:"#3b9eff", boxShadow:"0 0 6px rgba(59,158,255,0.8)" }}/>
-            <span style={{ fontFamily:"'Aldrich',sans-serif", fontSize:10, letterSpacing:2.5, color:"#3b9eff" }}>FRN STATUS LOOKUP</span>
-            <span style={{ fontSize:7, letterSpacing:1.5, color:"rgba(232,228,240,0.3)" }}>· LOCAL DATABASE · FY2026 TX</span>
-          </div>
-          <button onClick={onClose} style={{ background:"transparent", border:"1px solid rgba(232,228,240,0.15)", color:"rgba(232,228,240,0.4)", cursor:"pointer", fontFamily:"'DM Mono',monospace", fontSize:8, padding:"4px 10px", letterSpacing:1 }}>✕ CLOSE</button>
-        </div>
-
-        {/* Search bar */}
-        <div style={{ padding:"14px 20px", borderBottom:"1px solid rgba(59,158,255,0.1)", display:"flex", gap:8, alignItems:"center", flexWrap:"wrap", flexShrink:0 }}>
-          <div style={{ display:"flex", gap:4 }}>
-            {searchByOptions.map(o => (
-              <button key={o.key} onClick={() => setSearchBy(o.key)}
-                style={{ padding:"4px 10px", fontFamily:"'DM Mono',monospace", fontSize:7, letterSpacing:1.5, border:`1px solid ${searchBy===o.key ? "rgba(59,158,255,0.6)" : "rgba(59,158,255,0.15)"}`, background: searchBy===o.key ? "rgba(59,158,255,0.12)" : "transparent", color: searchBy===o.key ? "#3b9eff" : "rgba(232,228,240,0.35)", cursor:"pointer", transition:"all 0.15s" }}>
-                {o.label}
-              </button>
-            ))}
-          </div>
-          <input value={query} onChange={e => setQuery(e.target.value)} onKeyDown={handleKey}
-            placeholder={searchByOptions.find(o => o.key === searchBy)?.placeholder}
-            style={{ flex:1, minWidth:200, background:"rgba(255,255,255,0.03)", border:"1px solid rgba(59,158,255,0.25)", outline:"none", fontFamily:"'DM Mono',monospace", fontSize:9, color:"#e8e4f0", padding:"7px 12px" }}/>
-          <button onClick={doSearch}
-            style={{ padding:"7px 18px", fontFamily:"'DM Mono',monospace", fontSize:8, letterSpacing:2, border:"1px solid rgba(59,158,255,0.5)", background:"rgba(59,158,255,0.1)", color:"#3b9eff", cursor:"pointer", whiteSpace:"nowrap" }}>
-            SEARCH →
-          </button>
-        </div>
-
-        {/* Body: results + optional detail panel */}
-        <div style={{ flex:1, display:"flex", overflow:"hidden" }}>
-
-          {/* Results list */}
-          <div style={{ flex:1, overflowY:"auto", borderRight: selected ? "1px solid rgba(59,158,255,0.12)" : "none" }}>
-            {!searched && (
-              <div style={{ padding:"48px 20px", textAlign:"center" }}>
-                <div style={{ fontSize:9, color:"rgba(59,158,255,0.3)", letterSpacing:2, marginBottom:8 }}>ENTER A SEARCH TERM ABOVE</div>
-                <div style={{ fontSize:7.5, color:"rgba(232,228,240,0.2)" }}>Search by FRN number, application number, organization name, or BEN</div>
-              </div>
-            )}
-            {searched && loading && (
-              <div style={{ padding:"48px 20px", textAlign:"center", fontSize:9, color:"rgba(59,158,255,0.4)", letterSpacing:2 }}>SEARCHING...</div>
-            )}
-            {searched && !loading && results.length === 0 && (
-              <div style={{ padding:"48px 20px", textAlign:"center", fontSize:9, color:"rgba(232,228,240,0.25)", letterSpacing:2 }}>NO RESULTS FOUND</div>
-            )}
-            {searched && !loading && results.length > 0 && (
-              <>
-                <div style={{ display:"grid", gridTemplateColumns:"110px 1fr 90px 150px 110px 120px", padding:"8px 16px", borderBottom:"1px solid rgba(59,158,255,0.15)", background:"rgba(59,158,255,0.04)", position:"sticky", top:0 }}>
-                  {["FRN #","ORGANIZATION","BEN","SERVICE TYPE","COMMITMENT","STATUS"].map((h,i) => (
-                    <div key={i} style={{ fontSize:6.5, letterSpacing:1.5, color:"rgba(59,158,255,0.55)", fontFamily:"'DM Mono',monospace" }}>{h}</div>
-                  ))}
-                </div>
-                {results.map((r, i) => {
-                  const sc         = statusColor(r.form_471_frn_status_name);
-                  const commitment = r.funding_commitment_request ? `$${Number(r.funding_commitment_request).toLocaleString()}` : "—";
-                  const isSelected = selected?.funding_request_number === r.funding_request_number;
-                  return (
-                    <div key={i}
-                      onClick={() => selectRow(r)}
-                      style={{ display:"grid", gridTemplateColumns:"110px 1fr 90px 150px 110px 120px", padding:"10px 16px", borderBottom:"1px solid rgba(59,158,255,0.07)", alignItems:"center", cursor:"pointer", transition:"background 0.15s", background: isSelected ? "rgba(59,158,255,0.08)" : "transparent", borderLeft: isSelected ? "2px solid #3b9eff" : "2px solid transparent" }}
-                      onMouseEnter={e => { if (!isSelected) e.currentTarget.style.background="rgba(59,158,255,0.04)"; }}
-                      onMouseLeave={e => { if (!isSelected) e.currentTarget.style.background="transparent"; }}>
-                      <div style={{ fontSize:8, color:"#3b9eff", fontWeight:500 }}>{r.funding_request_number || "—"}</div>
-                      <div style={{ fontSize:8, color:"rgba(232,228,240,0.8)", paddingRight:10, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{r.organization_name || "—"}</div>
-                      <div style={{ fontSize:7.5, color:"rgba(232,228,240,0.45)" }}>{r.ben || "—"}</div>
-                      <div style={{ fontSize:7.5, color:"rgba(232,228,240,0.45)", paddingRight:8, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{r.form_471_service_type_name || "—"}</div>
-                      <div style={{ fontSize:8, color:"#22c97a" }}>{commitment}</div>
-                      <div><span style={{ fontSize:7, letterSpacing:1, padding:"2px 8px", border:`1px solid ${sc}40`, background:`${sc}10`, color:sc }}>{r.form_471_frn_status_name || "UNKNOWN"}</span></div>
-                    </div>
-                  );
-                })}
-                <div style={{ padding:"10px 16px", fontSize:7, color:"rgba(232,228,240,0.25)", letterSpacing:1.5, borderTop:"1px solid rgba(59,158,255,0.08)" }}>
-                  {results.length} RESULT{results.length !== 1 ? "S" : ""} · CLICK A ROW TO SEE 471 DETAILS
-                </div>
-              </>
-            )}
-          </div>
-
-          {/* Detail panel */}
-          {selected && (
-            <div style={{ width:300, flexShrink:0, overflowY:"auto", background:"rgba(5,5,18,0.6)", padding:"16px 18px", display:"flex", flexDirection:"column", gap:0 }}>
-              {/* Detail header */}
-              <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:14 }}>
-                <div style={{ fontSize:7, letterSpacing:2, color:"rgba(138,99,210,0.7)", textTransform:"uppercase" }}>FRN Detail</div>
-                <button onClick={() => { setSelected(null); setForm471(null); }}
-                  style={{ background:"transparent", border:"none", color:"rgba(232,228,240,0.3)", cursor:"pointer", fontSize:10, padding:"0 2px" }}>✕</button>
-              </div>
-
-              {/* Commitment fields */}
-              <div style={{ paddingBottom:14, borderBottom:"1px solid rgba(138,99,210,0.15)", marginBottom:14 }}>
-                <div style={{ fontSize:6.5, letterSpacing:2, color:"rgba(59,158,255,0.5)", marginBottom:10, textTransform:"uppercase" }}>Commitment Record</div>
-                {field("FRN #", selected.funding_request_number, "#3b9eff")}
-                {field("Organization", selected.organization_name)}
-                {field("BEN", selected.ben)}
-                {field("Service Type", selected.form_471_service_type_name)}
-                {field("FRN Status", selected.form_471_frn_status_name, statusColor(selected.form_471_frn_status_name))}
-                {field("Commitment Amount", selected.funding_commitment_request ? `$${Number(selected.funding_commitment_request).toLocaleString()}` : null, "#22c97a")}
-                {field("Discount %", selected.dis_pct ? `${Math.round(parseFloat(selected.dis_pct) * 100)}%` : null)}
-                {field("FCDL Date", selected.fcdl_letter_date ? new Date(selected.fcdl_letter_date).toLocaleDateString() : null)}
-                {field("Service Provider", selected.spin_name)}
-              </div>
-
-              {/* 471 fields */}
-              <div style={{ marginBottom:14 }}>
-                <div style={{ fontSize:6.5, letterSpacing:2, color:"rgba(138,99,210,0.5)", marginBottom:10, textTransform:"uppercase" }}>Form 471 Record</div>
-                {detail471Loading && <div style={{ fontSize:8, color:"rgba(138,99,210,0.4)", letterSpacing:1.5 }}>LOADING...</div>}
-                {!detail471Loading && !form471 && <div style={{ fontSize:8, color:"rgba(232,228,240,0.2)" }}>No matching 471 found in local DB</div>}
-                {!detail471Loading && form471 && (
-                  <>
-                    {field("App #", form471.application_number, "#a07ee0")}
-                    {field("471 Status", form471.form_471_status_name)}
-                    {field("Category of Service", form471.chosen_category_of_service)}
-                    {field("Funding Request Amt", form471.funding_request_amount ? `$${Number(form471.funding_request_amount).toLocaleString()}` : null, "#22c97a")}
-                    {field("Contact", form471.cnct_first_name ? `${form471.cnct_first_name} ${form471.cnct_last_name || ""}`.trim() : null)}
-                    {field("Contact Email", form471.cnct_email, "#3b9eff")}
-                    {field("Contact Phone", form471.cnct_phone)}
-                    {field("Certified", form471.certified_datetime ? new Date(form471.certified_datetime).toLocaleDateString() : null)}
-                  </>
-                )}
-              </div>
-
-              {/* Link out button */}
-              {selected.application_number && (
-                <a href={`https://legacy.fundsforlearning.com/471/${selected.application_number}`} target="_blank" rel="noreferrer"
-                  style={{ display:"flex", alignItems:"center", justifyContent:"center", gap:8, padding:"9px 14px", border:"1px solid rgba(138,99,210,0.4)", background:"rgba(138,99,210,0.08)", color:"#a07ee0", textDecoration:"none", fontFamily:"'DM Mono',monospace", fontSize:8, letterSpacing:1.5, textTransform:"uppercase", marginTop:"auto", transition:"all 0.15s" }}
-                  onMouseEnter={e => { e.currentTarget.style.background="rgba(138,99,210,0.18)"; e.currentTarget.style.borderColor="rgba(138,99,210,0.7)"; }}
-                  onMouseLeave={e => { e.currentTarget.style.background="rgba(138,99,210,0.08)"; e.currentTarget.style.borderColor="rgba(138,99,210,0.4)"; }}>
-                  View on FundsForLearning →
-                </a>
-              )}
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function BidResponseOverview({ token }) {
-  const [tags, setTags] = useState([]);
-
-  useEffect(() => {
-    if (!token) return;
-    fetch(`${API_URL}/api/tags`, { headers:{ Authorization:`Bearer ${token}` } })
-      .then(r => r.json())
-      .then(d => { if (d.status === "success") setTags(d.data || []); })
-      .catch(() => {});
-  }, [token]);
-
-  const responded = tags.filter(t => t.responded).length;
-  const wonTags   = tags.filter(t => t.bid_status === "won");
-  const lostTags  = tags.filter(t => t.bid_status === "lost");
-  const won       = wonTags.length;
-  const lost      = lostTags.length;
-  const winRate   = responded > 0 ? Math.round((won / responded) * 100) : 0;
-  const lossRate  = responded > 0 ? Math.round((lost / responded) * 100) : 0;
-  const totalRev  = wonTags.reduce((sum, t) => sum + (parseFloat(t.bid_amount) || 0), 0);
-  const margins   = wonTags.filter(t => t.bid_amount > 0).map(t => ((t.bid_amount - t.cogs) / t.bid_amount) * 100);
-  const avgMargin = margins.length > 0 ? (margins.reduce((a,b) => a+b, 0) / margins.length).toFixed(1) : null;
-  const revenue   = totalRev > 0 ? `$${totalRev.toLocaleString()}` : "$0";
-  const revNote   = `${won} funded commitment${won !== 1 ? "s" : ""} · FY2026`;
-
-  return (
-    <Panel>
-      <PTitle>{'// BID '}<span style={{ color:"#a07ee0" }}>RESPONSE OVERVIEW</span></PTitle>
-      <div style={{ padding:"14px 14px 16px" }}>
-
-        {/* Revenue block */}
-        <div style={{ background:"rgba(10,30,18,0.7)", border:"1px solid rgba(34,201,122,0.15)", borderRadius:10, padding:"13px 16px", marginBottom:12, textAlign:"center", position:"relative", overflow:"hidden" }}>
-          <div style={{ position:"absolute", top:0, left:"15%", right:"15%", height:1, background:"linear-gradient(90deg,transparent,rgba(34,201,122,0.5),transparent)" }}/>
-          <div style={{ fontSize:7, letterSpacing:2, color:"#1a7a4a", textTransform:"uppercase", marginBottom:5 }}>Total Revenue — Bids Won</div>
-          <div style={{ fontFamily:"'Aldrich',sans-serif", fontSize:30, color:"#22c97a", lineHeight:1, marginBottom:4, textShadow:"0 0 12px rgba(34,201,122,0.8), 0 0 35px rgba(34,201,122,0.4), 0 0 70px rgba(34,201,122,0.15)" }}>{revenue}</div>
-          <div style={{ fontSize:6.5, letterSpacing:1.2, color:"#0d5530", textTransform:"uppercase" }}>{revNote}</div>
-        </div>
-
-        {/* 3 counters */}
-        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:8, marginBottom:14 }}>
-          {[
-            { label:"Responded", value:responded, sub:"total bids",      color:"#a07ee0", subColor:"rgba(138,99,210,0.35)" },
-            { label:"Won",        value:won,       sub:`${winRate}% rate`,  color:"#22c97a", subColor:"rgba(34,201,122,0.35)" },
-            { label:"Lost",       value:lost,      sub:`${lossRate}% rate`, color:"#f0614a", subColor:"rgba(240,97,74,0.35)"  },
-          ].map(({ label, value, sub, color, subColor }) => (
-            <div key={label} style={{ background:"rgba(255,255,255,0.02)", border:"1px solid rgba(255,255,255,0.06)", borderRadius:8, padding:"10px 11px" }}>
-              <div style={{ fontSize:6.5, letterSpacing:1.8, color:"rgba(232,228,240,0.3)", textTransform:"uppercase", marginBottom:6 }}>{label}</div>
-              <div style={{ fontFamily:"'Aldrich',sans-serif", fontSize:26, color, lineHeight:1, marginBottom:3 }}>{value}</div>
-              <div style={{ fontSize:6.5, letterSpacing:1, textTransform:"uppercase", color:subColor }}>{sub}</div>
-            </div>
-          ))}
-        </div>
-
-        {/* Avg margin bar */}
-        <div>
-          <div style={{ display:"flex", alignItems:"baseline", gap:7, marginBottom:6 }}>
-            <span style={{ fontFamily:"'Aldrich',sans-serif", fontSize:12, color:"#8a63d2" }}>{avgMargin !== null ? `${avgMargin}%` : "—"}</span>
-            <span style={{ fontSize:7, letterSpacing:1.8, color:"rgba(138,99,210,0.4)", textTransform:"uppercase" }}>Avg Margin</span>
-          </div>
-          <div style={{ height:3, background:"rgba(255,255,255,0.05)", borderRadius:99, overflow:"hidden" }}>
-            <div style={{ height:"100%", width:`${avgMargin || 0}%`, borderRadius:99, background:"linear-gradient(90deg,#2a1a5e,#5a3ab0,#8a63d2,#c0a0ff)" }}/>
-          </div>
-        </div>
-
-      </div>
-    </Panel>
-  );
-}
-
+// ── Main Dashboard ────────────────────────────────────────────────────────────
 export default function Dashboard({ session }) {
-  const [token, setToken]     = useState(null);
-  const [stats, setStats]     = useState(null);
-  const [tab, setTab]         = useState("dashboard");
-  const [clock, setClock]     = useState("");
+  const [token, setToken]   = useState(null);
+  const [stats, setStats]   = useState(null);
+  const [tab, setTab]       = useState("dashboard");
+  const [clock, setClock]   = useState("");
   const [tagCount, setTagCount] = useState(0);
-  const [frnOpen, setFrnOpen] = useState(false);
-  const [ciOpen, setCiOpen]   = useState(false);
+  const [frnOpen, setFrnOpen]   = useState(false);
+  const [ciOpen, setCiOpen]     = useState(false);
   const [c2Open, setC2Open]     = useState(false);
-  const [entityOpen, setEntityOpen] = useState(false);
+  const [entityOpen, setEntityOpen]     = useState(false);
   const [prospectsOpen, setProspectsOpen] = useState(false);
 
   const refreshTagCount = useCallback(async (t) => {
@@ -2216,15 +1434,14 @@ export default function Dashboard({ session }) {
 
   useEffect(() => {
     getAuthToken().then(t => { setToken(t); refreshTagCount(t); });
-    const t = setInterval(() => setClock(new Date().toLocaleTimeString("en-US",{hour12:false}) + " CDT"), 1000);
+    const t = setInterval(() => setClock(new Date().toLocaleTimeString("en-US",{hour12:false,timeZone:"America/Chicago"}) + " CDT"), 1000);
     return () => clearInterval(t);
   }, [refreshTagCount]);
 
   useEffect(() => {
     if (!token) return;
     fetch(`${API_URL}/api/stats`, { headers:{ Authorization:`Bearer ${token}` } })
-      .then(r => r.json()).then(d => { if (d.status === "success") setStats(d.data); })
-      .catch(() => {});
+      .then(r => r.json()).then(d => { if (d.status==="success") setStats(d.data); }).catch(()=>{});
   }, [token]);
 
   async function handleSync() {
@@ -2233,169 +1450,198 @@ export default function Dashboard({ session }) {
     alert("Sync started — data will update in the background.");
   }
 
+  async function signOut() {
+    try {
+      const { createClient } = await import("https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm");
+      const sb = createClient(process.env.REACT_APP_SUPABASE_URL, process.env.REACT_APP_SUPABASE_ANON_KEY);
+      await sb.auth.signOut();
+    } catch {}
+    window.location.reload();
+  }
+
+  const STAT_CARDS = [
+    { label:"Current Funding Year", value: stats?.current_fy ? `FY${stats.current_fy}` : "FY2026", sub:"Window Open", color:"#7c3aed", bg:"#ede9fe", icon:"📅" },
+    { label:"Synced Form 470s",     value: stats?.total_470s?.toLocaleString() || "—",              sub:"In database", color:"#2563eb", bg:"#dbeafe", icon:"📋" },
+    { label:"Open 470s",            value: stats?.open_470s?.toLocaleString()  || "—",              sub:"Active bidding", color:"#d97706", bg:"#fef3c7", icon:"⏳" },
+    { label:"Commitments",          value: stats?.total_commitments?.toLocaleString() || "—",       sub:"FY2026", color:"#16a34a", bg:"#dcfce7", icon:"✅" },
+  ];
+
+  const DEADLINES = [
+    { name:"Form 470 Window", sub:"Open Now",              badge:"OPEN",     badgeClass:"badge-green", dot:"#22c55e" },
+    { name:"Form 471 Window", sub:"Closes April 1, 2026",  badge:"UPCOMING", badgeClass:"badge-amber", dot:"#f59e0b" },
+    { name:"SPIN Registration", sub:"Ongoing",             badge:"OPEN",     badgeClass:"badge-gray",  dot:"#cbd5e1" },
+  ];
+
+  const PORTAL_LINKS = [
+    { icon:"🏛️", name:"EPC Portal",      sub:"E-Rate Productivity Center",  href:"https://portal.usac.org/suite/" },
+    { icon:"📊", name:"USAC Open Data",   sub:"Datasets and API explorer",   href:"https://opendata.usac.org" },
+    { icon:"📝", name:"Form 470 Guide",   sub:"Competitive bidding process", href:"https://www.usac.org/e-rate/applicant-process/before-you-begin/competitive-bidding/" },
+    { icon:"📨", name:"Form 471 Guide",   sub:"Funding request submission",  href:"https://www.usac.org/e-rate/applicant-process/applying-for-discounts/form-471/" },
+  ];
+
   return (
     <>
       <style>{css}</style>
-      <div className="scale-ui" style={{ minHeight:"100vh", background:"#05050d", position:"relative" }}>
-        {frnOpen && token && <FRNStatusModal token={token} onClose={() => setFrnOpen(false)} />}
-        {ciOpen && token && <CompetitiveIntelModal token={token} onClose={() => setCiOpen(false)} />}
-        {c2Open && token && <C2BudgetModal token={token} onClose={() => setC2Open(false)} />}
-        {entityOpen && token && <EntitySearchModal token={token} onClose={() => setEntityOpen(false)} />}
-        {prospectsOpen && token && <C2ProspectsModal token={token} onClose={() => setProspectsOpen(false)} />}
-        <div style={{ position:"fixed", inset:0, background:"radial-gradient(ellipse 70% 50% at 15% 15%, rgba(138,99,210,0.09) 0%, transparent 60%)", pointerEvents:"none", zIndex:0 }}/>
-        <div style={{ position:"fixed", inset:0, backgroundImage:"radial-gradient(circle, rgba(138,99,210,0.8) 1px, transparent 1px)", backgroundSize:"28px 28px", opacity:0.035, pointerEvents:"none", zIndex:0 }}/>
+      {frnOpen       && token && <FRNStatusModal       token={token} onClose={() => setFrnOpen(false)} />}
+      {ciOpen        && token && <CompetitiveIntelModal token={token} onClose={() => setCiOpen(false)} />}
+      {c2Open        && token && <C2BudgetModal         token={token} onClose={() => setC2Open(false)} />}
+      {entityOpen    && token && <EntitySearchModal     token={token} onClose={() => setEntityOpen(false)} />}
+      {prospectsOpen && token && <C2ProspectsModal      token={token} onClose={() => setProspectsOpen(false)} />}
 
-        <div style={{ position:"relative", zIndex:1, maxWidth:1400, margin:"0 auto", padding:"20px 22px 48px" }}>
+      <div style={{ minHeight:"100vh", background:"#fff" }}>
 
-          {/* HEADER */}
-          <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:24, paddingBottom:16, borderBottom:"1px solid rgba(138,99,210,0.15)", animation:"fade-up 0.5s ease both" }}>
-            <div style={{ display:"flex", alignItems:"center", gap:14 }}>
-              <div style={{ position:"relative", width:40, height:40, display:"flex", alignItems:"center", justifyContent:"center" }}>
-                <svg width="40" height="40" viewBox="0 0 40 40" style={{ position:"absolute", inset:0, animation:"spin 18s linear infinite" }}>
-                  <polygon points="20,2 36,11 36,29 20,38 4,29 4,11" fill="none" stroke="rgba(138,99,210,0.5)" strokeWidth="1"/>
-                  <polygon points="20,6 32,13 32,27 20,34 8,27 8,13" fill="none" stroke="rgba(138,99,210,0.22)" strokeWidth="0.5"/>
-                </svg>
-                <span style={{ fontFamily:"'Aldrich',sans-serif", fontSize:16, color:"#a07ee0", position:"relative", zIndex:1 }}>K</span>
-              </div>
-              <div>
-                <div style={{ fontFamily:"'Aldrich',sans-serif", fontSize:16, color:"#e8e4f0", letterSpacing:1 }}>KADERA</div>
-                <div style={{ fontSize:7, color:"rgba(232,228,240,0.4)", letterSpacing:3 }}>E-RATE DASHBOARD</div>
-              </div>
-            </div>
-
-            {/* Nav tabs */}
-            <div style={{ display:"flex", gap:6 }}>
-              {["dashboard","search"].map(t => (
-                <button key={t} onClick={() => setTab(t)} style={{ padding:"7px 16px", fontFamily:"'DM Mono',monospace", fontSize:7.5, letterSpacing:2, border:`1px solid ${tab===t ? "rgba(138,99,210,0.6)" : "rgba(138,99,210,0.2)"}`, background: tab===t ? "rgba(138,99,210,0.12)" : "transparent", color: tab===t ? "#a07ee0" : "rgba(232,228,240,0.45)", cursor:"pointer", transition:"all 0.2s" }}>
-                  {t.toUpperCase()}
-                </button>
-              ))}
-              <button onClick={() => setTab("tags")} style={{ padding:"7px 16px", fontFamily:"'DM Mono',monospace", fontSize:7.5, letterSpacing:2, border:`1px solid ${tab==="tags" ? "rgba(240,180,41,0.6)" : "rgba(240,180,41,0.25)"}`, background: tab==="tags" ? "rgba(240,180,41,0.12)" : "transparent", color: tab==="tags" ? "#f0b429" : "rgba(240,180,41,0.5)", cursor:"pointer", transition:"all 0.2s", display:"flex", alignItems:"center", gap:6 }}>
-                ★ MY TAGS {tagCount > 0 && <span style={{ background:"rgba(240,180,41,0.2)", border:"1px solid rgba(240,180,41,0.4)", borderRadius:10, padding:"1px 6px", fontSize:6.5 }}>{tagCount}</span>}
-              </button>
-            </div>
-
-            <div style={{ display:"flex", alignItems:"center", gap:10 }}>
-              <span style={{ fontSize:10, color:"rgba(232,228,240,0.4)", letterSpacing:1.5 }}>{clock}</span>
-              <button onClick={handleSync} style={{ padding:"7px 14px", fontFamily:"'DM Mono',monospace", fontSize:7, letterSpacing:2, border:"1px solid rgba(59,158,255,0.35)", background:"rgba(59,158,255,0.06)", color:"#3b9eff", cursor:"pointer" }}>↺ SYNC</button>
-              <a href="https://forms.universalservice.org/portal/" target="_blank" rel="noreferrer" style={{ display:"flex", alignItems:"center", gap:7, padding:"7px 14px", fontFamily:"'DM Mono',monospace", fontSize:7, letterSpacing:2, border:"1px solid rgba(138,99,210,0.5)", background:"rgba(138,99,210,0.1)", color:"#a07ee0", textDecoration:"none", animation:"glow-p 3s infinite", clipPath:"polygon(0 0,100% 0,100% calc(100% - 7px),calc(100% - 7px) 100%,0 100%)" }}>
-                <div style={{ width:6, height:6, borderRadius:"50%", background:"#a07ee0", animation:"pulse-dot 1.5s infinite" }}/>
-                USAC PORTAL
-              </a>
-              <button onClick={() => signOut()} style={{ padding:"7px 12px", fontFamily:"'DM Mono',monospace", fontSize:7, letterSpacing:2, border:"1px solid rgba(240,97,74,0.3)", background:"transparent", color:"rgba(240,97,74,0.6)", cursor:"pointer" }}>SIGN OUT</button>
+        {/* ── Header ── */}
+        <div style={{ background:"#0f1e3d", height:56, display:"flex", alignItems:"center", justifyContent:"space-between", padding:"0 24px", position:"sticky", top:0, zIndex:100 }}>
+          <div style={{ display:"flex", alignItems:"center", gap:12 }}>
+            <div style={{ width:32, height:32, borderRadius:8, background:"#2563eb", display:"flex", alignItems:"center", justifyContent:"center", fontFamily:"'Aldrich',sans-serif", fontSize:16, color:"#fff" }}>K</div>
+            <div>
+              <div style={{ fontSize:14, fontWeight:600, color:"#fff", letterSpacing:0.5 }}>KADERA</div>
+              <div style={{ fontSize:9, color:"rgba(255,255,255,0.4)", letterSpacing:1.5 }}>E-RATE DASHBOARD</div>
             </div>
           </div>
 
+          <div style={{ display:"flex", gap:2 }}>
+            {[["dashboard","Dashboard"],["search","Search"],["tags",`★ My Tags${tagCount ? ` (${tagCount})` : ""}`]].map(([key,label]) => (
+              <button key={key} onClick={() => setTab(key)}
+                style={{ padding:"6px 16px", borderRadius:6, border:"none", background: tab===key ? "rgba(37,99,235,0.3)" : "transparent", color: key==="tags" ? "#fbbf24" : tab===key ? "#93b4fd" : "rgba(255,255,255,0.5)", fontSize:12, fontWeight:500, cursor:"pointer" }}>
+                {label}
+              </button>
+            ))}
+          </div>
+
+          <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+            <span style={{ fontSize:11, color:"rgba(255,255,255,0.3)", fontVariantNumeric:"tabular-nums" }}>{clock}</span>
+            <button onClick={handleSync} style={{ padding:"6px 14px", borderRadius:6, border:"1px solid rgba(59,130,246,0.5)", background:"rgba(59,130,246,0.1)", color:"#93b4fd", fontSize:11, fontWeight:500, cursor:"pointer" }}>↺ Sync</button>
+            <button onClick={() => window.open("https://portal.usac.org/suite/","_blank")} style={{ padding:"6px 14px", borderRadius:6, border:"1px solid rgba(255,255,255,0.2)", background:"transparent", color:"#fff", fontSize:11, fontWeight:500, cursor:"pointer" }}>USAC Portal ↗</button>
+            <button onClick={signOut} style={{ padding:"6px 14px", borderRadius:6, border:"1px solid rgba(239,68,68,0.3)", background:"transparent", color:"#fca5a5", fontSize:11, fontWeight:500, cursor:"pointer" }}>Sign Out</button>
+          </div>
+        </div>
+
+        {/* ── Content ── */}
+        <div style={{ maxWidth:1400, margin:"0 auto", padding:"20px 24px 48px" }}>
+
+          {/* DASHBOARD TAB */}
           {tab === "dashboard" && (
-            <>
-              {/* STAT STRIP */}
-              <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:10, marginBottom:20, animation:"fade-up 0.5s ease 0.1s both" }}>
-                <StatCard label="// CURRENT FUNDING YEAR" value="FY2026"    sub="Window Open"                          color="purple"/>
-                <StatCard label="// SYNCED FORM 470s"     value={stats ? stats.total_470s : "—"}  sub="In database"   color="blue"/>
-                <StatCard label="// OPEN 470s"            value={stats ? stats.open_470s  : "—"}  sub="Active bidding" color="gold"/>
-                <StatCard label="// COMMITMENTS"          value={stats ? stats.total_commitments : "—"} sub="FY2026"   color="green"/>
+            <div className="fade-in">
+
+              {/* Stat strip */}
+              <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:12, marginBottom:20 }}>
+                {STAT_CARDS.map(({ label, value, sub, color, bg, icon }) => (
+                  <div key={label} style={{ background:"#fff", borderRadius:12, padding:"16px 18px", border:"1.5px solid #cbd5e1", boxShadow:"0 1px 4px rgba(15,30,61,0.07)", display:"flex", alignItems:"center", gap:14 }}>
+                    <div style={{ width:40, height:40, borderRadius:10, background:bg, display:"flex", alignItems:"center", justifyContent:"center", fontSize:18, flexShrink:0 }}>{icon}</div>
+                    <div>
+                      <div style={{ fontSize:11, color:"#64748b", fontWeight:500, marginBottom:4 }}>{label}</div>
+                      <div style={{ fontFamily:"'Aldrich',sans-serif", fontSize:22, color, lineHeight:1 }}>{value}</div>
+                      <div style={{ fontSize:10, color:"#94a3b8", marginTop:3 }}>{sub}</div>
+                    </div>
+                  </div>
+                ))}
               </div>
 
-              {/* MAIN GRID */}
-              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 340px", gap:14, animation:"fade-up 0.5s ease 0.2s both" }}>
+              {/* Main grid */}
+              <div style={{ display:"grid", gridTemplateColumns:"1fr 1.2fr 290px", gap:16 }}>
 
-                {/* COL 1: TOOLS */}
-                <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
-                  <Panel>
-                    <PTitle>{'// E-RATE '}<span style={{ color:"#a07ee0" }}>QUICK ACCESS TOOLS</span></PTitle>
-                    <div style={{ padding:"12px 14px" }}>
-                      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8 }}>
-                        <ToolBtn onClick={() => setC2Open(true)} color="gold" icon="💰" name="E-RATE C2 BUDGET" desc="Look up Category 2 budget, committed, disbursed, and remaining amounts by entity or BEN."/>
-                        <ToolBtn onClick={() => setEntityOpen(true)} color="blue" icon="🔍" name="ENTITY SEARCH" desc="Search schools, libraries, districts, and consortia by name or BEN."/>
-                        <ToolBtn href="https://www.usac.org/e-rate/tools/window-status/"                                      color="gold"   icon="📅" name="WINDOW REPORTING"     desc="Check filing windows, open/close dates, and deadlines."/>
-                        <ToolBtn onClick={() => setFrnOpen(true)}                                                              color="blue"   icon="📋" name="FRN STATUS FY2016+"   desc="Search FRN status from local USAC commitment data."/>
-                        <ToolBtn onClick={() => setCiOpen(true)} wide color="purple" icon="📡" name="COMPETITIVE INTELLIGENCE" desc="Top providers, manufacturer presence, and service type breakdown from FY2026 TX commitments."/>
-                        <ToolBtn onClick={() => setProspectsOpen(true)} wide color="green" icon="🎯" name="C2 PROSPECT FINDER" desc="Find TX schools and districts with available C2 budget that have not yet filed a Form 470 in FY2026."/>
-                      </div>
-                    </div>
-                  </Panel>
-
-                  {/* Deadlines */}
-                  <Panel>
-                    <PTitle>{'// FY2026 '}<span style={{ color:"#a07ee0" }}>KEY DEADLINES</span></PTitle>
-                    <div style={{ padding:"10px 14px" }}>
+                {/* Col 1: Tools + Deadlines */}
+                <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
+                  <div className="card">
+                    <div className="card-hdr"><div className="card-title">Quick Access Tools</div></div>
+                    <div style={{ padding:12, display:"grid", gridTemplateColumns:"1fr 1fr", gap:8 }}>
                       {[
-                        { name:"Form 470 Window", sub:"Open Now", status:"OPEN", color:"#39ff14", pulse:true },
-                        { name:"Form 471 Window", sub:"Opens Jan 2026", status:"UPCOMING", color:"#f0b429", pulse:true },
-                        { name:"SPIN Registration", sub:"Ongoing", status:"OPEN", color:"rgba(232,228,240,0.35)", pulse:false },
-                        { name:"BEAR / 486 Deadlines", sub:"120 days after service start", status:"ROLLING", color:"rgba(232,228,240,0.35)", pulse:false },
-                      ].map((d,i) => (
-                        <div key={i} style={{ display:"flex", alignItems:"center", gap:9, padding:"7px 9px", border:`1px solid ${d.color}25`, background:`${d.color}06`, marginBottom:6, borderRadius:1 }}>
-                          <div style={{ width:6, height:6, borderRadius:"50%", background:d.color, flexShrink:0, ...(d.pulse && { animation:"pulse-dot 1.5s infinite" }) }}/>
+                        { name:"C2 Budget",         desc:"Look up Category 2 budget by entity or BEN",          onClick:() => setC2Open(true) },
+                        { name:"Entity Search",      desc:"Search schools, libraries, and districts",           onClick:() => setEntityOpen(true) },
+                        { name:"Window Reporting",   desc:"Check filing windows and key dates",                 href:"https://www.usac.org/e-rate/applicant-process/the-e-rate-timeline/" },
+                        { name:"FRN Status",         desc:"Search FRN status from local USAC data",             onClick:() => setFrnOpen(true) },
+                      ].map(({ name, desc, onClick, href }) => (
+                        <button key={name} className="tool-btn" onClick={onClick || (() => href && window.open(href,"_blank"))}>
+                          <div style={{ fontSize:11, fontWeight:600, color:"#2563eb", marginBottom:3 }}>{name}</div>
+                          <div style={{ fontSize:10, color:"#94a3b8", lineHeight:1.4 }}>{desc}</div>
+                        </button>
+                      ))}
+                      <button className="tool-btn" style={{ gridColumn:"span 2" }} onClick={() => setCiOpen(true)}>
+                        <div style={{ fontSize:11, fontWeight:600, color:"#2563eb", marginBottom:3 }}>Competitive Intelligence</div>
+                        <div style={{ fontSize:10, color:"#94a3b8", lineHeight:1.4 }}>Top providers, manufacturer presence, and service type breakdown from FY2026 TX</div>
+                      </button>
+                      <button className="tool-btn green" style={{ gridColumn:"span 2" }} onClick={() => setProspectsOpen(true)}>
+                        <div style={{ fontSize:11, fontWeight:600, color:"#16a34a", marginBottom:3 }}>🎯 C2 Prospect Finder</div>
+                        <div style={{ fontSize:10, color:"#64748b", lineHeight:1.4 }}>TX schools with available C2 budget and no FY2026 Form 470 filed</div>
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="card">
+                    <div className="card-hdr"><div className="card-title">FY2026 Key Deadlines</div></div>
+                    <div style={{ padding:"10px 14px" }}>
+                      {DEADLINES.map(({ name, sub, badge, badgeClass, dot }) => (
+                        <div key={name} style={{ display:"flex", alignItems:"center", gap:10, padding:"8px 10px", borderRadius:8, border:"1.5px solid #e2e8f0", background:"#f8fafc", marginBottom:6 }}>
+                          <div style={{ width:8, height:8, borderRadius:"50%", background:dot, flexShrink:0, boxShadow: dot==="#22c55e" ? "0 0 5px rgba(34,197,94,0.5)" : dot==="#f59e0b" ? "0 0 5px rgba(245,158,11,0.4)" : undefined }}/>
                           <div style={{ flex:1 }}>
-                            <div style={{ fontSize:8, color:"#e8e4f0" }}>{d.name}</div>
-                            <div style={{ fontSize:6.5, color:"rgba(232,228,240,0.4)", marginTop:1 }}>{d.sub}</div>
+                            <div style={{ fontSize:11, fontWeight:500, color:"#334155" }}>{name}</div>
+                            <div style={{ fontSize:9, color:"#94a3b8" }}>{sub}</div>
                           </div>
-                          <div style={{ fontSize:7, color:d.color }}>{d.status}</div>
+                          <span className={`badge ${badgeClass}`} style={{ fontSize:9 }}>{badge}</span>
                         </div>
                       ))}
                     </div>
-                  </Panel>
+                  </div>
                 </div>
 
-                {/* COL 2: 470 FEED */}
+                {/* Col 2: 470 Feed */}
                 {token && <Feed470 token={token} onTagsUpdated={() => refreshTagCount(token)} />}
 
-                {/* COL 3: SIDEBAR */}
+                {/* Col 3: Sidebar */}
                 <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
-                  {/* USAC status */}
-                  <div style={{ background:"rgba(10,8,20,0.95)", border:"1px solid rgba(57,255,20,0.3)", padding:"9px 14px", display:"flex", alignItems:"center", gap:9, position:"relative", clipPath:"polygon(0 0,100% 0,100% calc(100% - 7px),calc(100% - 7px) 100%,0 100%)" }}>
-                    <div style={{ position:"absolute", top:0, left:0, width:9, height:9, borderTop:"1.5px solid #39ff14", borderLeft:"1.5px solid #39ff14" }}/>
-                    <div style={{ width:6, height:6, borderRadius:"50%", background:"#39ff14", animation:"pulse-dot 1.5s infinite", boxShadow:"0 0 6px #39ff14" }}/>
-                    <span style={{ fontSize:7.5, color:"#e8e4f0", flex:1, letterSpacing:1 }}>USAC OPEN DATA API ONLINE</span>
+                  <div style={{ background:"#fff", borderRadius:10, border:"1.5px solid #e2e8f0", padding:"10px 14px", display:"flex", alignItems:"center", gap:8 }}>
+                    <StatusDot />
+                    <span style={{ fontSize:11, fontWeight:500, color:"#334155" }}>USAC Open Data API</span>
+                    <span style={{ marginLeft:"auto", fontSize:10, fontWeight:600, color:"#16a34a" }}>Online</span>
                   </div>
 
-                  <BidResponseOverview token={token} />
+                  {token && <BidResponseOverview token={token} />}
 
-                  <Panel>
-                    <PTitle>{'// USAC '}<span style={{ color:"#a07ee0" }}>PORTAL NAVIGATION</span></PTitle>
-                    <div style={{ padding:"9px 14px", display:"flex", flexDirection:"column", gap:6 }}>
-                      {[
-                        { href:"https://forms.universalservice.org/portal/", icon:"🏛️", name:"EPC PORTAL", sub:"E-Rate Productivity Center" },
-                        { href:"https://opendata.usac.org/browse?category=E-rate", icon:"📊", name:"USAC OPEN DATA", sub:"Datasets and API explorer" },
-                        { href:"https://www.usac.org/e-rate/applicant-process/the-application-process/form-470-competitive-bidding/", icon:"📝", name:"FORM 470 GUIDE", sub:"Competitive bidding process" },
-                        { href:"https://www.usac.org/e-rate/applicant-process/the-application-process/form-471-funding-request/", icon:"📨", name:"FORM 471 GUIDE", sub:"Funding request submission" },
-                        { href:"https://www.usac.org/e-rate/resources/rules-policies/", icon:"📚", name:"RULES & POLICIES", sub:"E-Rate program guidelines" },
-                      ].map((l,i) => (
-                        <a key={i} href={l.href} target="_blank" rel="noreferrer"
-                          style={{ display:"flex", alignItems:"center", gap:9, padding:"8px 10px", border:"1px solid rgba(138,99,210,0.15)", background:"rgba(138,99,210,0.03)", textDecoration:"none", transition:"all 0.2s", clipPath:"polygon(0 0,100% 0,100% calc(100% - 6px),calc(100% - 6px) 100%,0 100%)" }}
-                          onMouseEnter={e => { e.currentTarget.style.borderColor="rgba(138,99,210,0.5)"; e.currentTarget.style.background="rgba(138,99,210,0.08)"; }}
-                          onMouseLeave={e => { e.currentTarget.style.borderColor="rgba(138,99,210,0.15)"; e.currentTarget.style.background="rgba(138,99,210,0.03)"; }}>
-                          <div style={{ fontSize:14 }}>{l.icon}</div>
+                  <div className="card">
+                    <div className="card-hdr"><div className="card-title">USAC Portal Navigation</div></div>
+                    <div style={{ padding:"10px 12px" }}>
+                      {PORTAL_LINKS.map(({ icon, name, sub, href }) => (
+                        <a key={name} href={href} target="_blank" rel="noreferrer"
+                          style={{ display:"flex", alignItems:"center", gap:10, padding:"8px 10px", borderRadius:8, border:"1.5px solid #e2e8f0", background:"#f8fafc", marginBottom:6, textDecoration:"none", transition:"all 0.15s" }}
+                          onMouseEnter={e => { e.currentTarget.style.borderColor="#93b4fd"; e.currentTarget.style.background="#eff6ff"; }}
+                          onMouseLeave={e => { e.currentTarget.style.borderColor="#e2e8f0"; e.currentTarget.style.background="#f8fafc"; }}>
+                          <span style={{ fontSize:14 }}>{icon}</span>
                           <div style={{ flex:1 }}>
-                            <div style={{ fontSize:8, color:"#e8e4f0" }}>{l.name}</div>
-                            <div style={{ fontSize:6.5, color:"rgba(232,228,240,0.4)", marginTop:1 }}>{l.sub}</div>
+                            <div style={{ fontSize:11, fontWeight:500, color:"#334155" }}>{name}</div>
+                            <div style={{ fontSize:9, color:"#94a3b8" }}>{sub}</div>
                           </div>
-                          <div style={{ fontSize:8, color:"rgba(232,228,240,0.35)" }}>→</div>
+                          <span style={{ fontSize:12, color:"#cbd5e1" }}>→</span>
                         </a>
                       ))}
                     </div>
-                  </Panel>
-
-                  {/* Logged in user */}
-                  <Panel>
-                    <PTitle>{'// SESSION'}</PTitle>
-                    <div style={{ padding:"10px 14px" }}>
-                      <div style={{ fontSize:7.5, color:"rgba(232,228,240,0.6)", marginBottom:4 }}>{session?.user?.email}</div>
-                      <div style={{ fontSize:6.5, color:"rgba(138,99,210,0.5)" }}>KADERA INTERNAL · E-RATE TEAM</div>
-                    </div>
-                  </Panel>
+                  </div>
                 </div>
               </div>
-            </>
+            </div>
           )}
 
-          {tab === "search" && token && <SearchPanel token={token} onTagsUpdated={() => refreshTagCount(token)} />}
-          {tab === "tags"   && token && <TagsPanel token={token} onTagsUpdated={() => refreshTagCount(token)} />}
+          {/* SEARCH TAB */}
+          {tab === "search" && token && (
+            <div className="fade-in">
+              <SearchPanel token={token} />
+            </div>
+          )}
 
+          {/* TAGS TAB */}
+          {tab === "tags" && token && (
+            <div className="fade-in">
+              <div className="card">
+                <div className="card-hdr">
+                  <div className="card-title">My Tagged 470s</div>
+                  <div className="card-badge">{tagCount} tagged</div>
+                </div>
+                <TagsPanel token={token} onTagsUpdated={() => refreshTagCount(token)} />
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </>
   );
 }
-
