@@ -321,9 +321,7 @@ function Form470Modal({ token, appNum, onClose }) {
     ]).then(([fData, sData, cData]) => {
       if (!fData?.length) { setError(true); return; }
       setForm(fData[0]);
-      const svcArr = Array.isArray(sData) ? sData : [];
-      if (svcArr.length > 0) console.log("470 services fields:", Object.keys(svcArr[0]), "sample:", svcArr[0]);
-      setServices(svcArr);
+      setServices(Array.isArray(sData) ? sData : []);
       setConsultants(Array.isArray(cData) ? cData : []);
     }).catch(() => setError(true))
       .finally(() => setLoading(false));
@@ -552,8 +550,8 @@ function Form470Modal({ token, appNum, onClose }) {
                               <td style={{ padding:"8px 10px", color:"#475569" }}>{s.installation_and_initial_configuration || s.installation || "—"}</td>
                               <td style={{ padding:"8px 10px", color:"#475569" }}>{s.number_of_entities || "—"}</td>
                               <td style={{ padding:"8px 10px" }}>
-                                {(s.rfp_document_url || s.rfp_url || s.rfp_location || s.associated_rfp || s.rfp || s.rfp_document || s.document_url)
-                                  ? <a href={s.rfp_document_url || s.rfp_url} target="_blank" rel="noreferrer"
+                                {(s.rfp_documents?.url || s.rfp_document_url || s.rfp_url)
+                                  ? <a href={s.rfp_documents?.url || s.rfp_document_url || s.rfp_url} target="_blank" rel="noreferrer"
                                       style={{ color:"#2563eb", fontSize:11, fontWeight:600, textDecoration:"none" }}
                                       onMouseEnter={e => e.currentTarget.style.textDecoration="underline"}
                                       onMouseLeave={e => e.currentTarget.style.textDecoration="none"}>
@@ -621,8 +619,8 @@ function Form470Modal({ token, appNum, onClose }) {
               {(() => {
                 const rfpDocs = [...new Map(
                   services
-                    .filter(s => s.rfp_document_url || s.rfp_url || s.rfp_location || s.associated_rfp || s.rfp || s.rfp_document || s.document_url)
-                    .map(s => ({ url: s.rfp_document_url || s.rfp_url || s.rfp_location || s.associated_rfp || s.rfp || s.rfp_document || s.document_url, label: s.service_type_name || s.type_of_service || s.service_type || "RFP Document" }))
+                    .filter(s => s.rfp_documents?.url || s.rfp_document_url || s.rfp_url)
+                    .map(s => ({ url: s.rfp_documents?.url || s.rfp_document_url || s.rfp_url, label: s.service_type || s.service_type_name || s.type_of_service || "RFP Document" }))
                     .map(d => [d.url, d])
                 ).values()];
                 return (
