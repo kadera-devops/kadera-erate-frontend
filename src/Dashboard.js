@@ -343,9 +343,9 @@ function Form470Modal({ token, appNum, onClose }) {
   const f = form || {};
 
   const status = f.application_status || f.fcc_form_470_status || "";
-  const statusColor = status.toLowerCase().includes("certif") ? { bg:"#dcfce7", color:"#15803d" }
-    : status.toLowerCase().includes("post") ? { bg:"#dbeafe", color:"#1d4ed8" }
-    : { bg:"#f1f5f9", color:"#64748b" };
+
+
+
 
   const days = f.allowable_contract_date
     ? Math.ceil((new Date(f.allowable_contract_date) - new Date()) / (1000*60*60*24))
