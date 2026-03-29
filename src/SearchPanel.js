@@ -200,15 +200,16 @@ export default function SearchPanel({ token, onTagsUpdated, onView470 }) {
                   {results.map((row, i) => {
                     const is470Row = row.application_number && (searchType === "470s" || searchType === "contacts");
                     const is471Row = row.application_number && searchType === "471s";
-                    const link = is470Row
-                      ? `https://legacy.fundsforlearning.com/470/${row.application_number}`
-                      : is471Row
+                    const link = is471Row
                       ? `https://legacy.fundsforlearning.com/471/${row.application_number}`
                       : null;
                     return (
                       <tr key={i}
                         style={{ borderBottom:"1.5px solid #c8d6e8", cursor: link ? "pointer" : "default", transition:"background 0.1s" }}
-                        onClick={() => link && window.open(link, "_blank")}
+                        onClick={() => {
+                        if (is470Row && onView470) { onView470(String(row.application_number)); }
+                        else if (link) window.open(link, "_blank");
+                      }}
                         onMouseEnter={e => e.currentTarget.style.background="#f8fafc"}
                         onMouseLeave={e => e.currentTarget.style.background="transparent"}>
                         {currentCols.map(col => {
@@ -234,12 +235,12 @@ export default function SearchPanel({ token, onTagsUpdated, onView470 }) {
                           <div style={{ display:"flex", gap:6, alignItems:"center" }}>
                             {is470Row && onView470 ? (
                               <button onClick={e => { e.stopPropagation(); onView470(String(row.application_number)); }}
-                                style={{ padding:"3px 10px", borderRadius:5, border:"1.5px solid #93c5fd", background:"#eff6ff", color:"#2563eb", fontSize:10, fontWeight:600, cursor:"pointer", whiteSpace:"nowrap", fontFamily:"inherit" }}>
+                                style={{ background:"none", border:"none", color:"#2563eb", fontSize:11, fontWeight:600, cursor:"pointer", padding:0, textDecoration:"none", whiteSpace:"nowrap", fontFamily:"inherit" }}>
                                 View 470 →
                               </button>
                             ) : link ? (
                               <a href={link} target="_blank" rel="noreferrer"
-                                style={{ padding:"3px 10px", borderRadius:5, border:"1.5px solid #93c5fd", background:"#eff6ff", color:"#2563eb", fontSize:10, fontWeight:600, textDecoration:"none", whiteSpace:"nowrap" }}>
+                                style={{ color:"#2563eb", fontSize:11, fontWeight:600, textDecoration:"none", whiteSpace:"nowrap" }}>
                                 View →
                               </a>
                             ) : null}
