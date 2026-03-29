@@ -96,7 +96,7 @@ const css = `
   .tool-btn.green:hover { border-color:#4ade80; background:#dcfce7; }
 
   /* Feed */
-  .feed-item { display:flex; align-items:center; gap:12px; padding:10px 16px; border-bottom:1px solid #f1f5f9; transition:background 0.1s; cursor:pointer; }
+  .feed-item { display:flex; align-items:center; gap:12px; padding:10px 16px; border-bottom:1.5px solid #c8d6e8; transition:background 0.1s; cursor:pointer; }
   .feed-item:hover { background:#f8fafc; }
 
   /* Summary strip in modals */
@@ -418,7 +418,7 @@ function TagsPanel({ token, onTagsUpdated }) {
         const stage = stages[tag.application_number];
         const days  = tag.bid_due_date ? Math.ceil((new Date(tag.bid_due_date)-new Date())/(1000*60*60*24)) : null;
         return (
-          <div key={i} style={{ padding:"14px 20px", borderBottom:"1px solid #f1f5f9", background: popup?.appNum === tag.application_number ? "#fafbff" : undefined }}>
+          <div key={i} style={{ padding:"14px 20px", borderBottom:"1.5px solid #c8d6e8", background: popup?.appNum === tag.application_number ? "#fafbff" : undefined }}>
             <div style={{ display:"flex", alignItems:"flex-start", gap:12 }}>
               <div style={{ flex:1, minWidth:0 }}>
                 <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:4 }}>
@@ -1626,7 +1626,12 @@ export default function Dashboard({ session }) {
           {/* SEARCH TAB */}
           {tab === "search" && token && (
             <div className="fade-in">
-              <SearchPanel token={token} />
+              <div className="card">
+                <div className="card-hdr"><div className="card-title">Search USAC Data</div></div>
+                <div style={{ background:"#fff" }}>
+                  <SearchPanel token={token} onTagsUpdated={() => refreshTagCount(token)} />
+                </div>
+              </div>
             </div>
           )}
 
