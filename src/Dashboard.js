@@ -160,7 +160,7 @@ function StatusDot({ ok = true }) {
 
 
 // ── Feed470 ───────────────────────────────────────────────────────────────────
-function Feed470({ token, onTagsUpdated }) {
+function Feed470({ token, onTagsUpdated, onView470 }) {
   const [data, setData]     = useState([]);
   const [loading, setLoading] = useState(true);
   const [state]             = useState("TX");
@@ -265,7 +265,10 @@ function Feed470({ token, onTagsUpdated }) {
               <div key={i} className="feed-item">
                 <div style={{ flex:1, minWidth:0 }}>
                   <div style={{ display:"flex", alignItems:"center", gap:6, marginBottom:3 }}>
-                    <span style={{ fontSize:11, fontWeight:600, color:"#2563eb" }}>{item.application_number}</span>
+                    <span style={{ fontSize:11, fontWeight:600, color:"#2563eb", cursor:"pointer", textDecoration:"underline dotted" }}
+                      onClick={e => { e.stopPropagation(); onView470?.(String(item.application_number)); }}>
+                      {item.application_number}
+                    </span>
                     <span className="badge badge-green">OPEN</span>
                     {item.days_until_due <= 3 && item.days_until_due >= 0 && <span className="badge badge-red">URGENT</span>}
                     <button onClick={() => toggleTag(item)} style={{ marginLeft:"auto", padding:"2px 8px", borderRadius:4, border:`1.5px solid ${tagged ? "#86efac" : "#cbd5e1"}`, background: tagged ? "#f0fdf4" : "transparent", fontSize:10, fontWeight:600, color: tagged ? "#15803d" : "#94a3b8", cursor:"pointer" }}>
@@ -298,6 +301,204 @@ function Feed470({ token, onTagsUpdated }) {
   );
 }
 
+
+// ── Form 470 Detail Modal ─────────────────────────────────────────────────────
+function Form470Modal({ token, appNum, onClose }) {
+  const [data, setData]     = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError]   = useState("");
+  const [rawOpen, setRawOpen] = useState(false);
+
+  useEffect(() => {
+    if (!appNum || !token) return;
+    fetch(`${API_URL}/api/470-detail?app_num=${encodeURIComponent(appNum)}`, { headers:{ Authorization:`Bearer ${token}` } })
+      .then(r => r.json())
+      .then(json => {
+        if (json.status === "success" && json.data) setData(json.data);
+        else setError("Could not load 470 details");
+      })
+      .catch(() => setError("Connection error"))
+      .finally(() => setLoading(false));
+  }, [appNum, token]);
+
+  const fmtDate = v => v ? new Date(v).toLocaleDateString("en-US", { year:"numeric", month:"long", day:"numeric" }) : null;
+
+  const days = data?.bid_due_date
+    ? Math.ceil((new Date(data.bid_due_date) - new Date()) / (1000*60*60*24))
+    : null;
+
+  // Pick all non-null raw fields not already shown
+  const extraRawFields = data?.raw ? Object.entries(data.raw)
+    .filter(([k, v]) => v && !["application_number","billed_entity_name","billed_entity_number","billed_entity_state","funding_year","fcc_form_470_status","application_status","certified_date_time","allowable_contract_date","technical_contact_name","technical_contact_email","technical_contact_phone","form_nickname","category_one_description","category_two_description","service_category"].includes(k))
+    .sort(([a],[b]) => a.localeCompare(b)) : [];
+
+  return (
+    <div className="modal-backdrop" onClick={e => e.target === e.currentTarget && onClose()}>
+      <div className="modal-box modal-box-sm" style={{ width:"min(680px,96vw)" }}>
+        <div className="modal-hdr">
+          <div>
+            <div className="modal-title">Form 470 — {appNum}</div>
+            <div className="modal-sub">{loading ? "Loading..." : data ? `${data.billed_entity_name} · FY${data.funding_year}` : "Not found"}</div>
+          </div>
+          <button className="modal-close" onClick={onClose}>✕ Close</button>
+        </div>
+
+        <div className="modal-body" style={{ padding:0 }}>
+          {loading && <div style={{ padding:"48px", textAlign:"center", fontSize:12, color:"#94a3b8" }}>Loading 470 details...</div>}
+          {error && <div style={{ padding:24, fontSize:12, color:"#dc2626" }}>⚠ {error}</div>}
+          {!loading && data && (
+            <>
+              {/* Status banner */}
+              <div style={{ padding:"14px 20px", background: (data.application_status||"").toLowerCase().includes("open") ? "#f0fdf4" : "#f8fafc", borderBottom:"1.5px solid #e2e8f0", display:"flex", alignItems:"center", justifyContent:"space-between", flexWrap:"wrap", gap:10 }}>
+                <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+                  <span style={{ fontFamily:"'Aldrich',sans-serif", fontSize:20, color:"#0f1e3d" }}>{appNum}</span>
+                  <span className={`badge ${(data.application_status||"").toLowerCase().includes("open") ? "badge-green" : "badge-gray"}`}>
+                    {data.application_status || "—"}
+                  </span>
+                  {days != null && days >= 0 && (
+                    <span className={`badge ${days <= 3 ? "badge-red" : days <= 7 ? "badge-amber" : "badge-blue"}`}>
+                      {days === 0 ? "Due Today" : `${days} days left`}
+                    </span>
+                  )}
+                  {days != null && days < 0 && <span className="badge badge-gray">Closed</span>}
+                </div>
+                {/* External links */}
+                <div style={{ display:"flex", gap:8 }}>
+                  <a href={`https://legacy.fundsforlearning.com/470/${appNum}`} target="_blank" rel="noreferrer"
+                    style={{ padding:"5px 12px", borderRadius:6, border:"1.5px solid #cbd5e1", background:"#f8fafc", color:"#475569", fontSize:11, fontWeight:500, textDecoration:"none" }}>
+                    FundsForLearning ↗
+                  </a>
+                  <a href={`https://portal.usac.org/suite/#/470/${appNum}`} target="_blank" rel="noreferrer"
+                    style={{ padding:"5px 12px", borderRadius:6, border:"1.5px solid #93c5fd", background:"#eff6ff", color:"#2563eb", fontSize:11, fontWeight:500, textDecoration:"none" }}>
+                    View on USAC EPC ↗
+                  </a>
+                </div>
+              </div>
+
+              <div style={{ padding:"16px 20px", display:"flex", flexDirection:"column", gap:16 }}>
+
+                {/* Entity info */}
+                <Section title="Applicant Information">
+                  <FieldGrid fields={[
+                    { label:"Entity Name",   value: data.billed_entity_name },
+                    { label:"BEN",           value: data.billed_entity_number },
+                    { label:"State",         value: data.state },
+                    { label:"Funding Year",  value: data.funding_year ? `FY${data.funding_year}` : null },
+                  ]} />
+                </Section>
+
+                {/* Service info */}
+                <Section title="Service Details">
+                  <FieldGrid fields={[
+                    { label:"Service Category",   value: data.service_category },
+                    { label:"Category of Service", value: data.category_of_service !== data.service_category ? data.category_of_service : null },
+                    { label:"Narrative / Nickname", value: data.narrative || data.form_nickname },
+                    { label:"Signal Type",          value: data.signal_type },
+                    { label:"Function Type",        value: data.function_type },
+                    { label:"Pricing Type",         value: data.pricing_type },
+                    { label:"WAN",                  value: data.wan },
+                    { label:"Fiber Type",           value: data.fiber_type },
+                    { label:"Special Construction", value: data.special_construction },
+                  ]} />
+                  {data.narrative_description && (
+                    <div style={{ marginTop:10, padding:"12px 14px", background:"#f8fafc", borderRadius:8, border:"1.5px solid #e2e8f0" }}>
+                      <div style={{ fontSize:10, fontWeight:600, color:"#94a3b8", marginBottom:6, textTransform:"uppercase", letterSpacing:0.5 }}>Service Description</div>
+                      <div style={{ fontSize:12, color:"#334155", lineHeight:1.6 }}>{data.narrative_description}</div>
+                    </div>
+                  )}
+                </Section>
+
+                {/* Dates */}
+                <Section title="Key Dates">
+                  <FieldGrid fields={[
+                    { label:"Date Posted / Certified", value: fmtDate(data.date_posted) },
+                    { label:"Bid Due Date",             value: fmtDate(data.bid_due_date), highlight: days != null && days <= 7 },
+                  ]} />
+                </Section>
+
+                {/* Contact */}
+                <Section title="Technical Contact">
+                  <FieldGrid fields={[
+                    { label:"Name",  value: data.tech_contact_name },
+                    { label:"Email", value: data.tech_contact_email, link: data.tech_contact_email ? `mailto:${data.tech_contact_email}` : null },
+                    { label:"Phone", value: data.tech_contact_phone },
+                  ]} />
+                  {(data.consultant_name || data.consultant_phone) && (
+                    <>
+                      <div style={{ fontSize:11, fontWeight:600, color:"#475569", margin:"10px 0 6px" }}>Consultant</div>
+                      <FieldGrid fields={[
+                        { label:"Consultant Name",  value: data.consultant_name },
+                        { label:"Consultant Phone", value: data.consultant_phone },
+                      ]} />
+                    </>
+                  )}
+                </Section>
+
+                {/* RFP / Documents */}
+                {data.rfp_document_url && (
+                  <Section title="RFP / Documents">
+                    <a href={data.rfp_document_url} target="_blank" rel="noreferrer"
+                      style={{ display:"flex", alignItems:"center", gap:10, padding:"12px 14px", borderRadius:8, border:"1.5px solid #93c5fd", background:"#eff6ff", textDecoration:"none", color:"#2563eb", fontSize:12, fontWeight:500 }}>
+                      <span style={{ fontSize:20 }}>📄</span>
+                      <div>
+                        <div style={{ fontWeight:600 }}>RFP / Bid Document</div>
+                        <div style={{ fontSize:10, color:"#64748b", marginTop:2 }}>{data.rfp_document_url}</div>
+                      </div>
+                      <span style={{ marginLeft:"auto", fontSize:14 }}>↗</span>
+                    </a>
+                  </Section>
+                )}
+
+                {/* Extra raw fields toggle */}
+                {extraRawFields.length > 0 && (
+                  <div>
+                    <button onClick={() => setRawOpen(p => !p)}
+                      style={{ fontSize:11, fontWeight:500, color:"#64748b", background:"none", border:"none", cursor:"pointer", padding:0, display:"flex", alignItems:"center", gap:4 }}>
+                      {rawOpen ? "▲" : "▼"} {rawOpen ? "Hide" : "Show"} all USAC fields ({extraRawFields.length})
+                    </button>
+                    {rawOpen && (
+                      <div style={{ marginTop:10 }}>
+                        <FieldGrid fields={extraRawFields.map(([k, v]) => ({ label: k.replace(/_/g," "), value: String(v) }))} />
+                      </div>
+                    )}
+                  </div>
+                )}
+
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Section({ title, children }) {
+  return (
+    <div>
+      <div style={{ fontSize:11, fontWeight:700, color:"#0f1e3d", letterSpacing:0.5, marginBottom:8, paddingBottom:6, borderBottom:"1.5px solid #e2e8f0" }}>{title}</div>
+      {children}
+    </div>
+  );
+}
+
+function FieldGrid({ fields }) {
+  const visible = fields.filter(f => f.value);
+  if (!visible.length) return <div style={{ fontSize:11, color:"#94a3b8" }}>No data available</div>;
+  return (
+    <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill, minmax(200px, 1fr))", gap:8 }}>
+      {visible.map(({ label, value, link, highlight }) => (
+        <div key={label} style={{ background: highlight ? "#fff7ed" : "#f8fafc", border:`1.5px solid ${highlight ? "#fed7aa" : "#e2e8f0"}`, padding:"8px 12px", borderRadius:8 }}>
+          <div style={{ fontSize:9, fontWeight:600, color:"#94a3b8", textTransform:"uppercase", letterSpacing:0.5, marginBottom:3 }}>{label}</div>
+          {link
+            ? <a href={link} style={{ fontSize:12, color:"#2563eb", textDecoration:"none" }}>{value}</a>
+            : <div style={{ fontSize:12, color: highlight ? "#c2410c" : "#334155", fontWeight: highlight ? 600 : 400 }}>{value}</div>
+          }
+        </div>
+      ))}
+    </div>
+  );
+}
 
 // ── BidResponseOverview ───────────────────────────────────────────────────────
 function BidResponseOverview({ token }) {
@@ -1424,6 +1625,7 @@ export default function Dashboard({ session }) {
   const [clock, setClock]   = useState("");
   const [tagCount, setTagCount] = useState(0);
   const [frnOpen, setFrnOpen]   = useState(false);
+  const [form470App, setForm470App] = useState(null); // app number for 470 detail modal
   const [ciOpen, setCiOpen]     = useState(false);
   const [c2Open, setC2Open]     = useState(false);
   const [entityOpen, setEntityOpen]     = useState(false);
@@ -1485,6 +1687,7 @@ export default function Dashboard({ session }) {
     <>
       <style>{css}</style>
       {frnOpen       && token && <FRNStatusModal       token={token} onClose={() => setFrnOpen(false)} />}
+      {form470App    && token && <Form470Modal          token={token} appNum={form470App} onClose={() => setForm470App(null)} />}
       {ciOpen        && token && <CompetitiveIntelModal token={token} onClose={() => setCiOpen(false)} />}
       {c2Open        && token && <C2BudgetModal         token={token} onClose={() => setC2Open(false)} />}
       {entityOpen    && token && <EntitySearchModal     token={token} onClose={() => setEntityOpen(false)} />}
@@ -1588,7 +1791,7 @@ export default function Dashboard({ session }) {
                 </div>
 
                 {/* Col 2: 470 Feed */}
-                {token && <Feed470 token={token} onTagsUpdated={() => refreshTagCount(token)} />}
+                {token && <Feed470 token={token} onTagsUpdated={() => refreshTagCount(token)} onView470={setForm470App} />}
 
                 {/* Col 3: Sidebar */}
                 <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
@@ -1629,7 +1832,7 @@ export default function Dashboard({ session }) {
               <div className="card">
                 <div className="card-hdr"><div className="card-title">Search USAC Data</div></div>
                 <div style={{ background:"#fff" }}>
-                  <SearchPanel token={token} onTagsUpdated={() => refreshTagCount(token)} />
+                  <SearchPanel token={token} onTagsUpdated={() => refreshTagCount(token)} onView470={setForm470App} />
                 </div>
               </div>
             </div>

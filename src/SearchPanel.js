@@ -49,7 +49,7 @@ function statusBadge(val) {
   return null;
 }
 
-export default function SearchPanel({ token, onTagsUpdated }) {
+export default function SearchPanel({ token, onTagsUpdated, onView470 }) {
   const [searchType, setSearchType] = useState("contacts");
   const [query, setQuery]           = useState("");
   const [state, setState]           = useState("TX");
@@ -232,12 +232,17 @@ export default function SearchPanel({ token, onTagsUpdated }) {
                         })}
                         <td style={{ padding:"9px 14px" }} onClick={e => e.stopPropagation()}>
                           <div style={{ display:"flex", gap:6, alignItems:"center" }}>
-                            {link && (
+                            {is470Row && onView470 ? (
+                              <button onClick={e => { e.stopPropagation(); onView470(String(row.application_number)); }}
+                                style={{ padding:"3px 10px", borderRadius:5, border:"1.5px solid #93c5fd", background:"#eff6ff", color:"#2563eb", fontSize:10, fontWeight:600, cursor:"pointer", whiteSpace:"nowrap", fontFamily:"inherit" }}>
+                                View 470 →
+                              </button>
+                            ) : link ? (
                               <a href={link} target="_blank" rel="noreferrer"
                                 style={{ padding:"3px 10px", borderRadius:5, border:"1.5px solid #93c5fd", background:"#eff6ff", color:"#2563eb", fontSize:10, fontWeight:600, textDecoration:"none", whiteSpace:"nowrap" }}>
                                 View →
                               </a>
-                            )}
+                            ) : null}
                             {is470Row && (
                               <button onClick={e => toggleTag(e, row)}
                                 style={{ padding:"3px 10px", borderRadius:5, border:`1.5px solid ${tags.has(row.application_number) ? "#86efac" : "#cbd5e1"}`, background: tags.has(row.application_number) ? "#f0fdf4" : "#f8fafc", color: tags.has(row.application_number) ? "#15803d" : "#64748b", fontSize:10, fontWeight:600, cursor:"pointer", whiteSpace:"nowrap", fontFamily:"inherit" }}>
