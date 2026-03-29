@@ -262,16 +262,15 @@ function Feed470({ token, onTagsUpdated, onView470 }) {
             const tagged = tags.has(String(item.application_number));
             const dayLabel = days == null ? "—" : days < 0 ? "CLOSED" : days === 0 ? "TODAY" : `${days}`;
             return (
-              <div key={i} className="feed-item">
+              <div key={i} className="feed-item" onClick={() => onView470?.(String(item.application_number))} style={{ cursor:"pointer" }}>
                 <div style={{ flex:1, minWidth:0 }}>
                   <div style={{ display:"flex", alignItems:"center", gap:6, marginBottom:3 }}>
-                    <span style={{ fontSize:11, fontWeight:600, color:"#2563eb", cursor:"pointer", textDecoration:"underline dotted" }}
-                      onClick={e => { e.stopPropagation(); onView470?.(String(item.application_number)); }}>
+                    <span style={{ fontSize:11, fontWeight:600, color:"#2563eb" }}>
                       {item.application_number}
                     </span>
                     <span className="badge badge-green">OPEN</span>
                     {item.days_until_due <= 3 && item.days_until_due >= 0 && <span className="badge badge-red">URGENT</span>}
-                    <button onClick={() => toggleTag(item)} style={{ marginLeft:"auto", padding:"2px 8px", borderRadius:4, border:`1.5px solid ${tagged ? "#86efac" : "#cbd5e1"}`, background: tagged ? "#f0fdf4" : "transparent", fontSize:10, fontWeight:600, color: tagged ? "#15803d" : "#94a3b8", cursor:"pointer" }}>
+                    <button onClick={e => { e.stopPropagation(); toggleTag(item); }} style={{ marginLeft:"auto", padding:"2px 8px", borderRadius:4, border:`1.5px solid ${tagged ? "#86efac" : "#cbd5e1"}`, background: tagged ? "#f0fdf4" : "transparent", fontSize:10, fontWeight:600, color: tagged ? "#15803d" : "#94a3b8", cursor:"pointer" }}>
                       {tagged ? "★ Tagged" : "☆ Tag"}
                     </button>
                   </div>
@@ -563,7 +562,7 @@ function BidResponseOverview({ token }) {
 }
 
 // ── TagsPanel ─────────────────────────────────────────────────────────────────
-function TagsPanel({ token, onTagsUpdated }) {
+function TagsPanel({ token, onTagsUpdated, onView470 }) {
   const [tags, setTags]       = useState([]);
   const [loading, setLoading] = useState(true);
   const [popup, setPopup]     = useState(null);
@@ -623,7 +622,10 @@ function TagsPanel({ token, onTagsUpdated }) {
             <div style={{ display:"flex", alignItems:"flex-start", gap:12 }}>
               <div style={{ flex:1, minWidth:0 }}>
                 <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:4 }}>
-                  <span style={{ fontSize:12, fontWeight:600, color:"#2563eb" }}>{tag.application_number}</span>
+                  <span style={{ fontSize:12, fontWeight:600, color:"#2563eb", cursor:"pointer", textDecoration:"underline dotted" }}
+                    onClick={() => onView470?.(String(tag.application_number))}>
+                    {tag.application_number}
+                  </span>
                   {tag.bid_status === "won"  && <span className="badge badge-green">WON</span>}
                   {tag.bid_status === "lost" && <span className="badge badge-red">LOST</span>}
                   {tag.responded && !tag.bid_status && <span className="badge badge-blue">RESPONDED</span>}
@@ -633,6 +635,10 @@ function TagsPanel({ token, onTagsUpdated }) {
                 <div style={{ fontSize:10, color:"#94a3b8" }}>{tag.service_category} · {tag.state} · FY{tag.funding_year}</div>
               </div>
               <div style={{ display:"flex", gap:6, flexShrink:0 }}>
+                <button className="btn btn-sm" style={{ color:"#2563eb", borderColor:"#93c5fd", background:"#eff6ff" }}
+                  onClick={() => onView470?.(String(tag.application_number))}>
+                  View 470
+                </button>
                 <button className="btn btn-sm" style={{ color: tag.responded ? "#15803d" : undefined, borderColor: tag.responded ? "#86efac" : undefined, background: tag.responded ? "#f0fdf4" : undefined }}
                   onClick={() => updateTag(tag.application_number, { responded: !tag.responded })}>
                   {tag.responded ? "✓ Responded" : "Responded"}
@@ -1846,7 +1852,7 @@ export default function Dashboard({ session }) {
                   <div className="card-title">My Tagged 470s</div>
                   <div className="card-badge">{tagCount} tagged</div>
                 </div>
-                <TagsPanel token={token} onTagsUpdated={() => refreshTagCount(token)} />
+                <TagsPanel token={token} onTagsUpdated={() => refreshTagCount(token)} onView470={setForm470App} />
               </div>
             </div>
           )}
