@@ -123,7 +123,6 @@ const css = `
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 const fmt = v => v == null ? "—" : `$${Math.round(v).toLocaleString()}`;
-const fmtPct = v => v == null ? "—" : `${v}%`;
 const fmtDate = v => v ? new Date(v).toLocaleDateString() : "—";
 
 function SortHdr({ label, field, sortField, sortAsc, onSort, style }) {
@@ -384,6 +383,7 @@ function TagsPanel({ token, onTagsUpdated }) {
     } catch {} finally { setLoading(false); }
   }
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { load(); }, [token]);
 
   async function removeTag(appNum) {
