@@ -16,7 +16,7 @@ const css = `
 
   /* Modal backdrop */
   .modal-backdrop { position:fixed; inset:0; background:rgba(15,30,61,0.5); display:flex; align-items:center; justify-content:center; z-index:200; backdrop-filter:blur(2px); }
-  .modal-box { background:#fff; border-radius:16px; border:1.5px solid #cbd5e1; box-shadow:0 20px 60px rgba(15,30,61,0.18); width:min(1060px,96vw); max-height:90vh; display:flex; flex-direction:column; overflow:hidden; }
+  .modal-box { background:#fff; border-radius:0; border:1.5px solid #cbd5e1; box-shadow:0 20px 60px rgba(15,30,61,0.18); width:min(1060px,96vw); max-height:90vh; display:flex; flex-direction:column; overflow:hidden; }
   .modal-box-sm { width:min(600px,96vw); }
   .modal-hdr { padding:16px 20px; border-bottom:1.5px solid #e2e8f0; background:#f8fafc; display:flex; align-items:center; justify-content:space-between; flex-shrink:0; }
   .modal-title { font-size:14px; font-weight:600; color:#1e293b; }
@@ -321,7 +321,9 @@ function Form470Modal({ token, appNum, onClose }) {
     ]).then(([fData, sData, cData]) => {
       if (!fData?.length) { setError(true); return; }
       setForm(fData[0]);
-      setServices(Array.isArray(sData) ? sData : []);
+      const svcArr = Array.isArray(sData) ? sData : [];
+      if (svcArr.length > 0) console.log("470 services fields:", Object.keys(svcArr[0]), "sample:", svcArr[0]);
+      setServices(svcArr);
       setConsultants(Array.isArray(cData) ? cData : []);
     }).catch(() => setError(true))
       .finally(() => setLoading(false));
@@ -550,7 +552,7 @@ function Form470Modal({ token, appNum, onClose }) {
                               <td style={{ padding:"8px 10px", color:"#475569" }}>{s.installation_and_initial_configuration || s.installation || "—"}</td>
                               <td style={{ padding:"8px 10px", color:"#475569" }}>{s.number_of_entities || "—"}</td>
                               <td style={{ padding:"8px 10px" }}>
-                                {(s.rfp_document_url || s.rfp_url)
+                                {(s.rfp_document_url || s.rfp_url || s.rfp_location || s.associated_rfp || s.rfp || s.rfp_document || s.document_url)
                                   ? <a href={s.rfp_document_url || s.rfp_url} target="_blank" rel="noreferrer"
                                       style={{ color:"#2563eb", fontSize:11, fontWeight:600, textDecoration:"none" }}
                                       onMouseEnter={e => e.currentTarget.style.textDecoration="underline"}
@@ -619,8 +621,8 @@ function Form470Modal({ token, appNum, onClose }) {
               {(() => {
                 const rfpDocs = [...new Map(
                   services
-                    .filter(s => s.rfp_document_url || s.rfp_url)
-                    .map(s => ({ url: s.rfp_document_url || s.rfp_url, label: s.service_type_name || s.type_of_service || "RFP Document" }))
+                    .filter(s => s.rfp_document_url || s.rfp_url || s.rfp_location || s.associated_rfp || s.rfp || s.rfp_document || s.document_url)
+                    .map(s => ({ url: s.rfp_document_url || s.rfp_url || s.rfp_location || s.associated_rfp || s.rfp || s.rfp_document || s.document_url, label: s.service_type_name || s.type_of_service || s.service_type || "RFP Document" }))
                     .map(d => [d.url, d])
                 ).values()];
                 return (
