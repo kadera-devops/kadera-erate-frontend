@@ -1557,7 +1557,6 @@ function ContactSearchModal({ token, onClose }) {
               Enter a school type keyword and/or product name above, then click Search
             </div>
           )}
-          {tab === "school" && loading && <Spinner />}
           {loading && <Spinner />}
           {results && (
             <>
