@@ -1603,10 +1603,10 @@ function CompetitiveIntelModal({ token, onClose }) {
                       <div style={{ flex:1 }}>
                         <div style={{ display:"flex", justifyContent:"space-between", marginBottom:4 }}>
                           <span style={{ fontSize:12, fontWeight:500 }}>{s.name}</span>
-                          <span style={{ fontSize:11, fontWeight:600, color:"#16a34a" }}>{fmt(s.total)}</span>
+                          <span style={{ fontSize:11, fontWeight:600, color:"#16a34a" }}>{s.count} FRNs</span>
                         </div>
                         <div style={{ height:6, background:"#f1f5f9", borderRadius:99, overflow:"hidden" }}>
-                          <div style={{ width:`${Math.round((s.total/(data.service_types[0]?.total||1))*100)}%`, height:"100%", background:"linear-gradient(90deg,#6ee7b7,#16a34a)", borderRadius:99 }}/>
+                          <div style={{ width:`${Math.round((s.count/(data.service_types[0]?.count||1))*100)}%`, height:"100%", background:"linear-gradient(90deg,#6ee7b7,#16a34a)", borderRadius:99 }}/>
                         </div>
                         <div style={{ fontSize:10, color:"#94a3b8", marginTop:3 }}>{s.count} FRNs</div>
                       </div>
