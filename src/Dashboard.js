@@ -19,7 +19,7 @@ const css = `
     position: absolute;
     inset: 0;
     border-radius: 10px;
-    background: #1a0d2e;
+    background: #fff;
   }
   .kadera-ai-chase-border::before {
     content: '';
@@ -2172,7 +2172,7 @@ export default function Dashboard({ session }) {
           </div>
 
           <div style={{ display:"flex", gap:2 }}>
-            {[["dashboard","Dashboard"],["search","Search"],["tags",`★ My Tags${tagCount ? ` (${tagCount})` : ""}`],["ai","✦ Kadera AI"]].map(([key,label]) => (
+            {[["dashboard","Dashboard"],["search","Search"],["tags",`★ My Tags${tagCount ? ` (${tagCount})` : ""}`]].map(([key,label]) => (
               <button key={key} onClick={() => setTab(key)}
                 style={{ padding:"6px 16px", borderRadius:6, border:"none", background: tab===key ? (key==="ai" ? "rgba(124,58,237,0.2)" : "rgba(37,99,235,0.3)") : "transparent", color: key==="tags" ? "#fbbf24" : key==="ai" ? (tab===key ? "#c4b5fd" : "rgba(196,181,253,0.7)") : tab===key ? "#93b4fd" : "rgba(255,255,255,0.5)", fontSize:12, fontWeight:500, cursor:"pointer" }}>
                 {label}
@@ -2217,6 +2217,16 @@ export default function Dashboard({ session }) {
                   <div className="card">
                     <div className="card-hdr"><div className="card-title">Quick Access Tools</div></div>
                     <div style={{ padding:12, display:"grid", gridTemplateColumns:"1fr 1fr", gap:8 }}>
+                      <div style={{ gridColumn:"span 2", position:"relative", padding:1.5, borderRadius:10, overflow:"hidden", cursor:"pointer" }} onClick={() => setAiOpen(true)}>
+                        <div className="kadera-ai-chase-border" />
+                        <div style={{ position:"relative", zIndex:1, borderRadius:9, background:"#fff", border:"1.5px solid transparent", padding:"10px 14px", display:"flex", alignItems:"center", gap:10 }}>
+                          <div style={{ width:28, height:28, borderRadius:7, background:"linear-gradient(135deg,#6d28d9,#2563eb)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:14, flexShrink:0 }}>✦</div>
+                          <div>
+                            <div style={{ fontSize:11, fontWeight:600, color:"#7c3aed", marginBottom:2 }}>Kadera AI</div>
+                            <div style={{ fontSize:10, color:"#94a3b8", lineHeight:1.4 }}>Ask anything about bids, providers, pipeline, and prospects</div>
+                          </div>
+                        </div>
+                      </div>
                       {[
                         { name:"C2 Budget",         desc:"Look up Category 2 budget by entity or BEN",          onClick:() => setC2Open(true) },
                         { name:"Entity Search",      desc:"Search schools, libraries, and districts",           onClick:() => setEntityOpen(true) },
@@ -2236,16 +2246,6 @@ export default function Dashboard({ session }) {
                         <div style={{ fontSize:11, fontWeight:600, color:"#16a34a", marginBottom:3 }}>🎯 C2 Prospect Finder</div>
                         <div style={{ fontSize:10, color:"#64748b", lineHeight:1.4 }}>TX schools with available C2 budget and no FY2026 Form 470 filed</div>
                       </button>
-                      <div style={{ gridColumn:"span 2", position:"relative", padding:1.5, borderRadius:10, overflow:"hidden", cursor:"pointer" }} onClick={() => setAiOpen(true)}>
-                        <div className="kadera-ai-chase-border" />
-                        <div style={{ position:"relative", zIndex:1, borderRadius:9, background:"#0f0a1a", padding:"10px 14px", display:"flex", alignItems:"center", gap:10 }}>
-                          <div style={{ width:28, height:28, borderRadius:7, background:"linear-gradient(135deg,#6d28d9,#2563eb)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:14, flexShrink:0 }}>✦</div>
-                          <div>
-                            <div style={{ fontSize:11, fontWeight:600, color:"#a78bfa", marginBottom:2 }}>Kadera AI</div>
-                            <div style={{ fontSize:10, color:"rgba(167,139,250,0.5)", lineHeight:1.4 }}>Ask anything about bids, providers, pipeline, and prospects</div>
-                          </div>
-                        </div>
-                      </div>
                     </div>
                   </div>
 
@@ -2327,11 +2327,6 @@ export default function Dashboard({ session }) {
             </div>
           )}
 
-          {tab === "ai" && token && (
-            <div className="fade-in">
-              <KaderaAI token={token} />
-            </div>
-          )}
         </div>
       </div>
     </>
