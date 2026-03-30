@@ -617,8 +617,12 @@ function Form470Modal({ token, appNum, onClose }) {
 
               {/* Service Request RFP Documents */}
               {(() => {
-                // Collect all services that have RFP docs — keep duplicates (one per line item)
-                const rfpServices = services.filter(s => s.rfp_documents?.url || s.rfp_document_url || s.rfp_url);
+                // Deduplicate by URL — one row per unique document
+                const rfpServices = [...new Map(
+                  services
+                    .filter(s => s.rfp_documents?.url || s.rfp_document_url || s.rfp_url)
+                    .map(s => [s.rfp_documents?.url || s.rfp_document_url || s.rfp_url, s])
+                ).values()];
                 if (!rfpServices.length) return null;
 
                 const getFilename = url => {
