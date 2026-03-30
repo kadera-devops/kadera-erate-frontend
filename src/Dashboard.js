@@ -978,16 +978,7 @@ function FRNStatusModal({ token, onClose }) {
       <div className="modal-box modal-box-sm">
         <div className="modal-hdr">
           <div><div className="modal-title">FRN Status Lookup</div><div className="modal-sub">Search by FRN, application #, BEN, or organization name</div></div>
-          <div style={{ display:"flex", alignItems:"center", gap:10 }}>
-              <span style={{ fontSize:11, fontWeight:500, color:"#64748b" }}>Funding Year</span>
-              <select value={ciYear} onChange={e => setCiYear(e.target.value)}
-                style={{ padding:"5px 10px", borderRadius:7, border:"1.5px solid #cbd5e1", fontSize:12, fontWeight:600, color:"#1e293b", background:"#fff", outline:"none", cursor:"pointer" }}>
-                {["2026","2025","2024","2023","2022","2021"].map(y => (
-                  <option key={y} value={y}>FY{y}</option>
-                ))}
-              </select>
-            </div>
-            <button className="modal-close" onClick={onClose}>✕ Close</button>
+          <button className="modal-close" onClick={onClose}>✕ Close</button>
         </div>
         <div style={{ padding:16, borderBottom:"1.5px solid #e2e8f0", display:"flex", gap:8 }}>
           <input className="inp" value={q} onChange={e => setQ(e.target.value)} onKeyDown={e => e.key==="Enter" && doSearch()} placeholder="FRN, app number, BEN, or org name..." />
@@ -1539,7 +1530,16 @@ function CompetitiveIntelModal({ token, onClose }) {
             <div className="modal-title">Competitive Intelligence</div>
             <div className="modal-sub">FY{ciYear} TX Commitments · {data ? `${data.total?.toLocaleString()} commitments` : ""}</div>
           </div>
-          <button className="modal-close" onClick={onClose}>✕ Close</button>
+          <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+            <span style={{ fontSize:11, fontWeight:500, color:"#64748b" }}>Funding Year</span>
+            <select value={ciYear} onChange={e => setCiYear(e.target.value)}
+              style={{ padding:"5px 10px", borderRadius:7, border:"1.5px solid #cbd5e1", fontSize:12, fontWeight:600, color:"#1e293b", background:"#fff", outline:"none", cursor:"pointer" }}>
+              {["2026","2025","2024","2023","2022","2021"].map(y => (
+                <option key={y} value={y}>FY{y}</option>
+              ))}
+            </select>
+            <button className="modal-close" onClick={onClose}>✕ Close</button>
+          </div>
         </div>
         <div className="tab-strip">
           {TABS.map(([key,label]) => (
