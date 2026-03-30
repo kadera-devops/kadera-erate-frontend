@@ -1791,25 +1791,60 @@ function CompetitiveIntelModal({ token, onClose }) {
 }
 
 function ProviderApplicants({ token, spinName }) {
-  const [data, setData]     = useState(null);
+  const [rows, setRows]       = useState([]);
   const [loading, setLoading] = useState(true);
+
   useEffect(() => {
     fetch(`${API_URL}/api/provider-applicants?spin_name=${encodeURIComponent(spinName)}`, { headers:{ Authorization:`Bearer ${token}` } })
-      .then(r => r.json()).then(d => { if (d.status==="success") setData(d.data); })
-      .catch(()=>{}).finally(()=>setLoading(false));
+      .then(r => r.json())
+      .then(d => {
+        if (d.status === "success") {
+          const sorted = (d.data || []).sort((a, b) => (b.commitment || 0) - (a.commitment || 0));
+          setRows(sorted);
+        }
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false));
   }, [token, spinName]);
+
   if (loading) return <Spinner />;
-  if (!data?.length) return <Empty title="No applicants found" />;
+  if (!rows.length) return <Empty title="No applicants found" />;
+
   return (
-    <>
-      {data.map((a, i) => (
-        <div key={i} style={{ display:"flex", alignItems:"center", padding:"7px 0", borderBottom:"1px solid #f1f5f9" }}>
-          <div style={{ flex:1, fontSize:11, fontWeight:500 }}>{a.name}</div>
-          <div style={{ fontSize:11, fontWeight:600, color:"#16a34a", marginLeft:12 }}>{fmt(a.total)}</div>
-          <div style={{ fontSize:10, color:"#94a3b8", marginLeft:12 }}>{a.count} FRN{a.count!==1?"s":""}</div>
-        </div>
-      ))}
-    </>
+    <div style={{ overflowX:"auto" }}>
+      <table style={{ width:"100%", borderCollapse:"collapse", fontSize:12 }}>
+        <thead>
+          <tr style={{ borderBottom:"1.5px solid #e2e8f0", background:"#f8fafc" }}>
+            <th style={{ padding:"8px 12px", textAlign:"left", fontSize:11, fontWeight:700, color:"#64748b" }}>Applicant</th>
+            <th style={{ padding:"8px 12px", textAlign:"left", fontSize:11, fontWeight:700, color:"#64748b" }}>Service Type</th>
+            <th style={{ padding:"8px 12px", textAlign:"right", fontSize:11, fontWeight:700, color:"#64748b" }}>Commitment</th>
+            <th style={{ padding:"8px 12px", textAlign:"left", fontSize:11, fontWeight:700, color:"#64748b" }}>Form 471</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((r, i) => (
+            <tr key={i} style={{ borderBottom:"1px solid #f1f5f9" }}
+              onMouseEnter={e => e.currentTarget.style.background="#f8fafc"}
+              onMouseLeave={e => e.currentTarget.style.background="transparent"}>
+              <td style={{ padding:"8px 12px", fontWeight:500, color:"#1e293b" }}>{r.organization || "—"}</td>
+              <td style={{ padding:"8px 12px", color:"#64748b" }}>{r.service_type || "—"}</td>
+              <td style={{ padding:"8px 12px", textAlign:"right", fontWeight:600, color:"#16a34a" }}>{r.commitment ? fmt(r.commitment) : "—"}</td>
+              <td style={{ padding:"8px 12px" }}>
+                <a href={`https://legacy.fundsforlearning.com/471/${r.application_number}`} target="_blank" rel="noreferrer"
+                  style={{ fontSize:11, color:"#2563eb", textDecoration:"none", fontWeight:600 }}
+                  onMouseEnter={e => e.currentTarget.style.textDecoration="underline"}
+                  onMouseLeave={e => e.currentTarget.style.textDecoration="none"}>
+                  View 471 ↗
+                </a>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <div style={{ fontSize:10, color:"#94a3b8", padding:"8px 12px", borderTop:"1px solid #f1f5f9" }}>
+        {rows.length} records
+      </div>
+    </div>
   );
 }
 
