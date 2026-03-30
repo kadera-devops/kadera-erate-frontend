@@ -1444,7 +1444,7 @@ function C2BudgetModal({ token, onClose }) {
 // ── C2 Prospects Modal ────────────────────────────────────────────────────────
 
 // ── ContactSearchModal — search 470s by school type OR vendor product ─────────
-function ContactSearchModal({ token, onClose }) {
+function ContactSearchModal({ token, onClose, onView470 }) {
   // School search
   const [keywords, setKeywords] = useState("");
   const [serviceCategory, setServiceCategory] = useState("ALL");
@@ -1596,14 +1596,12 @@ function ContactSearchModal({ token, onClose }) {
                             onMouseLeave={e => e.currentTarget.style.background="transparent"}>
                             <td style={{ padding:"8px 12px" }}>
                               {r.application_number
-                                ? <a href={`https://legacy.fundsforlearning.com/470/${r.application_number}`}
-                                    target="_blank" rel="noreferrer"
-                                    style={{ fontSize:11, fontWeight:600, color:"#2563eb", textDecoration:"none", whiteSpace:"nowrap" }}
+                                ? <button onClick={e => { e.stopPropagation(); onView470?.(String(r.application_number)); }}
+                                    style={{ background:"none", border:"none", fontSize:11, fontWeight:600, color:"#2563eb", cursor:"pointer", padding:0, textDecoration:"none", whiteSpace:"nowrap", fontFamily:"inherit" }}
                                     onMouseEnter={e => e.currentTarget.style.textDecoration="underline"}
-                                    onMouseLeave={e => e.currentTarget.style.textDecoration="none"}
-                                    onClick={e => e.stopPropagation()}>
+                                    onMouseLeave={e => e.currentTarget.style.textDecoration="none"}>
                                     View 470 ↗
-                                  </a>
+                                  </button>
                                 : <span style={{ color:"#94a3b8", fontSize:11 }}>—</span>}
                             </td>
                             <td style={{ padding:"8px 12px", fontWeight:600, color:"#1e293b", maxWidth:200, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }} title={r.billed_entity_name}>{r.billed_entity_name}</td>
@@ -2423,7 +2421,7 @@ export default function Dashboard({ session }) {
       {frnOpen       && token && <FRNStatusModal       token={token} onClose={() => setFrnOpen(false)} />}
       {form470App    && token && <Form470Modal          token={token} appNum={form470App} onClose={() => setForm470App(null)} />}
       {ciOpen        && token && <CompetitiveIntelModal token={token} onClose={() => setCiOpen(false)} />}
-      {contactOpen   && token && <ContactSearchModal token={token} onClose={() => setContactOpen(false)} />}
+      {contactOpen   && token && <ContactSearchModal token={token} onClose={() => setContactOpen(false)} onView470={setForm470App} />}
       {aiOpen        && token && (
         <div className="modal-backdrop" onClick={e => e.target===e.currentTarget && setAiOpen(false)}>
           <div className="modal-box" style={{ width:"min(880px,96vw)", maxHeight:"92vh", display:"flex", flexDirection:"column" }}>
