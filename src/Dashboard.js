@@ -1436,8 +1436,7 @@ function ContactSearchModal({ token, onClose }) {
   function exportVendorCSV() {
     if (!vendorResults?.data?.length) return;
     const cols = ["entity_name","ben","manufacturer","model","product","total_spend","tech_contact_name","tech_contact_email","tech_contact_phone","service_category","application_status","bid_due_date"];
-    const csv  = [cols.join(","), ...vendorResults.data.map(r => cols.map(k => `"${(r[k]||"").toString().replace(/"/g,'""')}"`).join(","))].join("
-");
+    const csv  = [cols.join(","), ...vendorResults.data.map(r => cols.map(k => `"${(r[k]||"").toString().replace(/"/g,'""')}"`).join(","))].join("\n");
     const url  = URL.createObjectURL(new Blob([csv], { type:"text/csv" }));
     const a    = document.createElement("a"); a.href=url; a.download=`kadera-vendor-contacts-${Date.now()}.csv`; a.click();
   }
