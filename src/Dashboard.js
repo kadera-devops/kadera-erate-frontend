@@ -2119,7 +2119,7 @@ export default function Dashboard({ session }) {
           <div style={{ display:"flex", gap:2 }}>
             {[["dashboard","Dashboard"],["search","Search"],["tags",`★ My Tags${tagCount ? ` (${tagCount})` : ""}`],["ai","✦ Kadera AI"]].map(([key,label]) => (
               <button key={key} onClick={() => setTab(key)}
-                style={{ padding:"6px 16px", borderRadius:6, border:"none", background: tab===key ? "rgba(37,99,235,0.3)" : "transparent", color: key==="tags" ? "#fbbf24" : key==="ai" ? (tab===key ? "#a78bfa" : "#7c3aed") : tab===key ? "#93b4fd" : "rgba(255,255,255,0.5)", background: tab===key ? (key==="ai" ? "rgba(124,58,237,0.2)" : "rgba(37,99,235,0.3)") : "transparent", fontSize:12, fontWeight:500, cursor:"pointer" }}>
+                style={{ padding:"6px 16px", borderRadius:6, border:"none", background: tab===key ? (key==="ai" ? "rgba(124,58,237,0.2)" : "rgba(37,99,235,0.3)") : "transparent", color: key==="tags" ? "#fbbf24" : key==="ai" ? (tab===key ? "#a78bfa" : "#7c3aed") : tab===key ? "#93b4fd" : "rgba(255,255,255,0.5)", fontSize:12, fontWeight:500, cursor:"pointer" }}>
                 {label}
               </button>
             ))}
