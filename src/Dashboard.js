@@ -1546,28 +1546,34 @@ function CompetitiveIntelModal({ token, onClose }) {
               {/* TOP 25 PROVIDERS */}
               {view === "providers" && (
                 <>
-                  {data.top_providers?.map((p, i) => (
-                    <div key={i} style={{ display:"flex", alignItems:"center", gap:12, padding:"8px 0", borderBottom:"1px solid #f1f5f9", cursor:"pointer" }}
-                      onClick={() => setProviderPopup(providerPopup?.name===p.name ? null : p)}>
-                      <div style={{ width:24, textAlign:"right", fontFamily:"'Aldrich',sans-serif", fontSize:11, color:"#94a3b8" }}>#{i+1}</div>
-                      <div style={{ flex:1 }}>
-                        <div style={{ display:"flex", justifyContent:"space-between", marginBottom:4 }}>
-                          <span style={{ fontSize:12, fontWeight:500, color:"#1e293b" }}>{p.name}</span>
-                          <span style={{ fontSize:11, fontWeight:600, color:"#2563eb" }}>{fmt(p.total)}</span>
+                  {data.top_providers?.map((p, i) => {
+                    const isOpen = providerPopup?.name === p.name;
+                    return (
+                      <div key={i}>
+                        <div style={{ display:"flex", alignItems:"center", gap:12, padding:"8px 0", borderBottom: isOpen ? "none" : "1px solid #f1f5f9", cursor:"pointer",
+                          background: isOpen ? "#eff6ff" : "transparent" }}
+                          onClick={() => setProviderPopup(isOpen ? null : p)}>
+                          <div style={{ width:24, textAlign:"right", fontFamily:"'Aldrich',sans-serif", fontSize:11, color:"#94a3b8" }}>#{i+1}</div>
+                          <div style={{ flex:1 }}>
+                            <div style={{ display:"flex", justifyContent:"space-between", marginBottom:4 }}>
+                              <span style={{ fontSize:12, fontWeight:600, color: isOpen ? "#2563eb" : "#1e293b" }}>{p.name}</span>
+                              <span style={{ fontSize:11, fontWeight:600, color:"#2563eb" }}>{fmt(p.total)}</span>
+                            </div>
+                            <div style={{ height:6, background:"#f1f5f9", borderRadius:99, overflow:"hidden" }}>
+                              <div style={{ width:`${Math.round((p.total/maxProv)*100)}%`, height:"100%", background:"linear-gradient(90deg,#93b4fd,#2563eb)", borderRadius:99 }}/>
+                            </div>
+                            <div style={{ fontSize:10, color:"#94a3b8", marginTop:3 }}>{p.count} FRNs · {p.orgs} organizations</div>
+                          </div>
+                          <span style={{ fontSize:12, color:"#94a3b8" }}>{isOpen ? "▲" : "▼"}</span>
                         </div>
-                        <div style={{ height:6, background:"#f1f5f9", borderRadius:99, overflow:"hidden" }}>
-                          <div style={{ width:`${Math.round((p.total/maxProv)*100)}%`, height:"100%", background:"linear-gradient(90deg,#93b4fd,#2563eb)", borderRadius:99 }}/>
-                        </div>
-                        <div style={{ fontSize:10, color:"#94a3b8", marginTop:3 }}>{p.count} FRNs · {p.orgs} organizations</div>
+                        {isOpen && (
+                          <div style={{ background:"#f8fafc", borderBottom:"1.5px solid #e2e8f0", padding:"12px 0 12px 36px" }}>
+                            <ProviderApplicants token={token} spinName={p.name} />
+                          </div>
+                        )}
                       </div>
-                    </div>
-                  ))}
-                  {providerPopup && (
-                    <div style={{ marginTop:16, background:"#f8fafc", border:"1.5px solid #e2e8f0", borderRadius:10, padding:16 }}>
-                      <div style={{ fontSize:12, fontWeight:600, color:"#1e293b", marginBottom:12 }}>{providerPopup.name} — Applicants</div>
-                      <ProviderApplicants token={token} spinName={providerPopup.name} />
-                    </div>
-                  )}
+                    );
+                  })}
                 </>
               )}
 
@@ -1798,12 +1804,14 @@ function ProviderApplicants({ token, spinName }) {
     fetch(`${API_URL}/api/provider-applicants?spin_name=${encodeURIComponent(spinName)}`, { headers:{ Authorization:`Bearer ${token}` } })
       .then(r => r.json())
       .then(d => {
+        console.log("provider-applicants raw response:", JSON.stringify(d).slice(0, 500));
         if (d.status === "success") {
           const sorted = (d.data || []).sort((a, b) => (b.commitment || 0) - (a.commitment || 0));
+          console.log("first row:", sorted[0]);
           setRows(sorted);
         }
       })
-      .catch(() => {})
+      .catch(err => console.error("provider-applicants error:", err))
       .finally(() => setLoading(false));
   }, [token, spinName]);
 
