@@ -978,7 +978,16 @@ function FRNStatusModal({ token, onClose }) {
       <div className="modal-box modal-box-sm">
         <div className="modal-hdr">
           <div><div className="modal-title">FRN Status Lookup</div><div className="modal-sub">Search by FRN, application #, BEN, or organization name</div></div>
-          <button className="modal-close" onClick={onClose}>✕ Close</button>
+          <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+              <span style={{ fontSize:11, fontWeight:500, color:"#64748b" }}>Funding Year</span>
+              <select value={ciYear} onChange={e => setCiYear(e.target.value)}
+                style={{ padding:"5px 10px", borderRadius:7, border:"1.5px solid #cbd5e1", fontSize:12, fontWeight:600, color:"#1e293b", background:"#fff", outline:"none", cursor:"pointer" }}>
+                {["2026","2025","2024","2023","2022","2021"].map(y => (
+                  <option key={y} value={y}>FY{y}</option>
+                ))}
+              </select>
+            </div>
+            <button className="modal-close" onClick={onClose}>✕ Close</button>
         </div>
         <div style={{ padding:16, borderBottom:"1.5px solid #e2e8f0", display:"flex", gap:8 }}>
           <input className="inp" value={q} onChange={e => setQ(e.target.value)} onKeyDown={e => e.key==="Enter" && doSearch()} placeholder="FRN, app number, BEN, or org name..." />
@@ -1451,6 +1460,7 @@ function CompetitiveIntelModal({ token, onClose }) {
   const [view, setView]         = useState("providers");
   const [mfrMetric, setMfrMetric] = useState("count");
   const [providerPopup, setProviderPopup] = useState(null);
+  const [ciYear, setCiYear]           = useState("2026");
   const [partQuery, setPartQuery]   = useState("");
   const [partResults, setPartResults] = useState([]);
   const [partLoading, setPartLoading] = useState(false);
@@ -1468,10 +1478,11 @@ function CompetitiveIntelModal({ token, onClose }) {
 
   useEffect(() => {
     if (!token) return;
-    fetch(`${API_URL}/api/competitive-intel`, { headers:{ Authorization:`Bearer ${token}` } })
+    setLoading(true); setData(null); setProviderPopup(null);
+    fetch(`${API_URL}/api/competitive-intel?funding_year=${ciYear}`, { headers:{ Authorization:`Bearer ${token}` } })
       .then(r => r.json()).then(d => { if (d.status === "success") setData(d.data); })
       .catch(() => {}).finally(() => setLoading(false));
-  }, [token]);
+  }, [token, ciYear]);
 
   async function doPartSearch() {
     if (!partQuery.trim() || partQuery.trim().length < 2) return;
@@ -1526,7 +1537,7 @@ function CompetitiveIntelModal({ token, onClose }) {
         <div className="modal-hdr">
           <div>
             <div className="modal-title">Competitive Intelligence</div>
-            <div className="modal-sub">FY2026 TX Commitments · FY2025 Line Items · {data ? `${data.total?.toLocaleString()} commitments` : ""}</div>
+            <div className="modal-sub">FY{ciYear} TX Commitments · {data ? `${data.total?.toLocaleString()} commitments` : ""}</div>
           </div>
           <button className="modal-close" onClick={onClose}>✕ Close</button>
         </div>
@@ -1568,7 +1579,7 @@ function CompetitiveIntelModal({ token, onClose }) {
                         </div>
                         {isOpen && (
                           <div style={{ background:"#f8fafc", borderBottom:"1.5px solid #e2e8f0", padding:"12px 0 12px 36px" }}>
-                            <ProviderApplicants token={token} spinName={p.name} />
+                            <ProviderApplicants token={token} spinName={p.name} year={ciYear} />
                           </div>
                         )}
                       </div>
@@ -1796,14 +1807,14 @@ function CompetitiveIntelModal({ token, onClose }) {
   );
 }
 
-function ProviderApplicants({ token, spinName }) {
+function ProviderApplicants({ token, spinName, year }) {
   const [rows, setRows]       = useState([]);
   const [loading, setLoading] = useState(true);
   const [err, setErr]         = useState("");
 
   useEffect(() => {
     if (!token || !spinName) return;
-    fetch(`${API_URL}/api/provider-applicants?spin_name=${encodeURIComponent(spinName)}`, {
+    fetch(`${API_URL}/api/provider-applicants?spin_name=${encodeURIComponent(spinName)}&funding_year=${year || "2026"}`, {
       headers:{ Authorization:`Bearer ${token}` }
     })
       .then(r => r.json())
@@ -1823,7 +1834,7 @@ function ProviderApplicants({ token, spinName }) {
       })
       .catch(e => setErr(e.message))
       .finally(() => setLoading(false));
-  }, [token, spinName]);
+  }, [token, spinName, year]);
 
   if (loading) return <Spinner />;
   if (err)     return <div style={{ fontSize:12, color:"#dc2626", padding:8 }}>⚠ {err}</div>;
