@@ -1367,6 +1367,302 @@ function C2BudgetModal({ token, onClose }) {
 
 
 // ── C2 Prospects Modal ────────────────────────────────────────────────────────
+
+// ── ContactSearchModal — search 470s by school type OR vendor product ─────────
+function ContactSearchModal({ token, onClose }) {
+  const [tab, setTab]           = useState("school");
+  // School search
+  const [keywords, setKeywords] = useState("");
+  const [serviceCategory, setServiceCategory] = useState("ALL");
+  const [results, setResults]   = useState(null);
+  const [loading, setLoading]   = useState(false);
+  const [error, setError]       = useState("");
+  // Vendor search
+  const [vendorKw, setVendorKw]       = useState("");
+  const [vendorResults, setVendorResults] = useState(null);
+  const [vendorLoading, setVendorLoading] = useState(false);
+  const [vendorError, setVendorError]     = useState("");
+
+  const PRESETS = ["Private", "Charter", "Christian", "Catholic", "Baptist", "Independent", "Academy", "Montessori"];
+
+  async function doSearch() {
+    const kw = keywords.trim();
+    if (!kw) return;
+    setLoading(true); setError(""); setResults(null);
+    try {
+      const params = new URLSearchParams({ keywords: kw, funding_year:"2026", limit:500 });
+      if (serviceCategory !== "ALL") params.set("service_category", serviceCategory);
+      const res  = await fetch(`${API_URL}/api/contact-search?${params}`, { headers:{ Authorization:`Bearer ${token}` } });
+      const json = await res.json();
+      if (json.status === "success") setResults(json);
+      else setError(json.message || "Search failed");
+    } catch { setError("Connection error"); }
+    setLoading(false);
+  }
+
+  function exportCSV() {
+    if (!results?.data?.length) return;
+    const cols = ["billed_entity_name","billed_entity_number","state","service_category","application_status","bid_due_date","tech_contact_name","tech_contact_email","tech_contact_phone","application_number"];
+    const csv  = [cols.join(","), ...results.data.map(r => cols.map(k => `"${(r[k]||"").toString().replace(/"/g,'""')}"`).join(","))].join("\n");
+    const url  = URL.createObjectURL(new Blob([csv], { type:"text/csv" }));
+    const a    = document.createElement("a"); a.href=url; a.download=`kadera-contacts-${Date.now()}.csv`; a.click();
+  }
+
+  function toggleKeyword(word) {
+    const parts = keywords.split(",").map(k => k.trim()).filter(Boolean);
+    const idx   = parts.findIndex(p => p.toLowerCase() === word.toLowerCase());
+    if (idx >= 0) parts.splice(idx, 1);
+    else parts.push(word);
+    setKeywords(parts.join(", "));
+  }
+
+  function isActive(word) {
+    return keywords.split(",").map(k => k.trim().toLowerCase()).includes(word.toLowerCase());
+  }
+
+  async function doVendorSearch() {
+    const kw = vendorKw.trim();
+    if (!kw || kw.length < 2) return;
+    setVendorLoading(true); setVendorError(""); setVendorResults(null);
+    try {
+      const res  = await fetch(`${API_URL}/api/vendor-contacts?keyword=${encodeURIComponent(kw)}&limit=300`, { headers:{ Authorization:`Bearer ${token}` } });
+      const json = await res.json();
+      if (json.status === "success") setVendorResults(json);
+      else setVendorError(json.message || "Search failed");
+    } catch { setVendorError("Connection error"); }
+    setVendorLoading(false);
+  }
+
+  function exportVendorCSV() {
+    if (!vendorResults?.data?.length) return;
+    const cols = ["entity_name","ben","manufacturer","model","product","total_spend","tech_contact_name","tech_contact_email","tech_contact_phone","service_category","application_status","bid_due_date"];
+    const csv  = [cols.join(","), ...vendorResults.data.map(r => cols.map(k => `"${(r[k]||"").toString().replace(/"/g,'""')}"`).join(","))].join("
+");
+    const url  = URL.createObjectURL(new Blob([csv], { type:"text/csv" }));
+    const a    = document.createElement("a"); a.href=url; a.download=`kadera-vendor-contacts-${Date.now()}.csv`; a.click();
+  }
+
+  return (
+    <div className="modal-backdrop" onClick={e => e.target===e.currentTarget && onClose()}>
+      <div className="modal-box" style={{ width:"min(1000px,96vw)" }}>
+        <div className="modal-hdr">
+          <div>
+            <div className="modal-title">Contact Search</div>
+            <div className="modal-sub">{tab==="school" ? "Find contacts by school type on FY2026 Form 470s" : "Find contacts who bought a specific product or brand"}</div>
+          </div>
+          <button className="modal-close" onClick={onClose}>✕ Close</button>
+        </div>
+
+        {/* Tabs */}
+        <div className="tab-strip">
+          <button className={`tab-btn ${tab==="school"?"active":""}`} onClick={() => setTab("school")}>🏫 School Type Search</button>
+          <button className={`tab-btn ${tab==="vendor"?"active":""}`} onClick={() => setTab("vendor")}>🔍 Vendor / Product Search</button>
+        </div>
+
+        {/* School search controls */}
+        {tab === "school" && <div style={{ padding:"14px 20px", borderBottom:"1.5px solid #e2e8f0", background:"#f8fafc" }}>
+          {/* Preset chips */}
+          <div style={{ display:"flex", gap:6, flexWrap:"wrap", marginBottom:10 }}>
+            {PRESETS.map(w => (
+              <button key={w} onClick={() => toggleKeyword(w)}
+                style={{ padding:"3px 10px", borderRadius:99, border:`1.5px solid ${isActive(w) ? "#2563eb" : "#cbd5e1"}`, background: isActive(w) ? "#eff6ff" : "#fff", color: isActive(w) ? "#2563eb" : "#64748b", fontSize:11, fontWeight:600, cursor:"pointer", fontFamily:"inherit" }}>
+                {w}
+              </button>
+            ))}
+          </div>
+          {/* Search row */}
+          <div style={{ display:"flex", gap:8, alignItems:"flex-end" }}>
+            <div style={{ flex:1 }}>
+              <div style={{ fontSize:10, fontWeight:600, color:"#64748b", marginBottom:4, letterSpacing:0.3 }}>KEYWORDS (comma-separated)</div>
+              <input className="inp" value={keywords} onChange={e => setKeywords(e.target.value)}
+                onKeyDown={e => e.key==="Enter" && doSearch()}
+                placeholder='e.g. "Private, Charter, Christian"' />
+            </div>
+            <div style={{ width:180 }}>
+              <div style={{ fontSize:10, fontWeight:600, color:"#64748b", marginBottom:4, letterSpacing:0.3 }}>SERVICE CATEGORY</div>
+              <select className="inp" value={serviceCategory} onChange={e => setServiceCategory(e.target.value)}>
+                <option value="ALL">All Categories</option>
+                <option value="Internal Connections">Internal Connections</option>
+                <option value="Basic Maintenance">Basic Maintenance</option>
+                <option value="Internet">Internet Access</option>
+                <option value="Telecommunications">Telecommunications</option>
+              </select>
+            </div>
+            <button className="btn btn-primary" onClick={doSearch} disabled={loading || !keywords.trim()}>
+              {loading ? "Searching..." : "Search →"}
+            </button>
+          </div>
+          {error && <div style={{ marginTop:8, fontSize:11, color:"#dc2626" }}>⚠ {error}</div>}
+        </div>}
+
+        {/* Vendor search controls */}
+        {tab === "vendor" && (
+          <div style={{ padding:"14px 20px", borderBottom:"1.5px solid #e2e8f0", background:"#f8fafc" }}>
+            <div style={{ fontSize:11, color:"#64748b", marginBottom:10, lineHeight:1.5 }}>
+              Search FY2025 TX E-Rate line items by manufacturer or product. Results are matched to FY2026 Form 470 technical contacts for outreach.
+            </div>
+            <div style={{ display:"flex", gap:8, alignItems:"flex-end" }}>
+              <div style={{ flex:1 }}>
+                <div style={{ fontSize:10, fontWeight:600, color:"#64748b", marginBottom:4, letterSpacing:0.3 }}>MANUFACTURER OR PRODUCT</div>
+                <input className="inp" value={vendorKw} onChange={e => setVendorKw(e.target.value)}
+                  onKeyDown={e => e.key==="Enter" && doVendorSearch()}
+                  placeholder='e.g. "Ubiquiti", "Cisco Meraki", "Aruba", "AP-635"' />
+              </div>
+              <button className="btn btn-primary" onClick={doVendorSearch} disabled={vendorLoading || !vendorKw.trim()}>
+                {vendorLoading ? "Searching..." : "Search →"}
+              </button>
+            </div>
+            {vendorError && <div style={{ marginTop:8, fontSize:11, color:"#dc2626" }}>⚠ {vendorError}</div>}
+          </div>
+        )}
+
+        {/* Results */}
+        <div className="modal-body">
+          {/* School results */}
+          {tab === "school" && !results && !loading && (
+            <div style={{ padding:"48px", textAlign:"center", fontSize:13, color:"#94a3b8" }}>
+              Select school types above or type keywords to find technical contacts
+            </div>
+          )}
+          {tab === "school" && loading && <Spinner />}
+          {tab === "vendor" && vendorLoading && <Spinner />}
+          {tab === "vendor" && !vendorResults && !vendorLoading && (
+            <div style={{ padding:"48px", textAlign:"center", fontSize:13, color:"#94a3b8" }}>
+              Search for a manufacturer or product to find contacts who purchased it
+            </div>
+          )}
+          {tab === "vendor" && vendorResults && (
+            <>
+              <div style={{ padding:"10px 20px", borderBottom:"1.5px solid #e2e8f0", background:"#f8fafc", display:"flex", alignItems:"center", justifyContent:"space-between" }}>
+                <span style={{ fontSize:12, fontWeight:600, color:"#334155" }}>
+                  {vendorResults.count} contacts found
+                  <span style={{ fontWeight:400, color:"#94a3b8", marginLeft:6 }}>from {vendorResults.raw_line_items} "{vendorResults.keyword}" line items in FY2025 TX</span>
+                </span>
+                {vendorResults.count > 0 && (
+                  <button className="btn btn-sm" onClick={exportVendorCSV} style={{ color:"#16a34a", borderColor:"#86efac" }}>↓ Export CSV</button>
+                )}
+              </div>
+              {vendorResults.count === 0 ? (
+                <div style={{ padding:"48px", textAlign:"center", fontSize:13, color:"#94a3b8" }}>No matches found — try a different keyword</div>
+              ) : (
+                <div style={{ overflowX:"auto" }}>
+                  <table style={{ width:"100%", borderCollapse:"collapse", fontSize:12 }}>
+                    <thead>
+                      <tr style={{ background:"#f8fafc", borderBottom:"1.5px solid #e2e8f0" }}>
+                        {["Entity","BEN","Manufacturer","Model / Product","Spend (FY25)","Contact Name","Email","Phone","Status"].map(h => (
+                          <th key={h} style={{ padding:"8px 12px", textAlign:"left", fontSize:10, fontWeight:700, color:"#64748b", whiteSpace:"nowrap" }}>{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {vendorResults.data.map((r, i) => (
+                        <tr key={i} style={{ borderBottom:"1px solid #f1f5f9" }}
+                          onMouseEnter={e => e.currentTarget.style.background="#f8fafc"}
+                          onMouseLeave={e => e.currentTarget.style.background="transparent"}>
+                          <td style={{ padding:"8px 12px", fontWeight:600, color:"#1e293b", maxWidth:180, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }} title={r.entity_name}>{r.entity_name}</td>
+                          <td style={{ padding:"8px 12px", color:"#2563eb", fontWeight:500 }}>{r.ben||"—"}</td>
+                          <td style={{ padding:"8px 12px", color:"#7c3aed", fontWeight:500 }}>{r.manufacturer||"—"}</td>
+                          <td style={{ padding:"8px 12px", color:"#64748b", maxWidth:160, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }} title={r.model||r.product}>{r.model||r.product||"—"}</td>
+                          <td style={{ padding:"8px 12px", fontWeight:600, color:"#16a34a" }}>{r.total_spend ? fmt(r.total_spend) : "—"}</td>
+                          <td style={{ padding:"8px 12px", fontWeight:500, color:"#1e293b", whiteSpace:"nowrap" }}>{r.tech_contact_name||"—"}</td>
+                          <td style={{ padding:"8px 12px" }}>
+                            {r.tech_contact_email
+                              ? <a href={`mailto:${r.tech_contact_email}`} style={{ color:"#2563eb", textDecoration:"none", fontSize:11 }} onClick={e => e.stopPropagation()}>{r.tech_contact_email}</a>
+                              : <span style={{ color:"#94a3b8" }}>—</span>}
+                          </td>
+                          <td style={{ padding:"8px 12px", color:"#334155", whiteSpace:"nowrap" }}>{r.tech_contact_phone||"—"}</td>
+                          <td style={{ padding:"8px 12px" }}>
+                            <span style={{ fontSize:10, fontWeight:700, padding:"2px 7px", borderRadius:4,
+                              background:(r.application_status||"").toLowerCase().includes("certif")?"#dcfce7":"#f1f5f9",
+                              color:(r.application_status||"").toLowerCase().includes("certif")?"#15803d":"#64748b" }}>
+                              {r.application_status||"—"}
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </>
+          )}
+          {tab === "school" && loading && <Spinner />}
+          {results && (
+            <>
+              {/* Summary bar */}
+              <div style={{ padding:"10px 20px", borderBottom:"1.5px solid #e2e8f0", background:"#f8fafc", display:"flex", alignItems:"center", justifyContent:"space-between" }}>
+                <span style={{ fontSize:12, fontWeight:600, color:"#334155" }}>
+                  {results.count} entities found
+                  <span style={{ fontWeight:400, color:"#94a3b8", marginLeft:6 }}>with contacts on FY2026 Form 470s</span>
+                </span>
+                {results.count > 0 && (
+                  <button className="btn btn-sm" onClick={exportCSV} style={{ color:"#16a34a", borderColor:"#86efac" }}>↓ Export CSV</button>
+                )}
+              </div>
+
+              {results.count === 0 ? (
+                <div style={{ padding:"48px", textAlign:"center", fontSize:13, color:"#94a3b8" }}>
+                  No results — try different keywords
+                </div>
+              ) : (
+                <div style={{ overflowX:"auto" }}>
+                  <table style={{ width:"100%", borderCollapse:"collapse", fontSize:12 }}>
+                    <thead>
+                      <tr style={{ background:"#f8fafc", borderBottom:"1.5px solid #e2e8f0" }}>
+                        {["Entity","BEN","Service Category","Status","Bid Due","Contact Name","Email","Phone","App #"].map(h => (
+                          <th key={h} style={{ padding:"8px 12px", textAlign:"left", fontSize:10, fontWeight:700, color:"#64748b", whiteSpace:"nowrap" }}>{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {results.data.map((r, i) => {
+                        const days = r.bid_due_date ? Math.ceil((new Date(r.bid_due_date)-new Date())/(1000*60*60*24)) : null;
+                        return (
+                          <tr key={i} style={{ borderBottom:"1px solid #f1f5f9" }}
+                            onMouseEnter={e => e.currentTarget.style.background="#f8fafc"}
+                            onMouseLeave={e => e.currentTarget.style.background="transparent"}>
+                            <td style={{ padding:"8px 12px", fontWeight:600, color:"#1e293b", maxWidth:200, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }} title={r.billed_entity_name}>{r.billed_entity_name}</td>
+                            <td style={{ padding:"8px 12px", color:"#2563eb", fontWeight:500 }}>{r.billed_entity_number||"—"}</td>
+                            <td style={{ padding:"8px 12px", color:"#64748b", whiteSpace:"nowrap" }}>{r.service_category||"—"}</td>
+                            <td style={{ padding:"8px 12px" }}>
+                              <span style={{ fontSize:10, fontWeight:700, padding:"2px 7px", borderRadius:4,
+                                background: (r.application_status||"").toLowerCase().includes("certif") ? "#dcfce7" : "#f1f5f9",
+                                color: (r.application_status||"").toLowerCase().includes("certif") ? "#15803d" : "#64748b" }}>
+                                {r.application_status||"—"}
+                              </span>
+                            </td>
+                            <td style={{ padding:"8px 12px", color: days!=null&&days<=7 ? "#dc2626" : "#334155", fontWeight: days!=null&&days<=7 ? 600 : 400, whiteSpace:"nowrap" }}>
+                              {r.bid_due_date ? new Date(r.bid_due_date).toLocaleDateString() : "—"}
+                              {days!=null&&days>=0&&days<=7 && <span style={{ fontSize:9, marginLeft:4, color:"#dc2626" }}>({days}d)</span>}
+                            </td>
+                            <td style={{ padding:"8px 12px", fontWeight:500, color:"#1e293b", whiteSpace:"nowrap" }}>{r.tech_contact_name||"—"}</td>
+                            <td style={{ padding:"8px 12px" }}>
+                              {r.tech_contact_email
+                                ? <a href={`mailto:${r.tech_contact_email}`} style={{ color:"#2563eb", textDecoration:"none", fontSize:11 }} onClick={e => e.stopPropagation()}>{r.tech_contact_email}</a>
+                                : <span style={{ color:"#94a3b8" }}>—</span>}
+                            </td>
+                            <td style={{ padding:"8px 12px", color:"#334155", whiteSpace:"nowrap" }}>{r.tech_contact_phone||"—"}</td>
+                            <td style={{ padding:"8px 12px" }}>
+                              <span style={{ fontSize:11, color:"#2563eb", fontWeight:500, cursor:"pointer" }}
+                                onClick={() => window.open(`https://legacy.fundsforlearning.com/470/${r.application_number}`,"_blank")}>
+                                {r.application_number} ↗
+                              </span>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function C2ProspectsModal({ token, onClose }) {
   const [results, setResults]   = useState([]);
   const [loading, setLoading]   = useState(false);
@@ -2074,6 +2370,7 @@ export default function Dashboard({ session }) {
   const [form470App, setForm470App] = useState(null); // app number for 470 detail modal
   const [ciOpen, setCiOpen]     = useState(false);
   const [aiOpen, setAiOpen]     = useState(false);
+  const [contactOpen, setContactOpen] = useState(false);
   const [c2Open, setC2Open]     = useState(false);
   const [entityOpen, setEntityOpen]     = useState(false);
   const [prospectsOpen, setProspectsOpen] = useState(false);
@@ -2136,6 +2433,7 @@ export default function Dashboard({ session }) {
       {frnOpen       && token && <FRNStatusModal       token={token} onClose={() => setFrnOpen(false)} />}
       {form470App    && token && <Form470Modal          token={token} appNum={form470App} onClose={() => setForm470App(null)} />}
       {ciOpen        && token && <CompetitiveIntelModal token={token} onClose={() => setCiOpen(false)} />}
+      {contactOpen   && token && <ContactSearchModal token={token} onClose={() => setContactOpen(false)} />}
       {aiOpen        && token && (
         <div className="modal-backdrop" onClick={e => e.target===e.currentTarget && setAiOpen(false)}>
           <div className="modal-box" style={{ width:"min(880px,96vw)", maxHeight:"92vh", display:"flex", flexDirection:"column" }}>
@@ -2245,6 +2543,10 @@ export default function Dashboard({ session }) {
                       <button className="tool-btn green" style={{ gridColumn:"span 2" }} onClick={() => setProspectsOpen(true)}>
                         <div style={{ fontSize:11, fontWeight:600, color:"#16a34a", marginBottom:3 }}>🎯 C2 Prospect Finder</div>
                         <div style={{ fontSize:10, color:"#64748b", lineHeight:1.4 }}>TX schools with available C2 budget and no FY2026 Form 470 filed</div>
+                      </button>
+                      <button className="tool-btn" style={{ gridColumn:"span 2" }} onClick={() => setContactOpen(true)}>
+                        <div style={{ fontSize:11, fontWeight:600, color:"#2563eb", marginBottom:3 }}>📋 Contact Search</div>
+                        <div style={{ fontSize:10, color:"#94a3b8", lineHeight:1.4 }}>Find technical contacts on FY2026 470s by school type — Private, Charter, Christian, and more</div>
                       </button>
                     </div>
                   </div>
