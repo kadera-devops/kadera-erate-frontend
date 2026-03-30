@@ -1582,7 +1582,7 @@ function ContactSearchModal({ token, onClose }) {
                   <table style={{ width:"100%", borderCollapse:"collapse", fontSize:12 }}>
                     <thead>
                       <tr style={{ background:"#f8fafc", borderBottom:"1.5px solid #e2e8f0" }}>
-                        {["Entity","BEN","Service Category",product.trim()?"Matched Services":"Status","Bid Due","Contact Name","Email","Phone","View 470"].map(h => (
+                        {["View 470","Entity","BEN","Service Category",product.trim()?"Matched Services":"Status","Bid Due","Contact Name","Email","Phone"].map(h => (
                           <th key={h} style={{ padding:"8px 12px", textAlign:"left", fontSize:10, fontWeight:700, color:"#64748b", whiteSpace:"nowrap" }}>{h}</th>
                         ))}
                       </tr>
@@ -1594,6 +1594,18 @@ function ContactSearchModal({ token, onClose }) {
                           <tr key={i} style={{ borderBottom:"1px solid #f1f5f9" }}
                             onMouseEnter={e => e.currentTarget.style.background="#f8fafc"}
                             onMouseLeave={e => e.currentTarget.style.background="transparent"}>
+                            <td style={{ padding:"8px 12px" }}>
+                              {r.application_number
+                                ? <a href={`https://legacy.fundsforlearning.com/470/${r.application_number}`}
+                                    target="_blank" rel="noreferrer"
+                                    style={{ fontSize:11, fontWeight:600, color:"#2563eb", textDecoration:"none", whiteSpace:"nowrap" }}
+                                    onMouseEnter={e => e.currentTarget.style.textDecoration="underline"}
+                                    onMouseLeave={e => e.currentTarget.style.textDecoration="none"}
+                                    onClick={e => e.stopPropagation()}>
+                                    View 470 ↗
+                                  </a>
+                                : <span style={{ color:"#94a3b8", fontSize:11 }}>—</span>}
+                            </td>
                             <td style={{ padding:"8px 12px", fontWeight:600, color:"#1e293b", maxWidth:200, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }} title={r.billed_entity_name}>{r.billed_entity_name}</td>
                             <td style={{ padding:"8px 12px", color:"#2563eb", fontWeight:500 }}>{r.billed_entity_number||"—"}</td>
                             <td style={{ padding:"8px 12px", color:"#64748b", whiteSpace:"nowrap" }}>{r.service_category||"—"}</td>
@@ -1625,25 +1637,7 @@ function ContactSearchModal({ token, onClose }) {
                                 : <span style={{ color:"#94a3b8" }}>—</span>}
                             </td>
                             <td style={{ padding:"8px 12px", color:"#334155", whiteSpace:"nowrap" }}>{r.tech_contact_phone||"—"}</td>
-                            <td style={{ padding:"8px 12px" }}>
-                              {r.application_number ? (
-                                <div style={{ display:"flex", flexDirection:"column", gap:3 }}>
-                                  <a href={`https://legacy.fundsforlearning.com/470/${r.application_number}`}
-                                    target="_blank" rel="noreferrer"
-                                    style={{ fontSize:11, fontWeight:600, color:"#2563eb", textDecoration:"none", whiteSpace:"nowrap" }}
-                                    onMouseEnter={e => e.currentTarget.style.textDecoration="underline"}
-                                    onMouseLeave={e => e.currentTarget.style.textDecoration="none"}
-                                    onClick={e => e.stopPropagation()}>
-                                    View 470 ↗
-                                  </a>
-                                  <span style={{ fontSize:10, color:"#94a3b8" }}>{r.application_number}</span>
-                                </div>
-                              ) : (
-                                r.matched_services?.length ? (
-                                  <span style={{ fontSize:10, color:"#94a3b8" }}>No local record</span>
-                                ) : "—"
-                              )}
-                            </td>
+
                           </tr>
                         );
                       })}
