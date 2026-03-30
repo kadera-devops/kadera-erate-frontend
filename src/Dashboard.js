@@ -615,33 +615,65 @@ function Form470Modal({ token, appNum, onClose }) {
                 </Sec>
               )}
 
-              {/* Generated Documents */}
+              {/* Service Request RFP Documents */}
               {(() => {
-                const rfpDocs = [...new Map(
-                  services
-                    .filter(s => s.rfp_documents?.url || s.rfp_document_url || s.rfp_url)
-                    .map(s => ({ url: s.rfp_documents?.url || s.rfp_document_url || s.rfp_url, label: s.service_type || s.service_type_name || s.type_of_service || "RFP Document" }))
-                    .map(d => [d.url, d])
-                ).values()];
-                return (
-                  <Sec title="Generated Documents">
-                    {rfpDocs.length === 0 && (
-                      <div style={{ fontSize:12, color:"#94a3b8", padding:"8px 0" }}>No RFP documents associated with this Form 470.</div>
-                    )}
-                    {rfpDocs.map((doc, i) => (
-                      <a key={i} href={doc.url} target="_blank" rel="noreferrer"
-                        style={{ display:"flex", alignItems:"center", gap:12, padding:"12px 16px", border:"1.5px solid #93c5fd", borderRadius:8, background:"#eff6ff", textDecoration:"none", marginBottom:8, transition:"background 0.1s" }}
-                        onMouseEnter={e => e.currentTarget.style.background="#dbeafe"}
-                        onMouseLeave={e => e.currentTarget.style.background="#eff6ff"}>
-                        <span style={{ fontSize:22, flexShrink:0 }}>📄</span>
-                        <div style={{ flex:1, minWidth:0 }}>
-                          <div style={{ fontSize:13, fontWeight:600, color:"#1d4ed8" }}>View RFP Documents — {doc.label}</div>
-                          <div style={{ fontSize:11, color:"#3b82f6", marginTop:3, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{doc.url}</div>
-                        </div>
-                        <span style={{ fontSize:16, color:"#2563eb", flexShrink:0, fontWeight:600 }}>↗</span>
-                      </a>
-                    ))}
+                // Collect all services that have RFP docs — keep duplicates (one per line item)
+                const rfpServices = services.filter(s => s.rfp_documents?.url || s.rfp_document_url || s.rfp_url);
+                if (!rfpServices.length) return null;
 
+                const getFilename = url => {
+                  try {
+                    const parts = decodeURIComponent(url).split("/");
+                    return parts[parts.length - 1] || url;
+                  } catch { return url; }
+                };
+
+                const fmtUploadDate = v => {
+                  if (!v) return null;
+                  const d = new Date(v);
+                  return isNaN(d) ? null : d.toLocaleDateString("en-US", { month:"long", day:"numeric", year:"numeric" });
+                };
+
+                return (
+                  <Sec title="Service Request RFP Documents">
+                    <div style={{ borderTop:"1px solid #f1f5f9" }}>
+                      {rfpServices.map((s, i) => {
+                        const url = s.rfp_documents?.url || s.rfp_document_url || s.rfp_url;
+                        const filename = getFilename(url);
+                        const ext = filename.split(".").pop().toUpperCase();
+                        const uploadDate = fmtUploadDate(s.rfp_upload_date);
+                        const svcLabel = s.service_type || s.service_type_name || "Service Request";
+                        const fnLabel  = s.function || "";
+                        return (
+                          <div key={i} style={{ display:"flex", alignItems:"center", gap:14, padding:"12px 0", borderBottom:"1px solid #f1f5f9" }}>
+                            {/* Doc type icon */}
+                            <div style={{ width:40, height:44, borderRadius:6, background:"#eff6ff", border:"1.5px solid #93c5fd", display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
+                              <span style={{ fontSize:16 }}>📄</span>
+                              <span style={{ fontSize:8, fontWeight:700, color:"#2563eb", marginTop:1 }}>{ext}</span>
+                            </div>
+                            {/* Doc info */}
+                            <div style={{ flex:1, minWidth:0 }}>
+                              <div style={{ fontSize:12, fontWeight:700, color:"#111827", marginBottom:2, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
+                                {filename}
+                              </div>
+                              <div style={{ fontSize:11, color:"#64748b", marginBottom:2 }}>
+                                {svcLabel}{fnLabel ? ` — ${fnLabel}` : ""}
+                              </div>
+                              {uploadDate && (
+                                <div style={{ fontSize:10, color:"#94a3b8" }}>Uploaded {uploadDate}</div>
+                              )}
+                            </div>
+                            {/* Link */}
+                            <a href={url} target="_blank" rel="noreferrer"
+                              style={{ flexShrink:0, fontSize:12, fontWeight:600, color:"#2563eb", textDecoration:"none" }}
+                              onMouseEnter={e => e.currentTarget.style.textDecoration="underline"}
+                              onMouseLeave={e => e.currentTarget.style.textDecoration="none"}>
+                              View RFP Documents ↗
+                            </a>
+                          </div>
+                        );
+                      })}
+                    </div>
                   </Sec>
                 );
               })()}
