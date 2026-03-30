@@ -793,6 +793,10 @@ function TagsPanel({ token, onTagsUpdated, onView470 }) {
   const [loading, setLoading] = useState(true);
   const [popup, setPopup]     = useState(null);
   const [stages, setStages]   = useState({});
+  const [kwQuery, setKwQuery]     = useState("");
+  const [kwResults, setKwResults] = useState(null);
+  const [kwLoading, setKwLoading] = useState(false);
+  const [kwError, setKwError]     = useState("");
 
   const STAGE_LABELS = ["Bid Submitted","Under Review","Final Review","Wave Ready","Funded","Denied","On Appeal"];
   const STAGE_COLORS = ["#2563eb","#7c3aed","#d97706","#0891b2","#16a34a","#dc2626","#ea580c"];
@@ -829,6 +833,19 @@ function TagsPanel({ token, onTagsUpdated, onView470 }) {
     await load();
   }
 
+  async function doKwSearch() {
+    const kw = kwQuery.trim();
+    if (!kw) return;
+    setKwLoading(true); setKwError(""); setKwResults(null);
+    try {
+      const res  = await fetch(`${API_URL}/api/tags/keyword-search?keyword=${encodeURIComponent(kw)}`, { headers:{ Authorization:`Bearer ${token}` } });
+      const json = await res.json();
+      if (json.status === "success") setKwResults(json);
+      else setKwError(json.message || "Search failed");
+    } catch { setKwError("Connection error"); }
+    setKwLoading(false);
+  }
+
   if (loading) return <div style={{ padding:32 }}><Spinner /></div>;
   if (!tags.length) return (
     <div style={{ padding:48, textAlign:"center" }}>
@@ -840,6 +857,64 @@ function TagsPanel({ token, onTagsUpdated, onView470 }) {
 
   return (
     <div>
+      {/* Keyword filter bar */}
+      <div style={{ padding:"12px 16px", borderBottom:"1.5px solid #e2e8f0", background:"#f8fafc", display:"flex", gap:8, alignItems:"center" }}>
+        <input className="inp inp-sm" style={{ flex:1, maxWidth:360 }}
+          value={kwQuery} onChange={e => setKwQuery(e.target.value)}
+          onKeyDown={e => e.key==="Enter" && doKwSearch()}
+          placeholder='Filter tagged 470s by keyword e.g. "Ubiquiti", "Cisco", "WAP"' />
+        <button className="btn btn-sm btn-primary" onClick={doKwSearch} disabled={kwLoading || !kwQuery.trim()}>
+          {kwLoading ? "Searching..." : "Search →"}
+        </button>
+        {kwResults && (
+          <button className="btn btn-sm" onClick={() => { setKwResults(null); setKwQuery(""); }}>Clear</button>
+        )}
+        {kwResults && (
+          <span style={{ fontSize:11, color:"#64748b" }}>
+            {kwResults.count} of {tags.length} tagged 470s mention "{kwResults.keyword}"
+          </span>
+        )}
+        {kwError && <span style={{ fontSize:11, color:"#dc2626" }}>⚠ {kwError}</span>}
+      </div>
+
+      {/* Keyword results — compact cards */}
+      {kwResults && kwResults.count > 0 && (
+        <div style={{ borderBottom:"1.5px solid #e2e8f0", background:"#fffbeb" }}>
+          {kwResults.data.map((r, i) => (
+            <div key={i} style={{ padding:"12px 16px", borderBottom:"1px solid #fde68a", display:"flex", alignItems:"flex-start", gap:12 }}>
+              <div style={{ flex:1, minWidth:0 }}>
+                <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:3 }}>
+                  <span style={{ fontSize:12, fontWeight:700, color:"#1e293b" }}>{r.billed_entity_name}</span>
+                  {r.responded && <span className="badge badge-blue" style={{ fontSize:9 }}>Responded</span>}
+                  {r.bid_status === "won"  && <span className="badge badge-green" style={{ fontSize:9 }}>Won</span>}
+                  {r.bid_status === "lost" && <span className="badge badge-red"   style={{ fontSize:9 }}>Lost</span>}
+                </div>
+                <div style={{ fontSize:11, color:"#64748b", marginBottom:4 }}>{r.service_category}</div>
+                {r.services?.length > 0 && (
+                  <div style={{ display:"flex", gap:4, flexWrap:"wrap" }}>
+                    {r.services.map((s, si) => (
+                      <span key={si} style={{ fontSize:10, fontWeight:600, padding:"1px 7px", borderRadius:4, background:"#ede9fe", color:"#6d28d9" }}>
+                        {s.manufacturer || s.service_type}
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <div style={{ textAlign:"right", flexShrink:0 }}>
+                {r.tech_contact_name && <div style={{ fontSize:12, fontWeight:500, color:"#1e293b" }}>{r.tech_contact_name}</div>}
+                {r.tech_contact_email && <a href={`mailto:${r.tech_contact_email}`} style={{ fontSize:11, color:"#2563eb", textDecoration:"none" }}>{r.tech_contact_email}</a>}
+                {r.tech_contact_phone && <div style={{ fontSize:11, color:"#64748b" }}>{r.tech_contact_phone}</div>}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+      {kwResults && kwResults.count === 0 && (
+        <div style={{ padding:"20px 16px", background:"#fffbeb", borderBottom:"1.5px solid #e2e8f0", fontSize:12, color:"#92400e", textAlign:"center" }}>
+          None of your tagged 470s mention "{kwResults.keyword}" in their services
+        </div>
+      )}
+
       {tags.map((tag, i) => {
         const stage = stages[tag.application_number];
         const days  = tag.bid_due_date ? Math.ceil((new Date(tag.bid_due_date)-new Date())/(1000*60*60*24)) : null;
@@ -1374,6 +1449,7 @@ function ContactSearchModal({ token, onClose }) {
   // School search
   const [keywords, setKeywords] = useState("");
   const [serviceCategory, setServiceCategory] = useState("ALL");
+  const [product, setProduct]   = useState("");
   const [results, setResults]   = useState(null);
   const [loading, setLoading]   = useState(false);
   const [error, setError]       = useState("");
@@ -1392,6 +1468,7 @@ function ContactSearchModal({ token, onClose }) {
     try {
       const params = new URLSearchParams({ keywords: kw, funding_year:"2026", limit:500 });
       if (serviceCategory !== "ALL") params.set("service_category", serviceCategory);
+      if (product.trim()) params.set("product", product.trim());
       const res  = await fetch(`${API_URL}/api/contact-search?${params}`, { headers:{ Authorization:`Bearer ${token}` } });
       const json = await res.json();
       if (json.status === "success") setResults(json);
@@ -1447,7 +1524,7 @@ function ContactSearchModal({ token, onClose }) {
         <div className="modal-hdr">
           <div>
             <div className="modal-title">Contact Search</div>
-            <div className="modal-sub">{tab==="school" ? "Find contacts by school type on FY2026 Form 470s" : "Find contacts who bought a specific product or brand"}</div>
+            <div className="modal-sub">{tab==="school" ? "Find contacts by school type — optionally filter by product or manufacturer" : "Find contacts who bought a specific product or brand"}</div>
           </div>
           <button className="modal-close" onClick={onClose}>✕ Close</button>
         </div>
@@ -1470,14 +1547,22 @@ function ContactSearchModal({ token, onClose }) {
             ))}
           </div>
           {/* Search row */}
-          <div style={{ display:"flex", gap:8, alignItems:"flex-end" }}>
-            <div style={{ flex:1 }}>
-              <div style={{ fontSize:10, fontWeight:600, color:"#64748b", marginBottom:4, letterSpacing:0.3 }}>KEYWORDS (comma-separated)</div>
+          <div style={{ display:"flex", gap:8, alignItems:"flex-end", flexWrap:"wrap" }}>
+            <div style={{ flex:2, minWidth:200 }}>
+              <div style={{ fontSize:10, fontWeight:600, color:"#64748b", marginBottom:4, letterSpacing:0.3 }}>SCHOOL TYPE KEYWORDS (comma-separated)</div>
               <input className="inp" value={keywords} onChange={e => setKeywords(e.target.value)}
                 onKeyDown={e => e.key==="Enter" && doSearch()}
                 placeholder='e.g. "Private, Charter, Christian"' />
             </div>
-            <div style={{ width:180 }}>
+            <div style={{ flex:1, minWidth:160 }}>
+              <div style={{ fontSize:10, fontWeight:600, color:"#64748b", marginBottom:4, letterSpacing:0.3 }}>
+                PRODUCT / MANUFACTURER <span style={{ color:"#94a3b8", fontWeight:400 }}>(optional)</span>
+              </div>
+              <input className="inp" value={product} onChange={e => setProduct(e.target.value)}
+                onKeyDown={e => e.key==="Enter" && doSearch()}
+                placeholder='e.g. "Ubiquiti", "Cisco"' />
+            </div>
+            <div style={{ width:160 }}>
               <div style={{ fontSize:10, fontWeight:600, color:"#64748b", marginBottom:4, letterSpacing:0.3 }}>SERVICE CATEGORY</div>
               <select className="inp" value={serviceCategory} onChange={e => setServiceCategory(e.target.value)}>
                 <option value="ALL">All Categories</option>
@@ -1592,7 +1677,9 @@ function ContactSearchModal({ token, onClose }) {
               <div style={{ padding:"10px 20px", borderBottom:"1.5px solid #e2e8f0", background:"#f8fafc", display:"flex", alignItems:"center", justifyContent:"space-between" }}>
                 <span style={{ fontSize:12, fontWeight:600, color:"#334155" }}>
                   {results.count} entities found
-                  <span style={{ fontWeight:400, color:"#94a3b8", marginLeft:6 }}>with contacts on FY2026 Form 470s</span>
+                  <span style={{ fontWeight:400, color:"#94a3b8", marginLeft:6 }}>
+                    {product.trim() ? `mentioning "${product.trim()}" on FY2026 Form 470s` : "with contacts on FY2026 Form 470s"}
+                  </span>
                 </span>
                 {results.count > 0 && (
                   <button className="btn btn-sm" onClick={exportCSV} style={{ color:"#16a34a", borderColor:"#86efac" }}>↓ Export CSV</button>
@@ -1608,7 +1695,7 @@ function ContactSearchModal({ token, onClose }) {
                   <table style={{ width:"100%", borderCollapse:"collapse", fontSize:12 }}>
                     <thead>
                       <tr style={{ background:"#f8fafc", borderBottom:"1.5px solid #e2e8f0" }}>
-                        {["Entity","BEN","Service Category","Status","Bid Due","Contact Name","Email","Phone","App #"].map(h => (
+                        {["Entity","BEN","Service Category",product.trim()?"Matched Services":"Status","Bid Due","Contact Name","Email","Phone","App #"].map(h => (
                           <th key={h} style={{ padding:"8px 12px", textAlign:"left", fontSize:10, fontWeight:700, color:"#64748b", whiteSpace:"nowrap" }}>{h}</th>
                         ))}
                       </tr>
@@ -1624,11 +1711,21 @@ function ContactSearchModal({ token, onClose }) {
                             <td style={{ padding:"8px 12px", color:"#2563eb", fontWeight:500 }}>{r.billed_entity_number||"—"}</td>
                             <td style={{ padding:"8px 12px", color:"#64748b", whiteSpace:"nowrap" }}>{r.service_category||"—"}</td>
                             <td style={{ padding:"8px 12px" }}>
-                              <span style={{ fontSize:10, fontWeight:700, padding:"2px 7px", borderRadius:4,
-                                background: (r.application_status||"").toLowerCase().includes("certif") ? "#dcfce7" : "#f1f5f9",
-                                color: (r.application_status||"").toLowerCase().includes("certif") ? "#15803d" : "#64748b" }}>
-                                {r.application_status||"—"}
-                              </span>
+                              {product.trim() && r.matched_services?.length ? (
+                                <div style={{ display:"flex", gap:3, flexWrap:"wrap" }}>
+                                  {r.matched_services.slice(0,3).map((s, si) => (
+                                    <span key={si} style={{ fontSize:9, fontWeight:700, padding:"1px 6px", borderRadius:4, background:"#ede9fe", color:"#6d28d9", whiteSpace:"nowrap" }}>
+                                      {s.manufacturer || s.service_type}
+                                    </span>
+                                  ))}
+                                </div>
+                              ) : (
+                                <span style={{ fontSize:10, fontWeight:700, padding:"2px 7px", borderRadius:4,
+                                  background: (r.application_status||"").toLowerCase().includes("certif") ? "#dcfce7" : "#f1f5f9",
+                                  color: (r.application_status||"").toLowerCase().includes("certif") ? "#15803d" : "#64748b" }}>
+                                  {r.application_status||"—"}
+                                </span>
+                              )}
                             </td>
                             <td style={{ padding:"8px 12px", color: days!=null&&days<=7 ? "#dc2626" : "#334155", fontWeight: days!=null&&days<=7 ? 600 : 400, whiteSpace:"nowrap" }}>
                               {r.bid_due_date ? new Date(r.bid_due_date).toLocaleDateString() : "—"}
