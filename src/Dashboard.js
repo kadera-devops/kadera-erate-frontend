@@ -1848,6 +1848,186 @@ function ProviderApplicants({ token, spinName, year }) {
   );
 }
 
+
+// ── KaderaAI — Chat panel with direct DB access ───────────────────────────────
+function KaderaAI({ token }) {
+  const [messages, setMessages] = useState([]);
+  const [input, setInput]       = useState("");
+  const [loading, setLoading]   = useState(false);
+  const bottomRef = useRef(null);
+
+  const SUGGESTIONS = [
+    "Which open 470s close in the next 7 days?",
+    "Who are the top 5 providers winning Cat 2 contracts in FY2026?",
+    "Show me districts with C2 budget that haven't filed a 470 yet",
+    "What's my current pipeline win rate?",
+    "Which districts in Houston have open bids right now?",
+    "How much total E-Rate funding did Cisco win in FY2026 TX?",
+  ];
+
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior:"smooth" });
+  }, [messages, loading]);
+
+  async function sendMessage(text) {
+    const userText = (text || input).trim();
+    if (!userText || loading) return;
+    setInput("");
+
+    const newMessages = [...messages, { role:"user", content: userText }];
+    setMessages(newMessages);
+    setLoading(true);
+
+    try {
+      const res  = await fetch(`${API_URL}/api/claude-chat`, {
+        method: "POST",
+        headers: { Authorization:`Bearer ${token}`, "Content-Type":"application/json" },
+        body: JSON.stringify({ messages: newMessages }),
+      });
+      const json = await res.json();
+      if (json.status === "success") {
+        setMessages(prev => [...prev, {
+          role: "assistant",
+          content: json.response,
+          tools: json.tools_used,
+        }]);
+      } else {
+        setMessages(prev => [...prev, { role:"assistant", content:`Error: ${json.message}` }]);
+      }
+    } catch (err) {
+      setMessages(prev => [...prev, { role:"assistant", content:`Connection error: ${err.message}` }]);
+    }
+    setLoading(false);
+  }
+
+  function formatMessage(text) {
+    // Convert markdown-style bold and bullets to styled spans
+    return text.split("\n").map((line, i) => {
+      const bold = line.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+      const isBullet = line.trim().startsWith("- ") || line.trim().startsWith("• ");
+      return (
+        <div key={i} style={{ marginBottom: isBullet ? 3 : line === "" ? 8 : 2, paddingLeft: isBullet ? 14 : 0, position:"relative" }}>
+          {isBullet && <span style={{ position:"absolute", left:0, color:"#2563eb" }}>•</span>}
+          <span dangerouslySetInnerHTML={{ __html: bold }} />
+        </div>
+      );
+    });
+  }
+
+  return (
+    <div style={{ maxWidth:860, margin:"0 auto" }}>
+      {/* Header */}
+      <div style={{ marginBottom:20 }}>
+        <div style={{ display:"flex", alignItems:"center", gap:12, marginBottom:6 }}>
+          <div style={{ width:40, height:40, borderRadius:10, background:"linear-gradient(135deg,#6d28d9,#2563eb)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:20 }}>✦</div>
+          <div>
+            <div style={{ fontSize:20, fontWeight:700, color:"#0f1e3d" }}>Kadera AI</div>
+            <div style={{ fontSize:12, color:"#64748b" }}>Ask anything about your E-Rate data — bids, providers, pipeline, prospects</div>
+          </div>
+        </div>
+      </div>
+
+      {/* Chat area */}
+      <div style={{ background:"#fff", border:"1.5px solid #e2e8f0", borderRadius:12, overflow:"hidden", minHeight:480, display:"flex", flexDirection:"column" }}>
+
+        {/* Messages */}
+        <div style={{ flex:1, overflowY:"auto", padding:"20px 24px", display:"flex", flexDirection:"column", gap:16, minHeight:400, maxHeight:560 }}>
+
+          {messages.length === 0 && (
+            <div style={{ textAlign:"center", paddingTop:32 }}>
+              <div style={{ fontSize:32, marginBottom:12 }}>✦</div>
+              <div style={{ fontSize:15, fontWeight:600, color:"#1e293b", marginBottom:6 }}>What would you like to know?</div>
+              <div style={{ fontSize:13, color:"#94a3b8", marginBottom:24 }}>I have direct access to your Form 470s, commitments, pipeline, and prospects.</div>
+              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8, maxWidth:640, margin:"0 auto", textAlign:"left" }}>
+                {SUGGESTIONS.map((s, i) => (
+                  <button key={i} onClick={() => sendMessage(s)}
+                    style={{ padding:"10px 14px", borderRadius:8, border:"1.5px solid #e2e8f0", background:"#f8fafc", color:"#334155", fontSize:12, cursor:"pointer", textAlign:"left", lineHeight:1.4, fontFamily:"inherit", transition:"all 0.15s" }}
+                    onMouseEnter={e => { e.currentTarget.style.borderColor="#2563eb"; e.currentTarget.style.background="#eff6ff"; }}
+                    onMouseLeave={e => { e.currentTarget.style.borderColor="#e2e8f0"; e.currentTarget.style.background="#f8fafc"; }}>
+                    {s}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {messages.map((m, i) => (
+            <div key={i} style={{ display:"flex", gap:12, flexDirection: m.role==="user" ? "row-reverse" : "row" }}>
+              {/* Avatar */}
+              <div style={{ width:32, height:32, borderRadius:8, flexShrink:0, display:"flex", alignItems:"center", justifyContent:"center", fontSize:14,
+                background: m.role==="user" ? "#2563eb" : "linear-gradient(135deg,#6d28d9,#2563eb)", color:"#fff" }}>
+                {m.role==="user" ? "B" : "✦"}
+              </div>
+              {/* Bubble */}
+              <div style={{ maxWidth:"80%", background: m.role==="user" ? "#eff6ff" : "#f8fafc", border:`1.5px solid ${m.role==="user" ? "#93c5fd" : "#e2e8f0"}`, borderRadius: m.role==="user" ? "12px 4px 12px 12px" : "4px 12px 12px 12px", padding:"12px 16px" }}>
+                <div style={{ fontSize:13, color:"#1e293b", lineHeight:1.7 }}>
+                  {m.role === "assistant" ? formatMessage(m.content) : m.content}
+                </div>
+                {m.tools?.length > 0 && (
+                  <div style={{ marginTop:8, paddingTop:8, borderTop:"1px solid #e2e8f0", display:"flex", gap:6, flexWrap:"wrap" }}>
+                    {m.tools.map((t, ti) => (
+                      <span key={ti} style={{ fontSize:10, fontWeight:600, padding:"2px 7px", borderRadius:4, background:"#ede9fe", color:"#6d28d9" }}>
+                        ⚡ {t.name}
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          ))}
+
+          {loading && (
+            <div style={{ display:"flex", gap:12 }}>
+              <div style={{ width:32, height:32, borderRadius:8, flexShrink:0, display:"flex", alignItems:"center", justifyContent:"center", background:"linear-gradient(135deg,#6d28d9,#2563eb)", color:"#fff", fontSize:14 }}>✦</div>
+              <div style={{ background:"#f8fafc", border:"1.5px solid #e2e8f0", borderRadius:"4px 12px 12px 12px", padding:"12px 16px", display:"flex", alignItems:"center", gap:6 }}>
+                <div style={{ display:"flex", gap:4 }}>
+                  {[0,1,2].map(d => (
+                    <div key={d} style={{ width:6, height:6, borderRadius:"50%", background:"#6d28d9", animation:`bounce 1.2s ${d*0.2}s infinite` }}/>
+                  ))}
+                </div>
+                <span style={{ fontSize:12, color:"#64748b" }}>Querying your database...</span>
+              </div>
+            </div>
+          )}
+
+          <div ref={bottomRef} />
+        </div>
+
+        {/* Input bar */}
+        <div style={{ borderTop:"1.5px solid #e2e8f0", padding:"14px 16px", background:"#f8fafc", display:"flex", gap:10 }}>
+          {messages.length > 0 && (
+            <button onClick={() => setMessages([])}
+              style={{ padding:"8px 12px", borderRadius:8, border:"1.5px solid #e2e8f0", background:"#fff", color:"#94a3b8", fontSize:11, cursor:"pointer", whiteSpace:"nowrap", fontFamily:"inherit" }}>
+              Clear
+            </button>
+          )}
+          <input
+            value={input}
+            onChange={e => setInput(e.target.value)}
+            onKeyDown={e => e.key === "Enter" && !e.shiftKey && sendMessage()}
+            placeholder="Ask about bids, providers, your pipeline, prospects..."
+            disabled={loading}
+            style={{ flex:1, padding:"9px 14px", borderRadius:8, border:"1.5px solid #cbd5e1", background:"#fff", fontSize:13, color:"#1e293b", outline:"none", fontFamily:"inherit", transition:"border-color 0.15s" }}
+            onFocus={e => e.target.style.borderColor="#6d28d9"}
+            onBlur={e => e.target.style.borderColor="#cbd5e1"}
+          />
+          <button onClick={() => sendMessage()} disabled={loading || !input.trim()}
+            style={{ padding:"9px 20px", borderRadius:8, border:"none", background: loading || !input.trim() ? "#e2e8f0" : "linear-gradient(135deg,#6d28d9,#2563eb)", color: loading || !input.trim() ? "#94a3b8" : "#fff", fontSize:13, fontWeight:600, cursor: loading || !input.trim() ? "not-allowed" : "pointer", whiteSpace:"nowrap", fontFamily:"inherit", transition:"all 0.15s" }}>
+            {loading ? "..." : "Send →"}
+          </button>
+        </div>
+      </div>
+
+      <style>{`
+        @keyframes bounce {
+          0%, 60%, 100% { transform: translateY(0); }
+          30% { transform: translateY(-6px); }
+        }
+      `}</style>
+    </div>
+  );
+}
+
 // ── Main Dashboard ────────────────────────────────────────────────────────────
 export default function Dashboard({ session }) {
   const [token, setToken]   = useState(null);
@@ -1937,9 +2117,9 @@ export default function Dashboard({ session }) {
           </div>
 
           <div style={{ display:"flex", gap:2 }}>
-            {[["dashboard","Dashboard"],["search","Search"],["tags",`★ My Tags${tagCount ? ` (${tagCount})` : ""}`]].map(([key,label]) => (
+            {[["dashboard","Dashboard"],["search","Search"],["tags",`★ My Tags${tagCount ? ` (${tagCount})` : ""}`],["ai","✦ Kadera AI"]].map(([key,label]) => (
               <button key={key} onClick={() => setTab(key)}
-                style={{ padding:"6px 16px", borderRadius:6, border:"none", background: tab===key ? "rgba(37,99,235,0.3)" : "transparent", color: key==="tags" ? "#fbbf24" : tab===key ? "#93b4fd" : "rgba(255,255,255,0.5)", fontSize:12, fontWeight:500, cursor:"pointer" }}>
+                style={{ padding:"6px 16px", borderRadius:6, border:"none", background: tab===key ? "rgba(37,99,235,0.3)" : "transparent", color: key==="tags" ? "#fbbf24" : key==="ai" ? (tab===key ? "#a78bfa" : "#7c3aed") : tab===key ? "#93b4fd" : "rgba(255,255,255,0.5)", background: tab===key ? (key==="ai" ? "rgba(124,58,237,0.2)" : "rgba(37,99,235,0.3)") : "transparent", fontSize:12, fontWeight:500, cursor:"pointer" }}>
                 {label}
               </button>
             ))}
@@ -2079,6 +2259,12 @@ export default function Dashboard({ session }) {
                 </div>
                 <TagsPanel token={token} onTagsUpdated={() => refreshTagCount(token)} onView470={setForm470App} />
               </div>
+            </div>
+          )}
+
+          {tab === "ai" && token && (
+            <div className="fade-in">
+              <KaderaAI token={token} />
             </div>
           )}
         </div>
