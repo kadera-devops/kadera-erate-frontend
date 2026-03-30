@@ -1512,8 +1512,6 @@ function CompetitiveIntelModal({ token, onClose }) {
   const TABS = [
     ["providers","Top 25 Providers"],
     ["manufacturers","Manufacturer Breakdown"],
-    ["services","Service Types"],
-    ["products","Top Products"],
     ["partlookup","Part Lookup"],
     ["providersearch","Provider Search"],
     ["areaservice","Service Area"],
@@ -1613,39 +1611,6 @@ function CompetitiveIntelModal({ token, onClose }) {
               )}
 
               {/* SERVICE TYPES */}
-              {view === "services" && (
-                <>
-                  {data.service_types?.map((s, i) => (
-                    <div key={i} style={{ display:"flex", alignItems:"center", gap:12, padding:"8px 0", borderBottom:"1px solid #f1f5f9" }}>
-                      <div style={{ flex:1 }}>
-                        <div style={{ display:"flex", justifyContent:"space-between", marginBottom:4 }}>
-                          <span style={{ fontSize:12, fontWeight:500 }}>{s.name}</span>
-                          <span style={{ fontSize:11, fontWeight:600, color:"#16a34a" }}>{s.count} FRNs</span>
-                        </div>
-                        <div style={{ height:6, background:"#f1f5f9", borderRadius:99, overflow:"hidden" }}>
-                          <div style={{ width:`${Math.round((s.count/(data.service_types[0]?.count||1))*100)}%`, height:"100%", background:"linear-gradient(90deg,#6ee7b7,#16a34a)", borderRadius:99 }}/>
-                        </div>
-                        <div style={{ fontSize:10, color:"#94a3b8", marginTop:3 }}>{s.count} FRNs</div>
-                      </div>
-                    </div>
-                  ))}
-                </>
-              )}
-
-              {/* TOP PRODUCTS */}
-              {view === "products" && (
-                <>
-                  {data.top_products?.map((p, i) => (
-                    <div key={i} style={{ padding:"8px 0", borderBottom:"1px solid #f1f5f9" }}>
-                      <div style={{ display:"flex", justifyContent:"space-between", marginBottom:2 }}>
-                        <span style={{ fontSize:11, fontWeight:500 }} title={p.name}>{p.name?.length>60?p.name.slice(0,60)+"…":p.name}</span>
-                        <span style={{ fontSize:11, fontWeight:600, color:"#2563eb", flexShrink:0, marginLeft:8 }}>{p.count} records</span>
-                      </div>
-                    </div>
-                  ))}
-                </>
-              )}
-
               {/* PART LOOKUP */}
               {view === "partlookup" && (
                 <>
