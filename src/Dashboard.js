@@ -1623,19 +1623,19 @@ function CompetitiveIntelModal({ token, onClose }) {
                   {!partLoading && !partSearched && <Empty title="Search for a part above" sub="Search FY2025 TX line items by model number, product name, or manufacturer" />}
                   {!partLoading && partResults.length > 0 && (
                     <>
-                      <div className="tbl-hdr" style={{ gridTemplateColumns:"2fr 1.2fr 1fr 90px 90px 90px" }}>
+                      <div className="tbl-hdr" style={{ gridTemplateColumns:"2fr 1.4fr 1.2fr 90px 90px 90px" }}>
                         <div className="tbl-hdr-cell">PRODUCT</div>
-                        <div className="tbl-hdr-cell">MANUFACTURER</div>
-                        <div className="tbl-hdr-cell">ORGANIZATION</div>
+                        <div className="tbl-hdr-cell">SERVICE PROVIDER</div>
+                        <div className="tbl-hdr-cell">APPLICANT</div>
                         <SortHdr label="UNIT PRICE" field="unit_price" sortField={pSort.sortField} sortAsc={pSort.sortAsc} onSort={pSort.toggle} />
                         <div className="tbl-hdr-cell">QTY</div>
                         <div className="tbl-hdr-cell">TOTAL</div>
                       </div>
                       {pSort.apply(partResults).map((r, i) => (
-                        <div key={i} className="tbl-row" style={{ gridTemplateColumns:"2fr 1.2fr 1fr 90px 90px 90px" }}>
-                          <div className="tbl-cell" style={{ fontWeight:500 }} title={r.product_name}>{(r.model||r.product_name||"—").slice(0,40)}{(r.model||r.product_name||"").length>40?"…":""}</div>
-                          <div className="tbl-cell" style={{ fontSize:10 }}>{r.manufacturer||"—"}</div>
-                          <div className="tbl-cell" style={{ fontSize:10 }}>{r.organization||"—"}</div>
+                        <div key={i} className="tbl-row" style={{ gridTemplateColumns:"2fr 1.4fr 1.2fr 90px 90px 90px" }}>
+                          <div className="tbl-cell" style={{ fontWeight:500 }} title={r.product_name}>{(r.model_of_equipment||r.product_name||"—").slice(0,40)}{(r.model_of_equipment||r.product_name||"").length>40?"…":""}</div>
+                          <div className="tbl-cell" style={{ fontSize:10, color:"#2563eb", fontWeight:500 }}>{r.spin_name||"—"}</div>
+                          <div className="tbl-cell" style={{ fontSize:10 }}>{r.organization_name||"—"}</div>
                           <div className="tbl-cell" style={{ fontWeight:600, color:"#2563eb" }}>{r.unit_price?fmt(r.unit_price):"—"}</div>
                           <div className="tbl-cell">{r.quantity||"—"}</div>
                           <div className="tbl-cell" style={{ color:"#16a34a" }}>{r.total_cost?fmt(r.total_cost):"—"}</div>
