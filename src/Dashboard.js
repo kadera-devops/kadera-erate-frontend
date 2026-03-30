@@ -1582,7 +1582,7 @@ function ContactSearchModal({ token, onClose }) {
                   <table style={{ width:"100%", borderCollapse:"collapse", fontSize:12 }}>
                     <thead>
                       <tr style={{ background:"#f8fafc", borderBottom:"1.5px solid #e2e8f0" }}>
-                        {["Entity","BEN","Service Category",product.trim()?"Matched Services":"Status","Bid Due","Contact Name","Email","Phone","App #"].map(h => (
+                        {["Entity","BEN","Service Category",product.trim()?"Matched Services":"Status","Bid Due","Contact Name","Email","Phone","View 470"].map(h => (
                           <th key={h} style={{ padding:"8px 12px", textAlign:"left", fontSize:10, fontWeight:700, color:"#64748b", whiteSpace:"nowrap" }}>{h}</th>
                         ))}
                       </tr>
@@ -1626,10 +1626,16 @@ function ContactSearchModal({ token, onClose }) {
                             </td>
                             <td style={{ padding:"8px 12px", color:"#334155", whiteSpace:"nowrap" }}>{r.tech_contact_phone||"—"}</td>
                             <td style={{ padding:"8px 12px" }}>
-                              <span style={{ fontSize:11, color:"#2563eb", fontWeight:500, cursor:"pointer" }}
-                                onClick={() => window.open(`https://legacy.fundsforlearning.com/470/${r.application_number}`,"_blank")}>
-                                {r.application_number} ↗
-                              </span>
+                              {r.application_number ? (
+                                <a href={`https://legacy.fundsforlearning.com/470/${r.application_number}`}
+                                  target="_blank" rel="noreferrer"
+                                  style={{ fontSize:11, fontWeight:600, color:"#2563eb", textDecoration:"none", whiteSpace:"nowrap" }}
+                                  onMouseEnter={e => e.currentTarget.style.textDecoration="underline"}
+                                  onMouseLeave={e => e.currentTarget.style.textDecoration="none"}
+                                  onClick={e => e.stopPropagation()}>
+                                  View 470 ↗
+                                </a>
+                              ) : "—"}
                             </td>
                           </tr>
                         );
