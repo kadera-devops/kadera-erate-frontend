@@ -426,7 +426,7 @@ function Form470Modal({ token, appNum, onClose }) {
   };
 
   return (
-    <div className="modal-backdrop" onClick={e => e.target === e.currentTarget && onClose()}>
+    <div className="modal-backdrop" style={{ zIndex:400 }} onClick={e => e.target === e.currentTarget && onClose()}>
       <div className="modal-box" style={{ width:"min(860px,96vw)", maxHeight:"92vh" }}>
 
         {/* Header */}
