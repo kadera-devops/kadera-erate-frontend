@@ -1799,59 +1799,68 @@ function CompetitiveIntelModal({ token, onClose }) {
 function ProviderApplicants({ token, spinName }) {
   const [rows, setRows]       = useState([]);
   const [loading, setLoading] = useState(true);
+  const [debugMsg, setDebugMsg] = useState("Starting fetch...");
 
   useEffect(() => {
-    fetch(`${API_URL}/api/provider-applicants?spin_name=${encodeURIComponent(spinName)}`, { headers:{ Authorization:`Bearer ${token}` } })
-      .then(r => r.json())
+    if (!token || !spinName) { setDebugMsg("Missing token or spinName"); setLoading(false); return; }
+    const url = `${API_URL}/api/provider-applicants?spin_name=${encodeURIComponent(spinName)}`;
+    setDebugMsg(`Fetching: ${url.slice(0, 80)}...`);
+    fetch(url, { headers:{ Authorization:`Bearer ${token}` } })
+      .then(r => { setDebugMsg(`Status ${r.status}`); return r.json(); })
       .then(d => {
-        console.log("provider-applicants raw response:", JSON.stringify(d).slice(0, 500));
+        setDebugMsg(`Got ${d.data?.length ?? 0} rows. First: ${JSON.stringify(d.data?.[0]).slice(0,120)}`);
         if (d.status === "success") {
           const sorted = (d.data || []).sort((a, b) => (b.commitment || 0) - (a.commitment || 0));
-          console.log("first row:", sorted[0]);
           setRows(sorted);
         }
       })
-      .catch(err => console.error("provider-applicants error:", err))
+      .catch(err => setDebugMsg(`Error: ${err.message}`))
       .finally(() => setLoading(false));
   }, [token, spinName]);
 
-  if (loading) return <Spinner />;
-  if (!rows.length) return <Empty title="No applicants found" />;
+  if (loading) return <div style={{ fontSize:11, color:"#64748b", padding:8 }}>Loading... {debugMsg}</div>;
 
   return (
-    <div style={{ overflowX:"auto" }}>
-      <table style={{ width:"100%", borderCollapse:"collapse", fontSize:12 }}>
-        <thead>
-          <tr style={{ borderBottom:"1.5px solid #e2e8f0", background:"#f8fafc" }}>
-            <th style={{ padding:"8px 12px", textAlign:"left", fontSize:11, fontWeight:700, color:"#64748b" }}>Applicant</th>
-            <th style={{ padding:"8px 12px", textAlign:"left", fontSize:11, fontWeight:700, color:"#64748b" }}>Service Type</th>
-            <th style={{ padding:"8px 12px", textAlign:"right", fontSize:11, fontWeight:700, color:"#64748b" }}>Commitment</th>
-            <th style={{ padding:"8px 12px", textAlign:"left", fontSize:11, fontWeight:700, color:"#64748b" }}>Form 471</th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((r, i) => (
-            <tr key={i} style={{ borderBottom:"1px solid #f1f5f9" }}
-              onMouseEnter={e => e.currentTarget.style.background="#f8fafc"}
-              onMouseLeave={e => e.currentTarget.style.background="transparent"}>
-              <td style={{ padding:"8px 12px", fontWeight:500, color:"#1e293b" }}>{r.organization || "—"}</td>
-              <td style={{ padding:"8px 12px", color:"#64748b" }}>{r.service_type || "—"}</td>
-              <td style={{ padding:"8px 12px", textAlign:"right", fontWeight:600, color:"#16a34a" }}>{r.commitment ? fmt(r.commitment) : "—"}</td>
-              <td style={{ padding:"8px 12px" }}>
-                <a href={`https://legacy.fundsforlearning.com/471/${r.application_number}`} target="_blank" rel="noreferrer"
-                  style={{ fontSize:11, color:"#2563eb", textDecoration:"none", fontWeight:600 }}
-                  onMouseEnter={e => e.currentTarget.style.textDecoration="underline"}
-                  onMouseLeave={e => e.currentTarget.style.textDecoration="none"}>
-                  View 471 ↗
-                </a>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-      <div style={{ fontSize:10, color:"#94a3b8", padding:"8px 12px", borderTop:"1px solid #f1f5f9" }}>
-        {rows.length} records
-      </div>
+    <div>
+      <div style={{ fontSize:10, color:"#94a3b8", padding:"4px 0 8px", fontFamily:"monospace", wordBreak:"break-all" }}>{debugMsg}</div>
+      {!rows.length ? (
+        <div style={{ fontSize:12, color:"#94a3b8", padding:8 }}>No data returned.</div>
+      ) : (
+        <div style={{ overflowX:"auto" }}>
+          <table style={{ width:"100%", borderCollapse:"collapse", fontSize:12 }}>
+            <thead>
+              <tr style={{ borderBottom:"1.5px solid #e2e8f0", background:"#f8fafc" }}>
+                <th style={{ padding:"8px 12px", textAlign:"left", fontSize:11, fontWeight:700, color:"#64748b" }}>Applicant</th>
+                <th style={{ padding:"8px 12px", textAlign:"left", fontSize:11, fontWeight:700, color:"#64748b" }}>Service Type</th>
+                <th style={{ padding:"8px 12px", textAlign:"right", fontSize:11, fontWeight:700, color:"#64748b" }}>Commitment</th>
+                <th style={{ padding:"8px 12px", textAlign:"left", fontSize:11, fontWeight:700, color:"#64748b" }}>Form 471</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((r, i) => (
+                <tr key={i} style={{ borderBottom:"1px solid #f1f5f9" }}
+                  onMouseEnter={e => e.currentTarget.style.background="#f8fafc"}
+                  onMouseLeave={e => e.currentTarget.style.background="transparent"}>
+                  <td style={{ padding:"8px 12px", fontWeight:500, color:"#1e293b" }}>{r.organization || "—"}</td>
+                  <td style={{ padding:"8px 12px", color:"#64748b" }}>{r.service_type || "—"}</td>
+                  <td style={{ padding:"8px 12px", textAlign:"right", fontWeight:600, color:"#16a34a" }}>{r.commitment ? fmt(r.commitment) : "—"}</td>
+                  <td style={{ padding:"8px 12px" }}>
+                    <a href={`https://legacy.fundsforlearning.com/471/${r.application_number}`} target="_blank" rel="noreferrer"
+                      style={{ fontSize:11, color:"#2563eb", textDecoration:"none", fontWeight:600 }}
+                      onMouseEnter={e => e.currentTarget.style.textDecoration="underline"}
+                      onMouseLeave={e => e.currentTarget.style.textDecoration="none"}>
+                      View 471 ↗
+                    </a>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <div style={{ fontSize:10, color:"#94a3b8", padding:"8px 12px", borderTop:"1px solid #f1f5f9" }}>
+            {rows.length} records
+          </div>
+        </div>
+      )}
     </div>
   );
 }
