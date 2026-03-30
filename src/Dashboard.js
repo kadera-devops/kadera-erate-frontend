@@ -14,6 +14,41 @@ const css = `
   .fade-in { animation: fade-in 0.25s ease both; }
   ::-webkit-scrollbar { width: 6px; } ::-webkit-scrollbar-track { background: #f1f5f9; } ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 99px; }
 
+  /* Kadera AI chasing light border */
+  .kadera-ai-chase-border {
+    position: absolute;
+    inset: 0;
+    border-radius: 10px;
+    background: #1a0d2e;
+  }
+  .kadera-ai-chase-border::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: 10px;
+    padding: 1.5px;
+    background: conic-gradient(
+      from var(--angle, 0deg),
+      transparent 0deg,
+      transparent 300deg,
+      #a78bfa 330deg,
+      #ffffff 345deg,
+      #a78bfa 360deg
+    );
+    -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+    animation: kadera-chase 3s linear infinite;
+  }
+  @property --angle {
+    syntax: '<angle>';
+    initial-value: 0deg;
+    inherits: false;
+  }
+  @keyframes kadera-chase {
+    to { --angle: 360deg; }
+  }
+
   /* Modal backdrop */
   .modal-backdrop { position:fixed; inset:0; background:rgba(15,30,61,0.5); display:flex; align-items:center; justify-content:center; z-index:200; backdrop-filter:blur(2px); }
   .modal-box { background:#fff; border-radius:0; border:1.5px solid #cbd5e1; box-shadow:0 20px 60px rgba(15,30,61,0.18); width:min(1060px,96vw); max-height:90vh; display:flex; flex-direction:column; overflow:hidden; }
@@ -2038,6 +2073,7 @@ export default function Dashboard({ session }) {
   const [frnOpen, setFrnOpen]   = useState(false);
   const [form470App, setForm470App] = useState(null); // app number for 470 detail modal
   const [ciOpen, setCiOpen]     = useState(false);
+  const [aiOpen, setAiOpen]     = useState(false);
   const [c2Open, setC2Open]     = useState(false);
   const [entityOpen, setEntityOpen]     = useState(false);
   const [prospectsOpen, setProspectsOpen] = useState(false);
@@ -2100,6 +2136,25 @@ export default function Dashboard({ session }) {
       {frnOpen       && token && <FRNStatusModal       token={token} onClose={() => setFrnOpen(false)} />}
       {form470App    && token && <Form470Modal          token={token} appNum={form470App} onClose={() => setForm470App(null)} />}
       {ciOpen        && token && <CompetitiveIntelModal token={token} onClose={() => setCiOpen(false)} />}
+      {aiOpen        && token && (
+        <div className="modal-backdrop" onClick={e => e.target===e.currentTarget && setAiOpen(false)}>
+          <div className="modal-box" style={{ width:"min(880px,96vw)", maxHeight:"92vh", display:"flex", flexDirection:"column" }}>
+            <div className="modal-hdr">
+              <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+                <div style={{ width:32, height:32, borderRadius:8, background:"linear-gradient(135deg,#6d28d9,#2563eb)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:16 }}>✦</div>
+                <div>
+                  <div className="modal-title">Kadera AI</div>
+                  <div className="modal-sub">Ask anything about your E-Rate data</div>
+                </div>
+              </div>
+              <button className="modal-close" onClick={() => setAiOpen(false)}>✕ Close</button>
+            </div>
+            <div className="modal-body" style={{ padding:"16px 20px", flex:1 }}>
+              <KaderaAI token={token} />
+            </div>
+          </div>
+        </div>
+      )}
       {c2Open        && token && <C2BudgetModal         token={token} onClose={() => setC2Open(false)} />}
       {entityOpen    && token && <EntitySearchModal     token={token} onClose={() => setEntityOpen(false)} />}
       {prospectsOpen && token && <C2ProspectsModal      token={token} onClose={() => setProspectsOpen(false)} />}
@@ -2119,7 +2174,7 @@ export default function Dashboard({ session }) {
           <div style={{ display:"flex", gap:2 }}>
             {[["dashboard","Dashboard"],["search","Search"],["tags",`★ My Tags${tagCount ? ` (${tagCount})` : ""}`],["ai","✦ Kadera AI"]].map(([key,label]) => (
               <button key={key} onClick={() => setTab(key)}
-                style={{ padding:"6px 16px", borderRadius:6, border:"none", background: tab===key ? (key==="ai" ? "rgba(124,58,237,0.2)" : "rgba(37,99,235,0.3)") : "transparent", color: key==="tags" ? "#fbbf24" : key==="ai" ? (tab===key ? "#a78bfa" : "#7c3aed") : tab===key ? "#93b4fd" : "rgba(255,255,255,0.5)", fontSize:12, fontWeight:500, cursor:"pointer" }}>
+                style={{ padding:"6px 16px", borderRadius:6, border:"none", background: tab===key ? (key==="ai" ? "rgba(124,58,237,0.2)" : "rgba(37,99,235,0.3)") : "transparent", color: key==="tags" ? "#fbbf24" : key==="ai" ? (tab===key ? "#c4b5fd" : "rgba(196,181,253,0.7)") : tab===key ? "#93b4fd" : "rgba(255,255,255,0.5)", fontSize:12, fontWeight:500, cursor:"pointer" }}>
                 {label}
               </button>
             ))}
@@ -2181,6 +2236,16 @@ export default function Dashboard({ session }) {
                         <div style={{ fontSize:11, fontWeight:600, color:"#16a34a", marginBottom:3 }}>🎯 C2 Prospect Finder</div>
                         <div style={{ fontSize:10, color:"#64748b", lineHeight:1.4 }}>TX schools with available C2 budget and no FY2026 Form 470 filed</div>
                       </button>
+                      <div style={{ gridColumn:"span 2", position:"relative", padding:1.5, borderRadius:10, overflow:"hidden", cursor:"pointer" }} onClick={() => setAiOpen(true)}>
+                        <div className="kadera-ai-chase-border" />
+                        <div style={{ position:"relative", zIndex:1, borderRadius:9, background:"#0f0a1a", padding:"10px 14px", display:"flex", alignItems:"center", gap:10 }}>
+                          <div style={{ width:28, height:28, borderRadius:7, background:"linear-gradient(135deg,#6d28d9,#2563eb)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:14, flexShrink:0 }}>✦</div>
+                          <div>
+                            <div style={{ fontSize:11, fontWeight:600, color:"#a78bfa", marginBottom:2 }}>Kadera AI</div>
+                            <div style={{ fontSize:10, color:"rgba(167,139,250,0.5)", lineHeight:1.4 }}>Ask anything about bids, providers, pipeline, and prospects</div>
+                          </div>
+                        </div>
+                      </div>
                     </div>
                   </div>
 
