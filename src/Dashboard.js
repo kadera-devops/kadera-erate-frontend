@@ -1627,15 +1627,22 @@ function ContactSearchModal({ token, onClose }) {
                             <td style={{ padding:"8px 12px", color:"#334155", whiteSpace:"nowrap" }}>{r.tech_contact_phone||"—"}</td>
                             <td style={{ padding:"8px 12px" }}>
                               {r.application_number ? (
-                                <a href={`https://legacy.fundsforlearning.com/470/${r.application_number}`}
-                                  target="_blank" rel="noreferrer"
-                                  style={{ fontSize:11, fontWeight:600, color:"#2563eb", textDecoration:"none", whiteSpace:"nowrap" }}
-                                  onMouseEnter={e => e.currentTarget.style.textDecoration="underline"}
-                                  onMouseLeave={e => e.currentTarget.style.textDecoration="none"}
-                                  onClick={e => e.stopPropagation()}>
-                                  View 470 ↗
-                                </a>
-                              ) : "—"}
+                                <div style={{ display:"flex", flexDirection:"column", gap:3 }}>
+                                  <a href={`https://legacy.fundsforlearning.com/470/${r.application_number}`}
+                                    target="_blank" rel="noreferrer"
+                                    style={{ fontSize:11, fontWeight:600, color:"#2563eb", textDecoration:"none", whiteSpace:"nowrap" }}
+                                    onMouseEnter={e => e.currentTarget.style.textDecoration="underline"}
+                                    onMouseLeave={e => e.currentTarget.style.textDecoration="none"}
+                                    onClick={e => e.stopPropagation()}>
+                                    View 470 ↗
+                                  </a>
+                                  <span style={{ fontSize:10, color:"#94a3b8" }}>{r.application_number}</span>
+                                </div>
+                              ) : (
+                                r.matched_services?.length ? (
+                                  <span style={{ fontSize:10, color:"#94a3b8" }}>No local record</span>
+                                ) : "—"
+                              )}
                             </td>
                           </tr>
                         );
