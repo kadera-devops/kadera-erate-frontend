@@ -4,20 +4,6 @@ import SearchPanel from "./SearchPanel";
 
 const API_URL = process.env.REACT_APP_API_URL || "https://kadera-backend-production-6a21.up.railway.app";
 
-// Auto-refresh token on 401 and retry once
-async function apiFetch(url, options = {}, onNewToken) {
-  let res = await fetch(url, options);
-  if (res.status === 401) {
-    try {
-      const { getAuthToken } = await import("./supabaseClient");
-      const newToken = await getAuthToken();
-      if (newToken && onNewToken) onNewToken(newToken);
-      const newOptions = { ...options, headers: { ...options.headers, Authorization: `Bearer ${newToken}` } };
-      res = await fetch(url, newOptions);
-    } catch {}
-  }
-  return res;
-}
 
 // ── Design tokens ────────────────────────────────────────────────────────────
 const css = `
