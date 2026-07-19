@@ -2524,6 +2524,7 @@ function RenewalsPanel({ token }) {
   const [editing, setEditing]     = useState(null);
   const [filter, setFilter]       = useState("all");
   const [monthFilter, setMonthFilter] = useState(null);
+  const [alertTest, setAlertTest] = useState({ running:false, msg:"" });
 
   const load = useCallback(async () => {
     if (!token) return;
@@ -2564,6 +2565,22 @@ function RenewalsPanel({ token }) {
     await fetch(`${API_URL}/api/subscriptions/${id}/renew`, { method:"POST", headers:{ Authorization:`Bearer ${token}` } });
     load();
   }
+  async function testAlerts() {
+    setAlertTest({ running:true, msg:"" });
+    try {
+      const r = await fetch(`${API_URL}/api/renewal-alerts/run`, { method:"POST", headers:{ Authorization:`Bearer ${token}` } });
+      const j = await r.json();
+      if (j.status === "success") {
+        setAlertTest({ running:false, msg:"✓ Alert check ran — see your inbox and Railway logs" });
+      } else {
+        setAlertTest({ running:false, msg:`⚠ ${j.message || "Run failed"}` });
+      }
+    } catch {
+      setAlertTest({ running:false, msg:"⚠ Connection error" });
+    }
+    setTimeout(() => setAlertTest(a => ({ ...a, msg:"" })), 8000);
+  }
+
   async function churnSub(id) {
     await fetch(`${API_URL}/api/subscriptions/${id}`, {
       method:"PATCH", headers:{ Authorization:`Bearer ${token}`, "Content-Type":"application/json" },
@@ -2600,7 +2617,13 @@ function RenewalsPanel({ token }) {
           <div style={{ fontSize:20, fontWeight:700, color:"#0f1e3d" }}>Renewals</div>
           <div style={{ fontSize:12, color:"#64748b" }}>Customer subscriptions, terms, and renewal alerts</div>
         </div>
-        <button className="btn btn-primary" onClick={() => { setEditing(null); setFormOpen(true); }}>+ Add subscription</button>
+        <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+          {alertTest.msg && <span style={{ fontSize:11, color: alertTest.msg.startsWith("✓") ? "#16a34a" : "#dc2626" }}>{alertTest.msg}</span>}
+          <button className="btn" onClick={testAlerts} disabled={alertTest.running}>
+            {alertTest.running ? "Running..." : "✉ Test alerts now"}
+          </button>
+          <button className="btn btn-primary" onClick={() => { setEditing(null); setFormOpen(true); }}>+ Add subscription</button>
+        </div>
       </div>
 
       {/* Financial cards */}
