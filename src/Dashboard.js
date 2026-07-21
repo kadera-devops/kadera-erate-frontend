@@ -2821,6 +2821,253 @@ function ToolsPanel() {
   );
 }
 
+
+// ── RunbookPanel — technicians complete & log maintenance checklists ──────────
+const RUNBOOK_CHECKLISTS = {
+  daily: [
+    "All servers & hosts checking in to N-central (no stale agents)",
+    "Review and triage every alert raised overnight",
+    "All Cove backups from last night succeeded",
+    "No disk volume / datastore in a critical-space state",
+    "Critical services up on role servers (AD/DNS/DHCP/SQL/etc.)",
+    "No unresolved CRITICAL alerts left open without an owner",
+  ],
+  weekly: [
+    "Disk-space trend reviewed; projected shortfalls flagged",
+    "Antivirus/security agent healthy with current definitions everywhere",
+    "Host datastore / CSV free space healthy on all VMware/Hyper-V hosts",
+    "Event logs reviewed for recurring critical errors",
+    "Resolved alerts cleared; open items aging tracked",
+  ],
+  monthly: [
+    "Patch cycle completed; compliance recorded; failures remediated",
+    "Test restore performed and verified from Cove",
+    "All servers rebooted within policy where required; uptime reviewed",
+    "Hardware health reviewed on hosts (RAID, PSU, temp)",
+    "Monitoring thresholds still appropriate; noisy alerts tuned",
+    "Account report produced for the account owner",
+    "Hudu documentation updated for any change this month",
+  ],
+  quarterly: [
+    "Firmware / driver levels reviewed on hosts and key servers",
+    "N-central policies, automation, and alert rules reviewed end-to-end",
+    "Backup retention & DR approach validated against current needs",
+    "Capacity outlook reviewed (disk, host resources) for the next 1-2 quarters",
+    "This runbook reviewed and versioned; Hudu records reconciled",
+  ],
+};
+const CADENCE_META = {
+  daily:     { label:"Daily",     color:"#2563eb", bg:"#eff6ff" },
+  weekly:    { label:"Weekly",    color:"#0ca678", bg:"#f0fdf4" },
+  monthly:   { label:"Monthly",   color:"#7c3aed", bg:"#f5f3ff" },
+  quarterly: { label:"Quarterly", color:"#d97706", bg:"#fffbeb" },
+};
+
+function RunbookPanel({ token }) {
+  const [cadence, setCadence]   = useState("daily");
+  const [checks, setChecks]     = useState({});
+  const [nas, setNas]           = useState({});
+  const [notes, setNotes]       = useState("");
+  const [saving, setSaving]     = useState(false);
+  const [msg, setMsg]           = useState("");
+  const [status, setStatus]     = useState({});
+  const [history, setHistory]   = useState([]);
+  const [expanded, setExpanded] = useState(null);
+  const [view, setView]         = useState("checklist"); // 'checklist' | 'history'
+
+  const items = RUNBOOK_CHECKLISTS[cadence];
+
+  const loadStatus = useCallback(async () => {
+    if (!token) return;
+    try {
+      const r = await fetch(`${API_URL}/api/runbook/status`, { headers:{ Authorization:`Bearer ${token}` } });
+      const j = await r.json();
+      if (j.status === "success") setStatus(j.data);
+    } catch {}
+  }, [token]);
+
+  const loadHistory = useCallback(async () => {
+    if (!token) return;
+    try {
+      const r = await fetch(`${API_URL}/api/runbook/runs?limit=100`, { headers:{ Authorization:`Bearer ${token}` } });
+      const j = await r.json();
+      if (j.status === "success") setHistory(j.data);
+    } catch {}
+  }, [token]);
+
+  useEffect(() => { loadStatus(); loadHistory(); }, [loadStatus, loadHistory]);
+
+  function reset() { setChecks({}); setNas({}); setNotes(""); }
+  function switchCadence(c) { setCadence(c); reset(); setMsg(""); }
+
+  const checkedCount = items.filter((_, i) => checks[i] || nas[i]).length;
+  const allDone = checkedCount === items.length;
+
+  async function submit() {
+    setSaving(true); setMsg("");
+    const payload = items.map((label, i) => ({ id: i, label, checked: !!checks[i], na: !!nas[i] }));
+    if (checkedCount < items.length && !notes.trim()) {
+      setMsg("⚠ Add a note explaining any unchecked items before submitting a partial run.");
+      setSaving(false); return;
+    }
+    try {
+      const r = await fetch(`${API_URL}/api/runbook/runs`, {
+        method:"POST", headers:{ Authorization:`Bearer ${token}`, "Content-Type":"application/json" },
+        body: JSON.stringify({ cadence, items: payload, notes }),
+      });
+      const j = await r.json();
+      if (j.status === "success") {
+        setMsg(`✓ ${CADENCE_META[cadence].label} check logged (${checkedCount}/${items.length})`);
+        reset(); loadStatus(); loadHistory();
+        setTimeout(() => setMsg(""), 6000);
+      } else setMsg(`⚠ ${j.message || "Save failed"}`);
+    } catch { setMsg("⚠ Connection error"); }
+    setSaving(false);
+  }
+
+  function fmtWhen(ts) {
+    if (!ts) return "Never";
+    const d = new Date(ts);
+    return d.toLocaleDateString("en-US",{ month:"short", day:"numeric" }) + " " + d.toLocaleTimeString("en-US",{ hour:"numeric", minute:"2-digit" });
+  }
+  function agoColor(ts, cad) {
+    if (!ts) return "#dc2626";
+    const hrs = (Date.now() - new Date(ts)) / 3600000;
+    const limit = cad === "daily" ? 30 : cad === "weekly" ? 8*24 : cad === "monthly" ? 35*24 : 100*24;
+    return hrs > limit ? "#d97706" : "#16a34a";
+  }
+
+  function exportCSV() {
+    const rows = [["cadence","completed_at","user_email","checked","total","complete","notes"]];
+    history.forEach(h => rows.push([h.cadence, h.completed_at, h.user_email || "", h.checked_count, h.total_count, h.complete, (h.notes||"").replace(/"/g,'""')]));
+    const csv = rows.map(r => r.map(c => `"${(c ?? "").toString().replace(/"/g,'""')}"`).join(",")).join("\n");
+    const url = URL.createObjectURL(new Blob([csv], { type:"text/csv" }));
+    const a = document.createElement("a"); a.href=url; a.download=`kadera-runbook-log-${Date.now()}.csv`; a.click();
+  }
+
+  return (
+    <div className="fade-in">
+      <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:16 }}>
+        <div>
+          <div style={{ fontSize:20, fontWeight:700, color:"#0f1e3d" }}>Server Maintenance Runbook</div>
+          <div style={{ fontSize:12, color:"#64748b" }}>Complete and log the maintenance checks for the managed servers</div>
+        </div>
+        <div style={{ display:"flex", gap:6 }}>
+          <button className="btn" onClick={() => setView("checklist")} style={{ background: view==="checklist" ? "#eff6ff" : "#fff", color: view==="checklist" ? "#2563eb" : "#64748b", borderColor: view==="checklist" ? "#2563eb" : "#e2e8f0" }}>Checklist</button>
+          <button className="btn" onClick={() => setView("history")} style={{ background: view==="history" ? "#eff6ff" : "#fff", color: view==="history" ? "#2563eb" : "#64748b", borderColor: view==="history" ? "#2563eb" : "#e2e8f0" }}>History</button>
+        </div>
+      </div>
+
+      {/* Status strip — last completed per cadence */}
+      <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit, minmax(180px, 1fr))", gap:10, marginBottom:16 }}>
+        {Object.keys(CADENCE_META).map(c => {
+          const s = status[c];
+          return (
+            <div key={c} className="card" style={{ padding:"12px 14px", cursor:"pointer", borderTop:`3px solid ${CADENCE_META[c].color}` }}
+              onClick={() => { setView("checklist"); switchCadence(c); }}>
+              <div style={{ fontSize:11, fontWeight:700, color:CADENCE_META[c].color, letterSpacing:0.4, textTransform:"uppercase" }}>{CADENCE_META[c].label}</div>
+              <div style={{ fontSize:12, color:agoColor(s?.completed_at, c), fontWeight:600, marginTop:3 }}>
+                {s ? `Last: ${fmtWhen(s.completed_at)}` : "Never completed"}
+              </div>
+              {s && <div style={{ fontSize:10, color:"#94a3b8", marginTop:1 }}>{s.user_email} · {s.checked_count}/{s.total_count}</div>}
+            </div>
+          );
+        })}
+      </div>
+
+      {view === "checklist" ? (
+        <div className="card" style={{ padding:0, overflow:"hidden" }}>
+          {/* Cadence tabs */}
+          <div style={{ display:"flex", gap:6, padding:"12px 16px", borderBottom:"1.5px solid #e2e8f0", background:"#f8fafc" }}>
+            {Object.keys(CADENCE_META).map(c => (
+              <button key={c} onClick={() => switchCadence(c)}
+                style={{ padding:"5px 14px", borderRadius:99, fontSize:12, fontWeight:600, cursor:"pointer", fontFamily:"inherit",
+                  border:`1.5px solid ${cadence===c ? CADENCE_META[c].color : "#e2e8f0"}`,
+                  background: cadence===c ? CADENCE_META[c].bg : "#fff",
+                  color: cadence===c ? CADENCE_META[c].color : "#64748b" }}>
+                {CADENCE_META[c].label}
+              </button>
+            ))}
+          </div>
+
+          {/* Checklist items */}
+          <div style={{ padding:"8px 8px" }}>
+            {items.map((label, i) => (
+              <div key={i} style={{ display:"flex", alignItems:"center", gap:12, padding:"10px 12px", borderRadius:8, background: checks[i] ? "#f0fdf4" : nas[i] ? "#f8fafc" : "transparent" }}
+                onMouseEnter={e => { if (!checks[i] && !nas[i]) e.currentTarget.style.background="#f8fafc"; }}
+                onMouseLeave={e => { if (!checks[i] && !nas[i]) e.currentTarget.style.background="transparent"; }}>
+                <input type="checkbox" checked={!!checks[i]} disabled={!!nas[i]}
+                  onChange={e => setChecks(p => ({ ...p, [i]: e.target.checked }))}
+                  style={{ width:18, height:18, cursor:"pointer", accentColor:"#16a34a", flexShrink:0 }} />
+                <span style={{ flex:1, fontSize:13, color: nas[i] ? "#94a3b8" : "#1e293b", textDecoration: nas[i] ? "line-through" : "none" }}>{label}</span>
+                <button onClick={() => setNas(p => ({ ...p, [i]: !p[i] }))}
+                  style={{ fontSize:10, fontWeight:700, padding:"3px 9px", borderRadius:99, cursor:"pointer", fontFamily:"inherit",
+                    border:`1.5px solid ${nas[i] ? "#94a3b8" : "#e2e8f0"}`, background: nas[i] ? "#e2e8f0" : "#fff", color: nas[i] ? "#475569" : "#94a3b8" }}>
+                  N/A
+                </button>
+              </div>
+            ))}
+          </div>
+
+          {/* Notes + submit */}
+          <div style={{ padding:"12px 16px", borderTop:"1.5px solid #e2e8f0", background:"#f8fafc" }}>
+            <textarea value={notes} onChange={e => setNotes(e.target.value)} rows={2}
+              placeholder="Notes (required if any item is left unchecked) — findings, follow-ups, anything worth logging"
+              style={{ width:"100%", padding:"8px 12px", borderRadius:8, border:"1.5px solid #cbd5e1", fontSize:12, fontFamily:"inherit", color:"#1e293b", resize:"vertical", boxSizing:"border-box" }} />
+            <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginTop:10 }}>
+              <div style={{ fontSize:12, color: allDone ? "#16a34a" : "#64748b", fontWeight:600 }}>
+                {checkedCount}/{items.length} complete{allDone ? " · all checks done" : ""}
+                {msg && <span style={{ marginLeft:12, color: msg.startsWith("✓") ? "#16a34a" : "#dc2626", fontWeight:500 }}>{msg}</span>}
+              </div>
+              <div style={{ display:"flex", gap:8 }}>
+                <button className="btn" onClick={reset}>Reset</button>
+                <button className="btn btn-primary" onClick={submit} disabled={saving || checkedCount === 0}>
+                  {saving ? "Logging..." : "Submit & log check"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : (
+        <div className="card">
+          <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"12px 16px", borderBottom:"1.5px solid #e2e8f0" }}>
+            <div style={{ fontSize:13, fontWeight:600, color:"#0f1e3d" }}>Completion log</div>
+            <button className="btn btn-sm" onClick={exportCSV} style={{ color:"#16a34a", borderColor:"#86efac" }}>↓ Export CSV</button>
+          </div>
+          {history.length === 0 ? (
+            <Empty title="No runs logged yet" sub="Completed checklists will appear here" />
+          ) : (
+            <div>
+              {history.map((h, i) => (
+                <div key={i} style={{ borderBottom:"1px solid #f1f5f9" }}>
+                  <div style={{ display:"flex", alignItems:"center", gap:12, padding:"10px 16px", cursor:"pointer" }}
+                    onClick={() => setExpanded(expanded === h.id ? null : h.id)}>
+                    <span style={{ fontSize:10, fontWeight:700, padding:"2px 9px", borderRadius:99, background:CADENCE_META[h.cadence]?.bg, color:CADENCE_META[h.cadence]?.color, flexShrink:0 }}>{CADENCE_META[h.cadence]?.label || h.cadence}</span>
+                    <span style={{ fontSize:12, color:"#334155", flex:1 }}>{h.user_email || "—"}</span>
+                    <span style={{ fontSize:12, fontWeight:600, color: h.complete ? "#16a34a" : "#d97706" }}>{h.checked_count}/{h.total_count}{h.complete ? "" : " partial"}</span>
+                    <span style={{ fontSize:12, color:"#64748b", flexShrink:0, minWidth:110, textAlign:"right" }}>{fmtWhen(h.completed_at)}</span>
+                    <span style={{ fontSize:11, color:"#94a3b8" }}>{expanded === h.id ? "▲" : "▼"}</span>
+                  </div>
+                  {expanded === h.id && (
+                    <div style={{ padding:"4px 16px 14px 16px", background:"#f8fafc" }}>
+                      {(h.items || []).map((it, ii) => (
+                        <div key={ii} style={{ fontSize:12, color: it.checked ? "#16a34a" : it.na ? "#94a3b8" : "#dc2626", padding:"2px 0" }}>
+                          {it.checked ? "✓" : it.na ? "—" : "✗"} {it.label}{it.na ? " (N/A)" : ""}
+                        </div>
+                      ))}
+                      {h.notes && <div style={{ marginTop:8, fontSize:12, color:"#475569", fontStyle:"italic", padding:"8px 12px", background:"#fff", borderRadius:6, border:"1px solid #e2e8f0" }}>Note: {h.notes}</div>}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Main Dashboard ────────────────────────────────────────────────────────────
 export default function Dashboard({ session }) {
   const [token, setToken]   = useState(null);
@@ -2941,7 +3188,7 @@ export default function Dashboard({ session }) {
           </div>
 
           <div style={{ display:"flex", gap:2 }}>
-            {[["dashboard","Dashboard"],["search","Search"],["tags",`★ My Tags${tagCount ? ` (${tagCount})` : ""}`],["renewals","Renewals"],["tools","Tools"]].map(([key,label]) => (
+            {[["dashboard","Dashboard"],["search","Search"],["tags",`★ My Tags${tagCount ? ` (${tagCount})` : ""}`],["renewals","Renewals"],["runbook","Runbook"],["tools","Tools"]].map(([key,label]) => (
               <button key={key} onClick={() => setTab(key)}
                 style={{ padding:"6px 16px", borderRadius:6, border:"none", background: tab===key ? (key==="ai" ? "rgba(124,58,237,0.2)" : "rgba(37,99,235,0.3)") : "transparent", color: key==="tags" ? "#fbbf24" : key==="ai" ? (tab===key ? "#c4b5fd" : "rgba(196,181,253,0.7)") : tab===key ? "#93b4fd" : "rgba(255,255,255,0.5)", fontSize:12, fontWeight:500, cursor:"pointer" }}>
                 {label}
@@ -3102,6 +3349,10 @@ export default function Dashboard({ session }) {
 
           {tab === "renewals" && token && (
             <RenewalsPanel token={token} />
+          )}
+
+          {tab === "runbook" && token && (
+            <RunbookPanel token={token} />
           )}
 
           {tab === "tools" && token && (
