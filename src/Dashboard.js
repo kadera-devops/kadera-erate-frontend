@@ -2874,28 +2874,46 @@ function RunbookPanel({ token }) {
   const [history, setHistory]   = useState([]);
   const [expanded, setExpanded] = useState(null);
   const [view, setView]         = useState("checklist"); // 'checklist' | 'history'
+  const [tenants, setTenants]   = useState([]);
+  const [tenantId, setTenantId] = useState("");
+  const [addingTenant, setAddingTenant] = useState(false);
+  const [newTenant, setNewTenant]       = useState("");
+  const [histTenant, setHistTenant]     = useState("all");
 
   const items = RUNBOOK_CHECKLISTS[cadence];
+  const tenantName = tenants.find(t => t.id === tenantId)?.name || "";
 
-  const loadStatus = useCallback(async () => {
+  const loadTenants = useCallback(async () => {
     if (!token) return;
     try {
-      const r = await fetch(`${API_URL}/api/runbook/status`, { headers:{ Authorization:`Bearer ${token}` } });
+      const r = await fetch(`${API_URL}/api/tenants`, { headers:{ Authorization:`Bearer ${token}` } });
+      const j = await r.json();
+      if (j.status === "success") setTenants(j.data);
+    } catch {}
+  }, [token]);
+
+  const loadStatus = useCallback(async () => {
+    if (!token || !tenantId) { setStatus({}); return; }
+    try {
+      const r = await fetch(`${API_URL}/api/runbook/status?tenant_id=${tenantId}`, { headers:{ Authorization:`Bearer ${token}` } });
       const j = await r.json();
       if (j.status === "success") setStatus(j.data);
     } catch {}
-  }, [token]);
+  }, [token, tenantId]);
 
   const loadHistory = useCallback(async () => {
     if (!token) return;
     try {
-      const r = await fetch(`${API_URL}/api/runbook/runs?limit=100`, { headers:{ Authorization:`Bearer ${token}` } });
+      const tq = histTenant && histTenant !== "all" ? `&tenant_id=${histTenant}` : "";
+      const r = await fetch(`${API_URL}/api/runbook/runs?limit=150${tq}`, { headers:{ Authorization:`Bearer ${token}` } });
       const j = await r.json();
       if (j.status === "success") setHistory(j.data);
     } catch {}
-  }, [token]);
+  }, [token, histTenant]);
 
-  useEffect(() => { loadStatus(); loadHistory(); }, [loadStatus, loadHistory]);
+  useEffect(() => { loadTenants(); }, [loadTenants]);
+  useEffect(() => { loadStatus(); }, [loadStatus]);
+  useEffect(() => { loadHistory(); }, [loadHistory]);
 
   function reset() { setChecks({}); setNas({}); setNotes(""); }
   function switchCadence(c) { setCadence(c); reset(); setMsg(""); }
@@ -2903,7 +2921,24 @@ function RunbookPanel({ token }) {
   const checkedCount = items.filter((_, i) => checks[i] || nas[i]).length;
   const allDone = checkedCount === items.length;
 
+  async function addTenant() {
+    if (!newTenant.trim()) return;
+    try {
+      const r = await fetch(`${API_URL}/api/tenants`, {
+        method:"POST", headers:{ Authorization:`Bearer ${token}`, "Content-Type":"application/json" },
+        body: JSON.stringify({ name: newTenant.trim() }),
+      });
+      const j = await r.json();
+      if (j.status === "success") {
+        setTenants(p => [...p, j.data].sort((a,b) => a.name.localeCompare(b.name)));
+        setTenantId(j.data.id);
+        setNewTenant(""); setAddingTenant(false);
+      }
+    } catch {}
+  }
+
   async function submit() {
+    if (!tenantId) { setMsg("⚠ Select a tenant first."); return; }
     setSaving(true); setMsg("");
     const payload = items.map((label, i) => ({ id: i, label, checked: !!checks[i], na: !!nas[i] }));
     if (checkedCount < items.length && !notes.trim()) {
@@ -2913,11 +2948,11 @@ function RunbookPanel({ token }) {
     try {
       const r = await fetch(`${API_URL}/api/runbook/runs`, {
         method:"POST", headers:{ Authorization:`Bearer ${token}`, "Content-Type":"application/json" },
-        body: JSON.stringify({ cadence, items: payload, notes }),
+        body: JSON.stringify({ cadence, items: payload, notes, tenant_id: tenantId }),
       });
       const j = await r.json();
       if (j.status === "success") {
-        setMsg(`✓ ${CADENCE_META[cadence].label} check logged (${checkedCount}/${items.length})`);
+        setMsg(`✓ ${CADENCE_META[cadence].label} check logged for ${tenantName} (${checkedCount}/${items.length})`);
         reset(); loadStatus(); loadHistory();
         setTimeout(() => setMsg(""), 6000);
       } else setMsg(`⚠ ${j.message || "Save failed"}`);
@@ -2938,8 +2973,8 @@ function RunbookPanel({ token }) {
   }
 
   function exportCSV() {
-    const rows = [["cadence","completed_at","user_email","checked","total","complete","notes"]];
-    history.forEach(h => rows.push([h.cadence, h.completed_at, h.user_email || "", h.checked_count, h.total_count, h.complete, (h.notes||"").replace(/"/g,'""')]));
+    const rows = [["tenant","cadence","completed_at","user_email","checked","total","complete","notes"]];
+    history.forEach(h => rows.push([h.tenant_name || "", h.cadence, h.completed_at, h.user_email || "", h.checked_count, h.total_count, h.complete, (h.notes||"").replace(/"/g,'""')]));
     const csv = rows.map(r => r.map(c => `"${(c ?? "").toString().replace(/"/g,'""')}"`).join(",")).join("\n");
     const url = URL.createObjectURL(new Blob([csv], { type:"text/csv" }));
     const a = document.createElement("a"); a.href=url; a.download=`kadera-runbook-log-${Date.now()}.csv`; a.click();
@@ -2958,7 +2993,30 @@ function RunbookPanel({ token }) {
         </div>
       </div>
 
-      {/* Status strip — last completed per cadence */}
+      {/* Tenant picker */}
+      <div className="card" style={{ padding:"12px 16px", marginBottom:14, display:"flex", alignItems:"center", gap:12, flexWrap:"wrap" }}>
+        <span style={{ fontSize:12, fontWeight:700, color:"#0f1e3d", letterSpacing:0.3 }}>TENANT</span>
+        {!addingTenant ? (
+          <>
+            <select className="inp" style={{ maxWidth:320 }} value={tenantId} onChange={e => { setTenantId(e.target.value); setMsg(""); }}>
+              <option value="">Select managed client...</option>
+              {tenants.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+            </select>
+            <button className="btn btn-sm" onClick={() => setAddingTenant(true)}>+ New tenant</button>
+            {tenantId && <span style={{ fontSize:12, color:"#16a34a", fontWeight:600 }}>✓ {tenantName}</span>}
+          </>
+        ) : (
+          <>
+            <input className="inp" style={{ maxWidth:280 }} value={newTenant} onChange={e => setNewTenant(e.target.value)}
+              onKeyDown={e => e.key === "Enter" && addTenant()} placeholder="New managed client name" autoFocus />
+            <button className="btn btn-sm btn-primary" onClick={addTenant}>Add</button>
+            <button className="btn btn-sm" onClick={() => { setAddingTenant(false); setNewTenant(""); }}>Cancel</button>
+          </>
+        )}
+      </div>
+
+      {/* Status strip — last completed per cadence (for selected tenant) */}
+      {tenantId ? (
       <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit, minmax(180px, 1fr))", gap:10, marginBottom:16 }}>
         {Object.keys(CADENCE_META).map(c => {
           const s = status[c];
@@ -2974,8 +3032,14 @@ function RunbookPanel({ token }) {
           );
         })}
       </div>
+      ) : (
+        <div className="card" style={{ padding:"24px", marginBottom:16, textAlign:"center", fontSize:13, color:"#94a3b8" }}>
+          Select a tenant above to view their maintenance status and log checks
+        </div>
+      )}
 
       {view === "checklist" ? (
+        !tenantId ? null : (
         <div className="card" style={{ padding:0, overflow:"hidden" }}>
           {/* Cadence tabs */}
           <div style={{ display:"flex", gap:6, padding:"12px 16px", borderBottom:"1.5px solid #e2e8f0", background:"#f8fafc" }}>
@@ -3028,11 +3092,18 @@ function RunbookPanel({ token }) {
             </div>
           </div>
         </div>
+        )
       ) : (
         <div className="card">
           <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"12px 16px", borderBottom:"1.5px solid #e2e8f0" }}>
             <div style={{ fontSize:13, fontWeight:600, color:"#0f1e3d" }}>Completion log</div>
-            <button className="btn btn-sm" onClick={exportCSV} style={{ color:"#16a34a", borderColor:"#86efac" }}>↓ Export CSV</button>
+            <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+              <select className="inp inp-sm" value={histTenant} onChange={e => setHistTenant(e.target.value)}>
+                <option value="all">All tenants</option>
+                {tenants.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+              </select>
+              <button className="btn btn-sm" onClick={exportCSV} style={{ color:"#16a34a", borderColor:"#86efac" }}>↓ Export CSV</button>
+            </div>
           </div>
           {history.length === 0 ? (
             <Empty title="No runs logged yet" sub="Completed checklists will appear here" />
@@ -3043,6 +3114,7 @@ function RunbookPanel({ token }) {
                   <div style={{ display:"flex", alignItems:"center", gap:12, padding:"10px 16px", cursor:"pointer" }}
                     onClick={() => setExpanded(expanded === h.id ? null : h.id)}>
                     <span style={{ fontSize:10, fontWeight:700, padding:"2px 9px", borderRadius:99, background:CADENCE_META[h.cadence]?.bg, color:CADENCE_META[h.cadence]?.color, flexShrink:0 }}>{CADENCE_META[h.cadence]?.label || h.cadence}</span>
+                    <span style={{ fontSize:12, fontWeight:700, color:"#0f1e3d", minWidth:130 }}>{h.tenant_name || "—"}</span>
                     <span style={{ fontSize:12, color:"#334155", flex:1 }}>{h.user_email || "—"}</span>
                     <span style={{ fontSize:12, fontWeight:600, color: h.complete ? "#16a34a" : "#d97706" }}>{h.checked_count}/{h.total_count}{h.complete ? "" : " partial"}</span>
                     <span style={{ fontSize:12, color:"#64748b", flexShrink:0, minWidth:110, textAlign:"right" }}>{fmtWhen(h.completed_at)}</span>
