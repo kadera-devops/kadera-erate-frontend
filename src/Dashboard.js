@@ -2783,6 +2783,44 @@ function RenewalsPanel({ token }) {
   );
 }
 
+
+// ── ToolsPanel — launchpad for management tool logins ─────────────────────────
+const MGMT_TOOLS = [
+  { name:"N-central",           url:"https://ncod126.n-able.com/login",   desc:"RMM & endpoint management", color:"#e8590c", initials:"N" },
+  { name:"Cove Data Protection",url:"https://backup.management",           desc:"Cloud backup & recovery",   color:"#1971c2", initials:"C" },
+  { name:"Domotz",              url:"https://portal.domotz.com",           desc:"Network monitoring",        color:"#0ca678", initials:"D" },
+  { name:"Twingate",            url:"https://kadera.twingate.com",         desc:"Zero-trust remote access",  color:"#7048e8", initials:"T" },
+  { name:"Hudu",                url:"https://kadera.huducloud.com",        desc:"IT documentation",          color:"#e03131", initials:"H" },
+];
+
+function ToolsPanel() {
+  return (
+    <div className="fade-in">
+      <div style={{ marginBottom:16 }}>
+        <div style={{ fontSize:20, fontWeight:700, color:"#0f1e3d" }}>Management Tools</div>
+        <div style={{ fontSize:12, color:"#64748b" }}>Quick access to our platform logins — opens each portal in a new tab</div>
+      </div>
+      <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill, minmax(220px, 1fr))", gap:12 }}>
+        {MGMT_TOOLS.map((t, i) => (
+          <a key={i} href={t.url} target="_blank" rel="noreferrer"
+            className="card"
+            style={{ padding:"18px 18px", textDecoration:"none", display:"flex", alignItems:"center", gap:14, transition:"transform 0.12s, box-shadow 0.12s", cursor:"pointer" }}
+            onMouseEnter={e => { e.currentTarget.style.transform="translateY(-2px)"; e.currentTarget.style.boxShadow="0 6px 20px rgba(15,30,61,0.12)"; }}
+            onMouseLeave={e => { e.currentTarget.style.transform="none"; e.currentTarget.style.boxShadow=""; }}>
+            <div style={{ width:44, height:44, borderRadius:10, background:t.color, display:"flex", alignItems:"center", justifyContent:"center", fontSize:20, fontWeight:700, color:"#fff", flexShrink:0, fontFamily:"'Aldrich',sans-serif" }}>
+              {t.initials}
+            </div>
+            <div style={{ minWidth:0 }}>
+              <div style={{ fontSize:14, fontWeight:700, color:"#1e293b" }}>{t.name} <span style={{ fontSize:11, color:"#2563eb", fontWeight:500 }}>↗</span></div>
+              <div style={{ fontSize:11, color:"#64748b", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{t.desc}</div>
+            </div>
+          </a>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 // ── Main Dashboard ────────────────────────────────────────────────────────────
 export default function Dashboard({ session }) {
   const [token, setToken]   = useState(null);
@@ -2903,7 +2941,7 @@ export default function Dashboard({ session }) {
           </div>
 
           <div style={{ display:"flex", gap:2 }}>
-            {[["dashboard","Dashboard"],["search","Search"],["tags",`★ My Tags${tagCount ? ` (${tagCount})` : ""}`],["renewals","Renewals"]].map(([key,label]) => (
+            {[["dashboard","Dashboard"],["search","Search"],["tags",`★ My Tags${tagCount ? ` (${tagCount})` : ""}`],["renewals","Renewals"],["tools","Tools"]].map(([key,label]) => (
               <button key={key} onClick={() => setTab(key)}
                 style={{ padding:"6px 16px", borderRadius:6, border:"none", background: tab===key ? (key==="ai" ? "rgba(124,58,237,0.2)" : "rgba(37,99,235,0.3)") : "transparent", color: key==="tags" ? "#fbbf24" : key==="ai" ? (tab===key ? "#c4b5fd" : "rgba(196,181,253,0.7)") : tab===key ? "#93b4fd" : "rgba(255,255,255,0.5)", fontSize:12, fontWeight:500, cursor:"pointer" }}>
                 {label}
@@ -3064,6 +3102,10 @@ export default function Dashboard({ session }) {
 
           {tab === "renewals" && token && (
             <RenewalsPanel token={token} />
+          )}
+
+          {tab === "tools" && token && (
+            <ToolsPanel />
           )}
 
         </div>
